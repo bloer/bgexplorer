@@ -6,6 +6,6 @@ setup(name='bgmodelbuilder',
       url='http://github.com/bloer/bgmodelbuilder',
       author='Ben Loer',
       author_email='ben.loer@pnnl.gov',
-      license='GPLv3',
+      license='MIT',
       packages=['bgmodelbuilder'],
       zip_safe=False)
