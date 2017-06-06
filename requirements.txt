@@ -1,3 +1,4 @@
 bgmodelbuilder
 pint>=0.7
-pymongo
+pymongo>=3.3.0
+
