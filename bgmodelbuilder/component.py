@@ -194,8 +194,15 @@ class Component(PhysicalParameters):
         self.description = description
         self.comment = comment
         self.moreinfo = moreinfo or dict()
-        self.specs = specs or []
-        self.querymod = querymod or dict()
+        self.querymods = dict()
+        if querymod:
+            self.querymods[None] = querymod
+        self.specs = []
+        for spec in specs:
+            if type(spec) in [tuple, list]:
+                self.addspec(*spec)
+            else:
+                self.addspec(spec)
         
             
     def __str__(self):
@@ -208,8 +215,33 @@ class Component(PhysicalParameters):
     
     def __repr__(self):
         return "Component(**%s)"%(self.export())
-        
     
+    @property
+    def id(self):
+        """unique, hopefully permanent ID"""
+        return getattr(self,'_id',self.name)
+
+    def getspecid(self,spec):
+        """unique id for a component, spec combo"""
+        if spec is None: #ALL specs associated to this component
+            return self.id
+        elif spec not in self.specs:
+            return None
+        return str(self.id)+'//'+str(getattr(spec,'id',self.specs.index(spec)))
+    
+    def addspec(self, spec, querymod=None):
+        self.specs.append(spec)
+        if querymod:
+            self.querymods[spec] = querymod
+            
+    def getquerymod(self, spec=None):
+        mymod = self.querymods.get(spec,{})
+        if spec: #combine with the per-component spec
+            base = copy(self.querymods.get(None, {}))
+            base.update(mymod)
+            mymod = base
+        return mymod
+
     def findspecs(self, name, deep=False):
         return [a for a in self.specs if a.name == name]
     
@@ -361,6 +393,20 @@ class Assembly(Component):
         res = set()
         for comp in self.getcomponents(deep=deep, withweight=False):
             set.update(comp.findspecs(name=name, deep=deep))
+
+    def assignids(self, root='/', override=True):
+        """Assign a unique ID to each component based on the path to root.
+        If override is False, components will keep any already-assigned IDs
+        """
+        if override or not hasattr(self,'_id'):
+            self._id = root+self.name
+        subroot=self._id+'/'
+
+        for comp in self.getcomponents(deep=False, wighweight=False):
+            if hasattr(comp,'assignids'):
+                comp.assignids(subroot, override=override)
+            else if override or not hasattr(comp, '_id'):
+                comp._id = subroot+comp.name
     
 
 
