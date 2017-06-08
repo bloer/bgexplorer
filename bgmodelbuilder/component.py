@@ -128,7 +128,7 @@ class PhysicalParameters(object):
 
 """
 Querymod operator
-Modifies the query to associate ConversionEff to component,spec pairs
+Modifies the query to associate simulation datasets to component,spec pairs
 
 The exact form and implementation of each argument is up to the specific 
 ConversionsDatabase used.  For example, for a MongoDB database, the 
