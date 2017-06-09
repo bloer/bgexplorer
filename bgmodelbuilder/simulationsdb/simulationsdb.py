@@ -59,21 +59,19 @@ class SimulationsDB(object):
 
         return result or [] #make sure we can iterate over result
 
-    def evaluate(self, values, compspecs, cacheid=None):
+    def evaluate(self, values, compspecs):
         """Evaluate the reduced sum for values over the list of compspecs
         Args:
             values (list): list of identifiers for values. E.g., names
                            of columns in the db entries
             compspecs (list): list of (component,spec) pairs to caluclate 
                               these values for
-            cacheid (variable): unique identifier to find cache values for this
-                                query. 
 
         Returns:
             result (dict): dictionary of results for each key in values
         """
         #first, try the cache
-        result = self.getcachedreductions(cacheid, values)
+        result = self.getcachedreductions(values, compspecs)
         if result is None or len(result) != len(values):
             #there is no valid cache, so recalculate
             #first we need the list of effs for each comp, spec
@@ -88,7 +86,7 @@ class SimulationsDB(object):
             result = self.reduce(values, simweights.items())
             if result is not None:
                 #we have a new result, update the cache
-                self.cachereductions(cacheid, result)
+                self.cachereductions(values, compspecs, simweights, result)
         return result
             
         
@@ -143,11 +141,11 @@ class SimulationsDB(object):
          """Store newly matched conversions in the cache"""
          pass
 
-    def getcachedreductions(self, cacheid, values):
+    def getcachedreductions(self, values, compspecs):
         """Retrieve precalculated reduced vales in the cache"""
         return None
 
-    def cachereductions(self, cacheid, result):
+    def cachereductions(self, values, compspecs, simweights, result):
         """Store calculated reductions in the cache
 
         Args: 

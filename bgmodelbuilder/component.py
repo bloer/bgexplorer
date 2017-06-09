@@ -36,7 +36,7 @@ def ensure_quantity(value, defunit):
         if qval.dimensionality == units.dimensionless.dimensionality:
             qval = units.Quantity(qval, defunit)
         else:
-            except units.DimensionalityError(qval.u, defunit)
+            raise units.DimensionalityError(qval.u, defunit)
     
     return qval
     
@@ -267,6 +267,19 @@ class Component(PhysicalParameters):
 
     
     
+class SmallComponent(Component):
+    """A small or thin-walled component where the difference between surface
+    and bulk contamination is irrelevant from a simulations point of view. 
+    This is primarily an example of how to use query mods; in this case, 
+    we override surface distributions with bulk
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qm = self.querymods.get(None,{})
+        qm['union_keys'] = qm.get('union_keys',{})
+        qm['union_keys']['distribution'] = 'bulk'
+        self.querymods[None] = qm
+        
     
 class Assembly(Component):
     """Assembly of multiple components"""
@@ -281,7 +294,7 @@ class Assembly(Component):
         super().__init__(name=name, **kwargs)
 
         self._subcompmap = dict()
-        self.components[]
+        self.components = []
 
         #construct the list of components from list of comps or (comp,weight) 
         #pairs. Can also be bare objects
@@ -348,9 +361,9 @@ class Assembly(Component):
         return allcomp
 
     def isparentof(self, component, deep=False):
-    """Is this component within our owned tree?"""
-    return (component is self 
-            or component in self.getcomponents(deep=deep, withweight=False))
+        """Is this component within our owned tree?"""
+        return (component is self 
+                or component in self.getcomponents(deep=deep, withweight=False))
     
     def passingselector(self, selector=None):
         """ Override leaf-level method to add component weights """
@@ -405,7 +418,7 @@ class Assembly(Component):
         for comp in self.getcomponents(deep=False, wighweight=False):
             if hasattr(comp,'assignids'):
                 comp.assignids(subroot, override=override)
-            else if override or not hasattr(comp, '_id'):
+            elif override or not hasattr(comp, '_id'):
                 comp._id = subroot+comp.name
     
 

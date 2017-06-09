@@ -5,8 +5,9 @@ This provides classes used to represent a radiation detector and associated
 radioactive background emitters.
 """
 
-from pint import UnitRegistry
-units = UnitRegistry()
+import pint
+
+units = pint.UnitRegistry()
 units.DimensionalityError = pint.errors.DimensionalityError
 units.default_format = 'P'
 

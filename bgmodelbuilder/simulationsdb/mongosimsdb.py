@@ -24,8 +24,9 @@ from __future__ import (absolute_import, division,
 from builtins import super
 
 import pymongo
+from time import time
 
-from .simulationssdb import SimulationsDB
+from .simulationsdb import SimulationsDB
 
 class MongoSimsDB(SimulationsDB):
     def __init__(self, database, **kwargs):
@@ -35,6 +36,8 @@ class MongoSimsDB(SimulationsDB):
         #initialize the DB connection
         self._db = database
         self._cache = None #this will be updated in super() constructor
+        self._simsname = 'simulations'
+        self._simscollection = self._db[self._simsname]
 
         self.index_simentries()
         
@@ -51,6 +54,25 @@ class MongoSimsDB(SimulationsDB):
             self._cache = self._db.cache[str(model)]
             filter_ = {} if lastmod is None else {'timestamp':{'$lt'<lastmod}}
             self._cache.delete_many(filter_)
+            #now we need to delete any entry older than an associated sim
+            #use a join to minimize number of queries
+            res = self._cache.aggregate([
+                {'$unwind': '$simulations'},
+                {'$lookup': {'from': self._simsname,
+                             'localField': 'simulations',
+                             'foreignField': '_id',
+                             'as': 'simulations'}
+                },
+                {'$addFields': {'age': {'$subtract':
+                                ['$timestamp','$simulations.0.timestamp']}}
+                },
+                {'$match': {'$age':{'$lt':0}} },
+                {'$group': {'_id':'$_id'}}
+            ])
+            ids = [d['_id'] for d in res]
+            if ids:
+                self._cache.delete_many({'_id':{'$in':ids}})
+            
         else:
             self._cache = None
 
@@ -67,21 +89,29 @@ class MongoSimsDB(SimulationsDB):
     def cachesimentries(self, component, spec, result):
         if self._cache:
             _id = self.calculatecacheid( ((component, spec)) )
+            sid = component.getspecid(spec)
             self._cache.update_one({'_id':_id}, 
-                                   {'$set':{'simulations':result}},
+                                   {'$set':{'simulations':result,
+                                            'compspecs':[sid],
+                                            'timestamp':time()}},
                                    upsert=True)
 
-    def getcachedreductions(self, cacheid, values):
+    def getcachedreductions(self, values, compspecs):
         if not self._cache:
             return None
+        cacheid = self.calculatecacheid(compspecs)
         doc = self._cache.find_one(cacheid, projection={'reductions': True})
         if doc:
             return {key:val for key in values if key in doc['reductions']}
         return None
 
-    def cachereductions(self, cacheid, result):
+    def cachereductions(self, compspecs, values, simweights, result):
         if self._cache:
+            cacheid = self.calculatecacheid(compspecs)
             setkeys = {'reductions.%s'%key:val for key,val in result.items()}
+            setkeys['compspecs'] = [c.getspecid(s) for c,s in compspecs]
+            setkeys['timestamp'] = time()
+            setkeys['simulations'] = [s for s,w in simweights]
             self._cache.update_one({'_id':cacheid}, {'$set': setkeys},
                                    upsert=True)
     
@@ -124,7 +154,7 @@ class MongoSimsDB(SimulationsDB):
         What do we do with errors????
         """
         filter_ = {'_id':True} if idonly else {}
-        result = self._db.simulations.find(query, filter_)
+        result = self._simscollection.find(query, filter_)
         return [d['_id'] for d in result] if idonly else list(result)
 
     ############ users should override: #############
@@ -139,8 +169,8 @@ class MongoSimsDB(SimulationsDB):
         """ Create any indices on the simulationssdb for faster queries
         The collection name is assumed to be 'simulations'
         """
-        self._db.simulations.create_index([('volume':pymongo.ASCENDING),
-                                           ('source':pymongo.DESCENDING)])
+        self._simscollection.create_index([('volume', pymongo.ASCENDING),
+                                           ('source', pymongo.DESCENDING)])
 
     def reduce(self, values, entryweights):
         """For each entry in values, calculate the result summed over entries
@@ -182,5 +212,5 @@ class MongoSimsDB(SimulationsDB):
             {'$project': {'_id':False}}
         ]
         #these should be existing documents so there must be a single result
-        return self._db.simulations.aggregate(pipeline).next()
+        return self._simscollection.aggregate(pipeline).next()
 
