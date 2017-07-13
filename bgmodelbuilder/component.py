@@ -8,7 +8,7 @@ Created on Mon Aug 10 08:22:25 2015
 #python 2/3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from builtins import *
+from builtins import super
 
 from . import units
 
@@ -53,9 +53,9 @@ class PhysicalParameters(object):
     
 
     """
-    def __init___(self, material=None, mass=None, volume=None,
-                  surface=None, surface_in=None, surface_out=None,
-                  surface_interior=None):
+    def __init__(self, material=None, mass=None, volume=None,
+                 surface=None, surface_in=None, surface_out=None,
+                 surface_interior=None):
         """Constructor
 
         If `surface_in` or `surface_out` are given, `surface` is ignored
@@ -70,60 +70,59 @@ class PhysicalParameters(object):
             surface_interior (Quantity): total covered area of pieces used to 
                 construct a monolithic component e.g. bricks of lead
         """
-            
         self._material = material
-        self._mass = mass
-        self._volume = volume
-        self._surface_in = surface_in 
-        self._surface_out = surface_out
-        self._surface_interior = surface_interior
+        self._mass = mass or 0*units.kg
+        self._volume = volume or 0*units.cm**3
+        self._surface_in = surface_in or 0*units.cm**2
+        self._surface_out = surface_out or 0*units.cm**2
+        self._surface_interior = surface_interior or 0*units.cm**2
         #allow surface to be a proxy for surface_out
-        if surface and not surface_in and not surface_in:
-            self._surface_out = ensure_quantity(surface,'m^2')
+        if surface and not surface_in and not surface_out:
+            self._surface_out = ensure_quantity(surface,'cm^2')
             
-        #getters
-        @property
-        def material(self):
-            return self._material
-        @property
-        def mass(self):
-            return self._mass        
-        @property
-        def volume(self):
-            return self._volume
-        @property
-        def surface_in(self):
-            return self._surface_in
-        @property 
-        def surface_out(self):
-            return self._surface_out
-        @property 
-        def surface_interior(self):
-            return self._surface_interior
-        @property
-        def surface(self):
-            return self.surface_in + self.surface_out
+    #getters
+    @property
+    def material(self):
+        return self._material
+    @property
+    def mass(self):
+        return self._mass        
+    @property
+    def volume(self):
+        return self._volume
+    @property
+    def surface_in(self):
+        return self._surface_in
+    @property 
+    def surface_out(self):
+        return self._surface_out
+    @property 
+    def surface_interior(self):
+        return self._surface_interior
+    @property
+    def surface(self):
+        return self.surface_in + self.surface_out
 
-        #setters, make sure they have units!
-        @material.setter
-        def material(self,material):
-            self._material = material
-        @mass.setter
-        def mass(self, mass):
-            self._mass = ensure_quantity(mass, 'kg')
-        @volume.setter
-        def volume(self, volume):
-            self._volume = ensure_quantity(volume, 'm^3')
-        @surface_in.setter
-        def surface_in(self, surface_in):
-            self._surface_in = ensure_quantity(surface_in, 'm^2')
-        @surface_out.setter
-        def surface_out(self, surface_out):
-            self._surface_out = ensure_quantity(surface_out, 'm^2')
-        @surface_interior.setter
-        def surface_interior(self, surface_interior):
-            self._surface_interior = ensure_quantity(surface_interior, 'm^2')
-        
+    #setters, make sure they have units!
+    @material.setter
+    def setmaterial(self,material):
+        self._material = material
+    @mass.setter
+    def setmass(self, mass):
+        self._mass = ensure_quantity(mass, 'kg')
+    @volume.setter
+    def setvolume(self, volume):
+        self._volume = ensure_quantity(volume, 'm^3')
+    @surface_in.setter
+    def setsurface_in(self, surface_in):
+        self._surface_in = ensure_quantity(surface_in, 'm^2')
+    @surface_out.setter
+    def setsurface_out(self, surface_out):
+        self._surface_out = ensure_quantity(surface_out, 'm^2')
+    @surface_interior.setter
+    def setsurface_interior(self, surface_interior):
+        self._surface_interior = ensure_quantity(surface_interior, 'm^2')
+    
 
 
 """
@@ -168,7 +167,7 @@ class Component(PhysicalParameters):
 
     def __init__(self, name=None, description=None, 
                  comment=None, moreinfo=None, 
-                 specs=None, querymod=None, **kwargs):
+                 specs=[], querymod=None, **kwargs):
         """ Initialize a new physical component. 
         
         Args:
@@ -370,17 +369,18 @@ class Assembly(Component):
         if not selector:
             selector = selectany
         #if the selector passes for us, it passes for all children
-        try:
-            if selector(self,None):
-                selector = selectany
-        except:
-            #interpret exception as not wanting a None type so ignore
-            pass
+        ##this makes really confusing logic for negation!!!!
+        #try:
+        #    if selector(self,None):
+        #        selector = selectany
+        #except:
+        #    #interpret exception as not wanting a None type so ignore
+        #    pass
         
         #loop through children
         passing = []
         for comp, weight in self.components:
-            childpass = comp.passingselector(childselector)
+            childpass = comp.passingselector(selector)
             passing.extend([(c,s,w*weight) for c,s,w in childpass])
         return passing
     

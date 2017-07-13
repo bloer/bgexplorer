@@ -110,14 +110,15 @@ class ComponentSpec(object):
             multiplier = {
                 "per_piece": 1,
                 "bulk": component.mass,
-                "surface" : component.surface_in+component.surface_out,
-                "area" : max(component.surface_in, component.surface_out),
+                "surface" : component.surface,
                 "surface_in": component.surface_in,
                 "surface_out": component.surface_out,
                 "volumetric": component.volume,
                 "volume": component.volume,
                 "flux": component.surface_out,
             }.get(self.distribution,1)
+        if multiplier is None:
+            multiplier = 0
         #convert to seconds to make sure dimensions cancel out
         return (self.rate * multiplier).to('1/s')
     

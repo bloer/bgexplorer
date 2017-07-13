@@ -18,6 +18,7 @@ from collections import namedtuple
 from base64 import b64encode
 from hashlib import md5
 
+from .. import units
 
 class SimulationsDB(object):
     """Store pre-calculated conversion efficiencies, and calculate 
@@ -41,7 +42,7 @@ class SimulationsDB(object):
         """Set the model for cache state. See the constructor for details"""
         self._model = model
         self._lastmod = lastmod
-        self.expirecache(self, model, lastmod)
+        self.expirecache(model, lastmod)
 
 
     def findsimentries(self, component, spec):
@@ -52,11 +53,10 @@ class SimulationsDB(object):
             #there is no valid cache, so run the query
             query = self.calculatequery(component, spec, 
                                         component.getquerymod())
-            result = runquery(query)
+            result = self.runquery(query)
             if result is not None:
                 #we have a new result, update the cache
                 self.cachesimentries(component, spec, result)
-
         return result or [] #make sure we can iterate over result
 
     def evaluate(self, values, compspecs):
@@ -64,39 +64,50 @@ class SimulationsDB(object):
         Args:
             values (list): list of identifiers for values. E.g., names
                            of columns in the db entries
-            compspecs (list): list of (component,spec) pairs to caluclate 
-                              these values for
+            compspecs (list): list of (component,spec,weight) tuples 
+                              to caluclate these values for
 
         Returns:
             result (dict): dictionary of results for each key in values
         """
+        if not values or not compspecs:
+            return None
         #first, try the cache
         result = self.getcachedreductions(values, compspecs)
         if result is None or len(result) != len(values):
             #there is no valid cache, so recalculate
             #first we need the list of effs for each comp, spec
             simweights = {}
-            for comp, spec in compspecs:
-                rate = spec.emissionrate(comp)
-                if rate>0:
+            for comp, spec, weight in compspecs:
+                rate = spec.emissionrate(comp)*weight
+                if rate.m > 0: #rate is a pint.Quantity
                     for sim in self.findsimentries(comp, spec):
                         simweights[sim] = rate + simweights.get(sim,0)
 
             #now we have a rolled-up list of conversions, so calculate the vals
-            result = self.reduce(values, simweights.items())
+            for key in simweights:
+                simweights[key] = simweights[key].to('1/s').m
+            result = self.reduce(values, simweights)
             if result is not None:
+                #and reapply the units
+                for key in result:
+                    if key in values:
+                        result[key] *= units['1/s']
                 #we have a new result, update the cache
                 self.cachereductions(values, compspecs, simweights, result)
+                
         return result
             
         
     def calculatecacheid(self, compspecs):
-        """For the list of (component, spec) pairs in compspecs, calculate a 
-        unique cache value. By default, convert all individual IDs to 
+        """For the list of (component, spec,weight) pairs in compspecs, 
+        calculate a unique cache value. 
+        By default, convert all individual IDs to 
         strings, concatenate, and calculate an md5sum base64 encoded
         """
         #I think this only works in python3...
-        myhash =md5(''.join(str(c.getspecid(s)).encode() for c,s in compspecs)) 
+        myhash = md5(b''.join(str(c[0].getspecid(c[1])).encode() 
+                             for c in compspecs)) 
         return b64encode(myhash.digest())
         
     #the following should be overridden by derived classes

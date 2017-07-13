@@ -26,17 +26,22 @@ from builtins import super
 import pymongo
 from time import time
 
+from .. import units
 from .simulationsdb import SimulationsDB
 
+
+#need a way to get united quantities in and out of the cache
+
+
 class MongoSimsDB(SimulationsDB):
-    def __init__(self, database, **kwargs):
+    def __init__(self, database, simscollectionname=None, **kwargs):
         """Create a new db instance, bound to database, which should be 
         a valid pymongo Database instance. 
         """
         #initialize the DB connection
         self._db = database
         self._cache = None #this will be updated in super() constructor
-        self._simsname = 'simulations'
+        self._simsname = simscollectionname or 'simulations'
         self._simscollection = self._db[self._simsname]
 
         self.index_simentries()
@@ -66,7 +71,7 @@ class MongoSimsDB(SimulationsDB):
                 {'$addFields': {'age': {'$subtract':
                                 ['$timestamp','$simulations.0.timestamp']}}
                 },
-                {'$match': {'$age':{'$lt':0}} },
+                {'$match': {'age':{'$lt':0}} },
                 {'$group': {'_id':'$_id'}}
             ])
             ids = [d['_id'] for d in res]
@@ -80,7 +85,7 @@ class MongoSimsDB(SimulationsDB):
         if not self._cache:
             return None
         #use the same cacheid as for values
-        _id = self.calculatecacheid( ((component, spec)) )
+        _id = self.calculatecacheid(((component, spec),) )
         doc = self._cache.find_one(_id, projection={'simulations':True})
         if doc:
             return doc['simulations']
@@ -88,7 +93,7 @@ class MongoSimsDB(SimulationsDB):
     
     def cachesimentries(self, component, spec, result):
         if self._cache:
-            _id = self.calculatecacheid( ((component, spec)) )
+            _id = self.calculatecacheid( ((component, spec),) )
             sid = component.getspecid(spec)
             self._cache.update_one({'_id':_id}, 
                                    {'$set':{'simulations':result,
@@ -101,17 +106,19 @@ class MongoSimsDB(SimulationsDB):
             return None
         cacheid = self.calculatecacheid(compspecs)
         doc = self._cache.find_one(cacheid, projection={'reductions': True})
-        if doc:
-            return {key:val for key in values if key in doc['reductions']}
+        if doc and 'reductions' in doc:
+            red = doc['reductions']
+            return {key:units(red[key]) for key in values if key in red}
         return None
 
-    def cachereductions(self, compspecs, values, simweights, result):
+    def cachereductions(self, values, compspecs, simweights, result):
         if self._cache:
             cacheid = self.calculatecacheid(compspecs)
-            setkeys = {'reductions.%s'%key:val for key,val in result.items()}
-            setkeys['compspecs'] = [c.getspecid(s) for c,s in compspecs]
+            setkeys = {'reductions.%s'%key:str(val) #transform Quantity to str
+                       for key,val in result.items()}
+            setkeys['compspecs'] = [c.getspecid(s) for c,s,w in compspecs]
             setkeys['timestamp'] = time()
-            setkeys['simulations'] = [s for s,w in simweights]
+            setkeys['simulations'] = [s for s,w in simweights.items()]
             self._cache.update_one({'_id':cacheid}, {'$set': setkeys},
                                    upsert=True)
     
@@ -165,7 +172,7 @@ class MongoSimsDB(SimulationsDB):
                 'distribution': spec.distribution,
                }
     
-    def index_simulations(self):
+    def index_simentries(self):
         """ Create any indices on the simulationssdb for faster queries
         The collection name is assumed to be 'simulations'
         """
@@ -191,10 +198,14 @@ class MongoSimsDB(SimulationsDB):
         in the 'simulations' collection, and that the reduction is simple 
         addition
         """
+        if not values or not entryweights:
+            return None
+        
         #there doesn't seem to be a sensible way to do lookups...
+        simkeys = list(entryweights.keys())
         getweight = {'$let':{
-            'vars':{'keys': entryweights.keys(), 
-                    'weights': entryweights.values()},
+            'vars':{'keys': simkeys, 
+                    'weights': list(entryweights.values())},
             'in':{'$arrayElemAt':["$$weights",
                                   {'$indexOfArray':["$$keys",'$_id']}] }
         }}
@@ -203,7 +214,7 @@ class MongoSimsDB(SimulationsDB):
         reducer['_id'] = None
         pipeline = [
             #select the entries by id in entryweights
-            {'$match':{'_id':{'$in':entryweights.keys()}}},
+            {'$match':{'_id':{'$in':simkeys}}},
             #lookup the entry's weight
             {'$addFields': {'_weight': getweight}}, 
             #reduce

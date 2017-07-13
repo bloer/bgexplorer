@@ -24,6 +24,6 @@ Additional information like part numbers, vendors, dates received, links to trac
 ### component.Assembly
 An assembly has a name, optional desription and comment, and contains a list of sub-components and/or sub-assemblies.  Each subcomponetn can also be given a weight, typically used for multiple part numbers (e.g. a flange assembly may have 20 bolts as subcomponents.)  Or, if a 'wire' component is specified given with a mass of 1 g/meter, the weight given might be 30 meters. 
 
-### compspec.ComponentSpecification
+### compspec.ComponentSpec
 
 *in progress*
