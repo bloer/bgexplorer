@@ -226,7 +226,7 @@ class Component(PhysicalParameters):
             return self.id
         elif spec not in self.specs:
             return None
-        return str(self.id)+'//'+str(getattr(spec,'id',self.specs.index(spec)))
+        return str(self.id)+','+str(getattr(spec,'id',self.specs.index(spec)))
     
     def addspec(self, spec, querymod=None):
         self.specs.append(spec)

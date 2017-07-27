@@ -15,3 +15,7 @@ units.default_format = 'P'
 units.ppb_U = 12*units['mBq/kg']
 units.ppb_Th = 4.1*units['mBq/kg']
 units.ppb_K = 0.031*units['mBq/kg']
+
+from . import component
+from . import compspec
+from . import simulationsdb
