@@ -10,119 +10,15 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from builtins import super
 
-from . import units
+from .common import units, ensure_quantity, removeclasses
+from .mappable import Mappable
 
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
 from copy import copy
 
 #utility function for selections
 def selectany(comp=None, spec=None):
     return True
-
-
-def ensure_quantity(value, defunit):
-    """Make sure a variable is a pint.Quantity, and transform if unitless
-    
-    Args:
-        value: The test value
-        defunit (str,Unit, Quanty): default unit to interpret as
-    Returns:
-        Quantity: Value if already Quantity, else Quantity(value, defunit)
-    """
-    if value is None:
-        return None
-    qval = units.Quantity(value)
-    if qval.dimensionality != units.Quantity(defunit).dimensionality:
-        if qval.dimensionality == units.dimensionless.dimensionality:
-            qval = units.Quantity(qval, defunit)
-        else:
-            raise units.DimensionalityError(qval.u, defunit)
-    
-    return qval
-    
-    
-
-class PhysicalParameters(object):
-    """Helper class to store list of component physical parameters
-
-    All dimensional parameters will be cast to pint.Quantity's if bare numbers 
-    are passed, with default SI units (kg, m, s). 
-    All attributes are optional 
-    
-    Attributes: are same as init args
-    
-
-    """
-    def __init__(self, material=None, mass=None, volume=None,
-                 surface=None, surface_in=None, surface_out=None,
-                 surface_interior=None):
-        """Constructor
-
-        If `surface_in` or `surface_out` are given, `surface` is ignored
-        
-        Args:
-            material (str): physical material (e.g. wood, copper)
-            mass (Quantity): mass of material. interpreted as kg if unitless
-            volume (Quantity): volume of material, interpreted as m^3
-            surface (Quantity): total surface area. interpted as m^2  
-            surface_in (Quantity): inner surface area (e.g. cryostat) 
-            surface_out (Quantity): same as inner, but for outer surface
-            surface_interior (Quantity): total covered area of pieces used to 
-                construct a monolithic component e.g. bricks of lead
-        """
-        self._material = material
-        self._mass = mass or 0*units.kg
-        self._volume = volume or 0*units.cm**3
-        self._surface_in = surface_in or 0*units.cm**2
-        self._surface_out = surface_out or 0*units.cm**2
-        self._surface_interior = surface_interior or 0*units.cm**2
-        #allow surface to be a proxy for surface_out
-        if surface and not surface_in and not surface_out:
-            self._surface_out = ensure_quantity(surface,'cm^2')
-            
-    #getters
-    @property
-    def material(self):
-        return self._material
-    @property
-    def mass(self):
-        return self._mass        
-    @property
-    def volume(self):
-        return self._volume
-    @property
-    def surface_in(self):
-        return self._surface_in
-    @property 
-    def surface_out(self):
-        return self._surface_out
-    @property 
-    def surface_interior(self):
-        return self._surface_interior
-    @property
-    def surface(self):
-        return self.surface_in + self.surface_out
-
-    #setters, make sure they have units!
-    @material.setter
-    def setmaterial(self,material):
-        self._material = material
-    @mass.setter
-    def setmass(self, mass):
-        self._mass = ensure_quantity(mass, 'kg')
-    @volume.setter
-    def setvolume(self, volume):
-        self._volume = ensure_quantity(volume, 'm^3')
-    @surface_in.setter
-    def setsurface_in(self, surface_in):
-        self._surface_in = ensure_quantity(surface_in, 'm^2')
-    @surface_out.setter
-    def setsurface_out(self, surface_out):
-        self._surface_out = ensure_quantity(surface_out, 'm^2')
-    @surface_interior.setter
-    def setsurface_interior(self, surface_interior):
-        self._surface_interior = ensure_quantity(surface_interior, 'm^2')
-    
 
 
 """
@@ -160,39 +56,39 @@ q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
                                                        'bulk']} }
 """
 
+    
 
 
-class Component(PhysicalParameters):
-    """Single piece of detector/shield geometry with set of material specs"""
-
-    def __init__(self, name=None, description=None, 
-                 comment=None, moreinfo=None, 
-                 specs=[], querymod=None, **kwargs):
-        """ Initialize a new physical component. 
-        
+class BaseComponent(Mappable):
+    """Base class for Components and Assemblies, defines useful functions"""
+    def __init__(self, name=None, description=None, partnum=None, 
+                 comment=None, moreinfo=None, isroot=False,
+                 specs=[], querymod=None, **kwargs) : 
+        """Create a new BaseComponent.
         Args:
-            name (str): name of this component, ideally unique
-            description (str): one-sentence description of this component
-            comment (str): detail about implementation (e.g. mass made up)
-            moreinfo (dict): key-value pairs for any other information like 
-                part numbers, vendor contacts, etc
+            name (str): a short, hopefully unique name for the component
+            description (str): longer descriptive string
+            comment (str): describe current implementation or status
+            partnum (str): Part/drawing number of this piece
+            moreinfo (dict): dictionary of additional metadata
+            isroot (bool): Indicates if this component is THE root assembly
+                should only ever be true for an Assembly
             specs (list): ComponentSpecifications attached to this component
                 Each item in the list may be either a ComponentSpecification 
                 or a (ComponentSpecification, querymod) pair
             querymod (dict): modify the default query to find ConversionEffs
                 for all specs associated with this component. See the 
                 specific DB implementation for the expected format
-        
-
         """
-        #initialize the base class
         super().__init__(**kwargs)
-        
-        #basic bookkeeping and descriptive stuff
         self.name = name
         self.description = description
         self.comment = comment
-        self.moreinfo = moreinfo or dict()
+        self.partnum = partnum
+        self.moreinfo = moreinfo or {}
+        self.isroot = isroot
+        self.placements = set()
+        #basic bookkeeping and descriptive stuff
         self.querymods = dict()
         if querymod:
             self.querymods[None] = querymod
@@ -202,49 +98,41 @@ class Component(PhysicalParameters):
                 self.addspec(*spec)
             else:
                 self.addspec(spec)
-        
-            
-    def __str__(self):
-        return "Component('%s')"%self.name
+
     
-    def export(self):
-        """Extract all arguments needed for the constructor as a dictionary"""
-        #need to do something smarter here...
-        return self.__dict__
+
+    def __str__(self):
+        return "%s('%s')"%(type(self).__name__, self.name)
     
     def __repr__(self):
-        return "Component(**%s)"%(self.export())
+        return "%s('%s')"%(type(self).__name__, self.id)
     
-    @property
-    def id(self):
-        """unique, hopefully permanent ID"""
-        return getattr(self,'_id',self.name)
 
-    def getspecid(self,spec):
-        """unique id for a component, spec combo"""
-        if spec is None: #ALL specs associated to this component
-            return self.id
-        elif spec not in self.specs:
-            return None
-        return str(self.id)+','+str(getattr(spec,'id',self.specs.index(spec)))
-    
     def addspec(self, spec, querymod=None):
         self.specs.append(spec)
         if querymod:
-            self.querymods[spec] = querymod
+            self.querymods[getattr(spec, 'id', spec)] = querymod
+        if hasattr(spec, 'appliedto'):
+            spec.appliedto.add(self)
             
-    def getquerymod(self, spec=None):
-        mymod = self.querymods.get(spec,{})
-        if spec: #combine with the per-component spec
-            base = copy(self.querymods.get(None, {}))
-            base.update(mymod)
-            mymod = base
-        return mymod
+    def findspecs(self, name=None, deep=False, children=False):
+        result = copy(self.specs)
+        if deep:
+            #concatenate all subspecs
+            result = sum((s.getsubspecs() if hasattr(s,'getsubspecs') else [s]
+                          for s in result), [])
+        if name is None:
+            return set(result)
+        return set([a for a in result if a.name == name])
+            
+    def gettotalweight(self):
+        """Get the total weight (usually number of) placed components
+        Will be 0 if not placed anywhere in tree or only belong to unplaced 
+        assemblies
+        """
+        return (1 if self.isroot 
+                else sum([p.gettotalweight() for p in self.placements]))
 
-    def findspecs(self, name, deep=False):
-        return [a for a in self.specs if a.name == name]
-    
-    
     def passingselector(self, selector=None):
         """
         Get a list of all component specifications that pass the given selector
@@ -257,14 +145,113 @@ class Component(PhysicalParameters):
                             (for leaf components comp==self and weight==1)
         """
         if not selector:
-            selector = passany
-        return [(self,s,1) for s in self.specs if selector(self,s)]
+            selector = selectany
+        return [(self,s,1) for s in self.findspecs(deep=True) 
+                if selector(self,s)]
     
     def isparentof(self, component, deep=False):
         """ Are we the parent component? This is a leaf, so only if it is us """
         return component is self
 
+    def todict(self):
+        """Export this object to a dictionary suitable for storage/transmission
+        """
+        result = removeclasses(copy(self.__dict__))
+        result['__class__'] = type(self).__name__
+        #placements may not have IDs, so delete and assume they'll be rebuilt
+        del result['placements']
+        #expect to receive querymods along with their associated specs
+        del result['querymods']
+        result['querymod'] = self.querymods.get(None)
+        result['specs'] = [(spec, self.querymods.get(spec)) 
+                           for spec in result['specs']]
+        return result
+        
+
+
+class Component(BaseComponent):
+    """Helper class to store list of component physical parameters
+
+    All dimensional parameters will be cast to pint.Quantity's if bare numbers 
+    are passed, with default SI units (kg, m, s). 
+    All attributes are optional 
     
+    Attributes: are same as init args
+    
+
+    """
+    def __init__(self, name=None, material=None, mass=None, volume=None,
+                 surface=None, surface_in=None, surface_out=None,
+                 surface_interior=None, **kwargs):
+        """Constructor
+
+        If `surface_in` or `surface_out` are given, `surface` is ignored
+        
+        Args:
+            material (str): physical material (e.g. wood, copper)
+            mass (Quantity): mass of material. interpreted as kg if unitless
+            volume (Quantity): volume of material, interpreted as m^3
+            surface (Quantity): total surface area. interpted as m^2  
+            surface_in (Quantity): inner surface area (e.g. cryostat) 
+            surface_out (Quantity): same as inner, but for outer surface
+            surface_interior (Quantity): total covered area of pieces used to 
+                construct a monolithic component e.g. bricks of lead
+        """
+        super().__init__(name=name, **kwargs)
+        self.material = material
+        self.mass = mass or 0*units.kg
+        self.volume = volume or 0*units.cm**3
+        self.surface_in = surface_in or 0*units.cm**2
+        self.surface_out = surface_out or 0*units.cm**2
+        self.surface_interior = surface_interior or 0*units.cm**2
+        #allow surface to be a proxy for surface_out
+        if surface and not surface_in and not surface_out:
+            self.surface_out = surface
+
+    #getters
+    @property
+    def material(self):
+        return self._material
+    @property
+    def mass(self):
+        return self._mass        
+    @property
+    def volume(self):
+        return self._volume
+    @property
+    def surface_in(self):
+        return self._surface_in
+    @property 
+    def surface_out(self):
+        return self._surface_out
+    @property 
+    def surface_interior(self):
+        return self._surface_interior
+    @property
+    def surface(self):
+        return self.surface_in + self.surface_out
+
+    #setters, make sure they have units!
+    @material.setter
+    def material(self,material):
+        self._material = material
+    @mass.setter
+    def mass(self, mass):
+        self._mass = ensure_quantity(mass, 'kg')
+    @volume.setter
+    def volume(self, volume):
+        self._volume = ensure_quantity(volume, 'm^3')
+    @surface_in.setter
+    def surface_in(self, surface_in):
+        self._surface_in = ensure_quantity(surface_in, 'm^2')
+    @surface_out.setter
+    def surface_out(self, surface_out):
+        self._surface_out = ensure_quantity(surface_out, 'm^2')
+    @surface_interior.setter
+    def surface_interior(self, surface_interior):
+        self._surface_interior = ensure_quantity(surface_interior, 'm^2')
+    
+
     
 class SmallComponent(Component):
     """A small or thin-walled component where the difference between surface
@@ -279,52 +266,114 @@ class SmallComponent(Component):
         qm['union_keys']['distribution'] = 'bulk'
         self.querymods[None] = qm
         
-    
-class Assembly(Component):
+class Placement(object):
+    """A class representing an instance of a component placed within an 
+    Assembly. For example, the same resistor might be used in different places
+    in an experiment, and so will need to be associated to different simulation
+    datasets. This lets us avoid copying components. 
+    """
+    def __init__(self, parent, component, weight=1, querymod=None, 
+                 simdata=None):
+        """Args:
+            parent (Assembly): assembly in which we're being placed
+                Unlike components, placements should be unique
+            component (Component): the component or assembly to place here
+            weight (numeric): Usually, how many of this component, but could 
+                be fractional in some cases
+            querymod (dict): modifier to DB query to locate sim datasets
+            simdata (dict): map simulation data to specs for this component
+                should have the form {spec: simdata}
+            
+        """
+        self.parent = parent
+        self.component = component
+        self.weight = weight
+        self.querymod = querymod
+        self.simdata = simdata or {}
+        if hasattr(component, 'placements'): #it might still be a reference
+            component.placements.add(self)
+
+    def addsimdata(self, spec, simdata):
+        #not sure if spec will be a CompSpec or ID, so make sure to get the ID
+        self.simdata[getattr(spec,'id',spec)].append(simdata)
+
+    def gettotalweight(self):
+        parentweight = self.parent.gettotalweight() if self.parent else 1
+        return self.weight * parentweight
+
+    def getquerymodifiers(self, spec=None):
+        """Get a list of query modifiers in ascending priority for the spec"""
+        result = []
+        if self.parent:
+            #how to order multiple placements? should be interleaved I guess
+            parentresults = [p.getquerymodifiers() 
+                             for p in self.parent.placements]
+            #todo there must be a better way to interleave too...
+            maxlen = max(len(sub) for sub in parentresults)
+            for i in range(maxlen):
+                for sub in parentresults:
+                    if len(sub)>0:
+                        result.append(sub.pop())
+            #todo: the parent itself may have querymods too
+            result.reverse()
+        #now the bare component, then component, spec
+        if self.component.querymods.get(None):
+            result.append(self.component.querymods[None])
+        if spec and self.component.querymods.get(spec.id):
+            result.append(self.component.querymods[spec.id])
+        #finally our mod
+        if self.querymod:
+            result.append(self.querymod)
+
+        return result
+
+    @property
+    def name(self):
+        return self.component.name
+
+    def todict(self):
+        result = removeclasses(copy(self.__dict__))
+        #replace objects with ID references
+        del result['parent'] #this gets reset on construction
+        return result
+
+class Assembly(BaseComponent):
     """Assembly of multiple components"""
-    def __init__(self,name=None, components=None, **kwargs):
+    def __init__(self, name=None, components=None, **kwargs):
         """Create a new assembly of multiple components
         
         Args:
-            name (str): Name for this assembly (ideally unique)
             components (list): list of Components or Assemblies owned by this
-                object. Can be bare Components or (Component, weight) pairs
+                object. Can be bare Components or tuples, dictionary of
+                Placement arguments.
         """
         super().__init__(name=name, **kwargs)
 
-        self._subcompmap = dict()
-        self.components = []
+        self._components = []
 
         #construct the list of components from list of comps or (comp,weight) 
         #pairs. Can also be bare objects
         for comp in components:
-            c = comp
-            w = 1
-            if type(comp) in (tuple,list):
-                c,w = comp
-            if type(c) is dict:
-                c=buildcomponent(**c)
-            self.addcomponent(c,w)
-
-        super().__init__(name=name,**kwargs)
+            self.addcomponent(comp)
         
-    def __str__(self):
-        return "Assembly('%s')"%self.name
-    
-    def export(self):
-        """Extract all arguments needed for the constructor as a dictionary"""
-        #need to do something smarter here...
-        return self.__dict__
-    
-    def __repr__(self):
-        return "Assembly(**%s)"%(self.export())
-        
-        
-    def addcomponent(self,component, weight=1):
-        """Add a new component directly to this assembly"""
-        self.components.append((component,weight))
-        if component.name:
-            self._subcompmap[component.name] = (component,weight)
+    def addcomponent(self, placement):
+        """Add a new component directly to this assembly
+        the single argument "placement" can take many forms: 
+           Component/Assembly to attache
+           list or tuple of positional arguments to Placement
+           dict of kwarg arguments to Placement
+        """
+        if isinstance(placement, BaseComponent):
+            placement = Placement(self, placement)
+        elif isinstance(placement, Placement): 
+            placement.parent = self
+        elif type(placement) in (tuple, list):
+            placement = Placement(self, *placement)
+        elif isinstance(placement, dict):
+            placement = Placement(self, **placement)
+        else:
+            raise TypeError("Unhandled type %s for placement",type(placement))
+        self._components.append(placement)
             
     #functions for inspecting the tree of subcomponents
     def getcomponents(self, deep=False, withweight=False, merge=True):
@@ -338,9 +387,11 @@ class Assembly(Component):
                 at multiple leaves in the tree
         """
         if not deep:
-            return [c if withweight else c[0] for c in self.components]
+            return [(p.component, p.weight) if withweight else p.component 
+                    for p in self._components]
         allcomp = []
-        for comp,weight in self.components:
+        for placement in self._components:
+            comp, weight = placement.component, placement.weight
             if hasattr(comp,'getcomponents'):
                 subcomps = comp.getcomponents(deep,withweight)
                 if withweight:
@@ -379,7 +430,7 @@ class Assembly(Component):
         
         #loop through children
         passing = []
-        for comp, weight in self.components:
+        for comp, weight in self.getcomponents(withweight=True, deep=False):
             childpass = comp.passingselector(selector)
             passing.extend([(c,s,w*weight) for c,s,w in childpass])
         return passing
@@ -402,26 +453,14 @@ class Assembly(Component):
             tree.append(component)
         return tree
         
-    def findspecs(self, name, deep=False):
-        res = set()
-        for comp in self.getcomponents(deep=deep, withweight=False):
-            set.update(comp.findspecs(name=name, deep=deep))
+    def findspecs(self, name=None, deep=False, children=False):
+        result = super().findspecs(name=name, deep=deep)
+        
+        if children:
+            for comp in self.getcomponents(deep=True, withweight=False):
+                result.update(comp.findspecs(name=name, deep=deep))
 
-    def assignids(self, root='/', override=True):
-        """Assign a unique ID to each component based on the path to root.
-        If override is False, components will keep any already-assigned IDs
-        """
-        if override or not hasattr(self,'_id'):
-            self._id = root+self.name
-        subroot=self._id+'/'
-
-        for comp in self.getcomponents(deep=False, wighweight=False):
-            if hasattr(comp,'assignids'):
-                comp.assignids(subroot, override=override)
-            elif override or not hasattr(comp, '_id'):
-                comp._id = subroot+comp.name
-    
-
+        return result
 
     @property
     def material(self):
@@ -430,7 +469,8 @@ class Assembly(Component):
     #there has got to be a smarter way to do all of this...
     def sumoverchildren(self,attr):
         """Utility function to ease the overrides below"""
-        return sum(c.__getattribute__(attr)*w for c,w in self.components)
+        return sum(c.__getattribute__(attr)*w 
+                   for c,w in self.getcomponents(withweight=True, deep=False))
 
     @property
     def mass(self):
@@ -454,13 +494,14 @@ class Assembly(Component):
     
         
         
-def buildcomponent(args):
+def buildcomponentfromdict(args):
     """Construct a Component or Assembly from a dict"""
     cls = Component
     if '__class__' in args:
-        classname = x.pop('__class__')
+        classname = args.pop('__class__')
         if classname == 'Assembly':
             cls = Assembly
         elif classname != 'Component':
-            print("Unknown class name '%s'"%classname)
+            raise ValueError("buildcomponentfromdict: Unknown class name '%s'"
+                             %classname)
     return cls(**args)

@@ -1,0 +1,103 @@
+"""
+Common functions and utility classes shared by other units
+"""
+import inspect
+from copy import copy
+import pint
+
+###### physical units #######
+units = pint.UnitRegistry()
+units.auto_reduce_dimensions = False #this doesn't work right
+units.DimensionalityError = pint.errors.DimensionalityError
+units.default_format = 'P'
+#some common unit conversions
+units.ppb_U = 12*units['mBq/kg']
+units.ppb_Th = 4.1*units['mBq/kg']
+units.ppb_K = 0.031*units['mBq/kg']
+
+def ensure_quantity(value, defunit=None):
+    """Make sure a variable is a pint.Quantity, and transform if unitless
+    
+    Args:
+        value: The test value
+        defunit (str,Unit, Quanty): default unit to interpret as
+    Returns:
+        Quantity: Value if already Quantity, else Quantity(value, defunit)
+    """
+    if value is None:
+        return None
+    qval = units.Quantity(value)
+    if (defunit is not None and 
+        qval.dimensionality != units.Quantity(1*defunit).dimensionality):
+        if qval.dimensionality == units.dimensionless.dimensionality:
+            qval = units.Quantity(qval.m, defunit)
+        else:
+            raise units.DimensionalityError(qval.u, defunit)
+    
+    return qval
+    
+
+
+def to_primitive(val, renameunderscores=True, recursive=True,
+                 replaceids=True, stringify=(units.Quantity,)):
+    """Transform a class object into a primitive object for serialization"""
+    
+    if replaceids and hasattr(val, 'id'):
+        val =  val.id
+    elif replaceids and hasattr(val, '_id'):
+        val =  val._id
+
+    elif inspect.getmodule(val): #I think this tests for non-builtin classes
+        if hasattr(val, 'todict'): #has a custom conversion
+            val =  val.todict()
+        elif isinstance(val, stringify):
+            val =  str(val)
+        elif hasattr(val, '__dict__'): #this is probably going to break lots
+            val =  copy(val.__dict__)
+        else: #not sure what this is...
+            raise TypeError("Can't convert %s to exportable",type(val))
+            
+    if recursive:
+        if isinstance(val, dict):
+            removeclasses(val, renameunderscores, recursive, replaceids, 
+                          stringify)
+        elif isinstance(val, list):
+            val = [to_primitive(sub, renameunderscores, recursive, replaceids,
+                                stringify) for sub in val]
+    return val
+    
+
+####### Functions for dictionary export of complex structures #####
+def removeclasses(adict, renameunderscores=True, recursive=True,
+                  replaceids=True, stringify=(units.Quantity,)):
+    """Transform all custom class objects in the dict to plain dicts
+    Args:
+        adict (dict): The dictionary to update in place
+        renameunderscores (bool): For any key starting with a single underscore,
+            replace with the regular. I.e. '_key'->'key'. Note '_id' will 
+            NOT be replaced
+        recursive (bool): call removeclasses on any dicts stored as objects
+            inside this dictionary
+        replaceids (bool): If true, replace any object with an 'id' attribute
+            by that object's id
+        stringify (list): list of classes that should be transformed into 
+            string objects rather than dictionaries
+    """
+
+    underkeys = []
+    
+    for key, val in adict.items():
+        #check if we need to rename this key
+        if (key != '_id' and hasattr(key,'startswith') and 
+            key.startswith('_') and not key.startswith('__')):
+            underkeys.append(key)
+        
+        adict[key] = to_primitive(val, renameunderscores, recursive, 
+                                  replaceids, stringify)
+        
+    if renameunderscores:
+        for key in underkeys:
+            adict[key[1:]] = adict[key]
+            del adict[key]
+    
+    return adict

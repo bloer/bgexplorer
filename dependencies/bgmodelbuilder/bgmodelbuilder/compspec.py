@@ -8,17 +8,17 @@ Created on Mon Jul 27 11:04:32 2015
 #python 2/3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from builtins import *
+from builtins import super
+
 from math import log,exp
-from . import units
-from copy import deepcopy as copy
-#from abc import ABCMeta, abstractproperty
-
-#from conversioneff import RegionOfInterst,EvaluatedRegionOfInterst,ConversionEff
+from .common import units, ensure_quantity, removeclasses
+from .mappable import Mappable
+from copy import copy
 
 
 
-class ComponentSpec(object):
+
+class ComponentSpec(Mappable):
     """ Define a specification to determine emissions from some component.
     
     Each component will define a list of specs mapping to one or more
@@ -40,6 +40,7 @@ class ComponentSpec(object):
     def __init__(self, name="",
                  distribution=_default_distribution, normfunc=None,
                  category="", comment="", reference="", moreinfo=None,
+                 appliedto=None,
                  **kwargs):
         """Make a new ComponentSpec
 
@@ -48,15 +49,19 @@ class ComponentSpec(object):
             distribution (str): how is the contaminant distributed? Most common
                 values are bulk, surface_in, surface_out
             normfunc (func): A function taking the owning Component that returns
-                a custom normalization factor. For example, if normfunc is None,
-                bulk specs use component.mass
+                a custom normalization factor. Can be a function taking a 
+                component as argument or a string to be evaluated; in this 
+                case the variable MUST be named 'component'. The special string
+                'piece' is equivalent to '1'. The 'units' object is also 
+                available to the string. 
             category(str): A descriptive category for higher-order groupings. 
                 for example, Cosmogenic Activation, Radon Daughter
             comment (str) A descriptive comment
             reference (str) information about the origin of the number
             moreinfo (dict): key-value pairs for any other information
+            appliedto (set): set of components this spec is bound to
         """
-        super().__init__()
+        super().__init__(**kwargs)
 
         self.name = name
         self.distribution = distribution
@@ -72,9 +77,10 @@ class ComponentSpec(object):
         self.comment = comment
         self.reference = reference
         self.moreinfo = moreinfo or {}
+        self.appliedto = appliedto or set()
         
     def __str__(self):
-        return "ComponentSpec('%s')"%self.name
+        return "%s('%s')"%(type(self).__name__, self.name)
         
     def __repr__(self):
         return ("ComponentSpec('%s',distribution='%s',category='%')"
@@ -105,10 +111,18 @@ class ComponentSpec(object):
         """Normalize the emission rate to the component"""
         multiplier = 0
         if self.normfunc:
-            multiplier = self.normfunc(component)
+            if callable(self.normfunc): #its a function
+                multiplier = self.normfunc(component)
+            elif type(self.normfunc) is str:
+                #evaluate it. the __builtins__ thing somewhat protects 
+                #against malicious stuff. 
+                multiplier = eval(self.normfunc, 
+                                  {'__builtins__':{},'units':units},
+                                  {'component':component, 'piece':1})
+            else:
+                raise TypeError("Unknown type %s for normfunc"%self.normfunc)
         else:
             multiplier = {
-                "per_piece": 1,
                 "bulk": component.mass,
                 "surface" : component.surface,
                 "surface_in": component.surface_in,
@@ -119,10 +133,25 @@ class ComponentSpec(object):
             }.get(self.distribution,1)
         if multiplier is None:
             multiplier = 0
-        #convert to seconds to make sure dimensions cancel out
+
         return (self.rate * multiplier).to('1/s')
     
+    def totalemissionrate(self):
+        """Get the total emission rate from all associated components 
+        and their global weights
+        """
+        return sum(self.emissionrate(comp) * comp.gettotalweight() 
+                   for comp in self.appliedto)
+    
+    def todict(self):
+        """Export this instance to a plain object"""
+        result = copy(self.__dict__)
+        #all 'appliedto' will get rebuilt on restore
+        del result['appliedto']
+        result['__class__'] = type(self).__name__
+        return removeclasses(result)
         
+
 class CombinedSpec(ComponentSpec):
     """Utility class to group multiple material specs into one"""
     
@@ -132,7 +161,7 @@ class CombinedSpec(ComponentSpec):
         if specs:
             for spec in specs:
                 self.addmaterialspec(spec)
-
+        
     @property
     def rate(self):
         return sum(spec.rate for spec in self._specs)
@@ -140,36 +169,33 @@ class CombinedSpec(ComponentSpec):
     def emissionrate(self,component):
         return sum(spec.emissionrate(component) for spec in self._specs)
         
-    def getspecs(self, deep=False):
-        if not deep:
-            return self._specs
-        allspecs = []
-        #print("getting material spec for %s"%self.name)
-        for spec in self._specs:
-            #print("\trecursing into subspec %s"%spec.name)
-            if isinstance(spec,CombinedSpec):
-                allspecs.extend(spec.getmaterialspecs(deep=True))
-            else:
-                allspecs.append(spec)
-        #print("Finished getting deep specs for %s"%self.name)
-        return allspecs
+    def getsubspecs(self):
+        return self._specs
     
     def addmaterialspec(self,spec):
+        #todo: is this really a good plan??
+        spec._id = self.id+('-%d'%len(self._specs))
+        spec.appliedto = self.appliedto 
         self._specs.append(spec)
         
     def __repr__(self):
         return "CombinedSpec('%s', specs=%s)"%(self.name, self._specs)
+
+    def updatesubspecs(self, attr, val):
+        for sub in self.getsubspecs():
+            setattr(sub, attr, val)
 
     #overload __getitem__ so we can unpack subspecs directly
     #should we allow deep unpacking???
     def __getitem__(self,key):
         return self.getspecs()[key]
 
+    
         
 
 class RadioactiveIsotope(object):
     def __init__(self,halflife,name=None):
-        self.halflife = halflife
+        self.halflife = ensure_quantity(halflife, units.seconds)
         self.name = name        
 
 class RadioactiveContam(ComponentSpec):
@@ -181,9 +207,11 @@ class RadioactiveContam(ComponentSpec):
     
     """
 
-    def __init__(self, name='', isotope=None, rate=None, **kwargs):
-        self._rate = rate
+    def __init__(self, name='', rate=None, isotope=None, **kwargs):
+        self._rate = ensure_quantity(rate)
         self.isotope = isotope or name
+        if isinstance(self.isotope, dict): #handle imports
+            self.isotope = RadioactiveIsotope(**self.isotope)
         super().__init__(name=name, **kwargs)
         
     @property
@@ -195,6 +223,8 @@ class RadioactiveContam(ComponentSpec):
      
     def __repr__(self):
         return "RadioactiveContam('%s',%s)"%(self.name,self.getratestr())
+
+    
                                 
     
 class RadonExposure(RadioactiveContam):
@@ -212,14 +242,14 @@ class RadonExposure(RadioactiveContam):
                  distribution='surface', name='Pb210',
                  column_height = _default_column_height, mode="free",
                  **kwargs):
-        self.radonlevel = radonlevel
-        self.exposure = exposure
-        self._column_height = column_height
+        self.radonlevel = ensure_quantity(radonlevel,"Bq/m^3")
+        self.exposure = ensure_quantity(exposure, units.day)
+        self.column_height = ensure_quantity(column_height, units.cm)
         if mode not in ("free","trapped"):
             print("Uknown mode %s: using 'free'"%mode)
             mode="free"
         self.mode = mode
-        super().__init__(name=name,isotope='Pb210',
+        super().__init__(name=name,isotope=kwargs.pop('isotope','Pb210'),
                          distribution=distribution,
                          **kwargs)
     
@@ -230,13 +260,13 @@ class RadonExposure(RadioactiveContam):
         #very different, so just be crude
         if self.mode is "trapped":
             #rn decays away during exposure
-            R0 = self.radonlevel * self._column_height * \
-                (1-exp(-self.exposure/_tau_rn222)) * \
-                _tau_rn222 / self._tau_pb210
+            R0 = (self.radonlevel * self.column_height * 
+                  (1-exp(-self.exposure/self._tau_rn222)) * 
+                  self._tau_rn222 / self._tau_pb210)
             return R0 * exp(-self.exposure/self._tau_pb210)
         else:
-            return self.radonlevel * self._column_height * \
-                (1-exp(-self.exposure / self._tau_pb210))
+            return (self.radonlevel * self.column_height * 
+                    (1-exp(-self.exposure / self._tau_pb210)))
     
         
     def getfullspec(self):
@@ -245,44 +275,55 @@ class RadonExposure(RadioactiveContam):
     def __repr__(self):
         return "RadonExposure(%s)"%(self.getfullspec())
                                                          
-        
-#this class doesn't really add anything, but might help for accounting
-class DustAccumulation(RadioactiveIsotope):
+
+
+
+class DustAccumulation(CombinedSpec):
     """Dust deposited onto a surface or into the bulk of a material.
     Users specify the type and concentration of radioactive contaminants
     in the dust, how the dust distribution is modeled, and the accumulation
     rate, mass per surface area or total mass
+
+    Args:
+        dustmass(Quantity): mass of dust, units should match distribution
+            e.g. dimensionless for bulk, kg/cm2 for surface, or kg for per piece
+        isotopes(list): list of RadioactiveContams with rates in Bq/kg 
+            present in the dust
     """        
-    def __init__(self, isotope, dustmass, concentration, **kwargs):
-        """Args:
-            dustmass (float): dimensioned mass of dust considered
-                Units should follow the 'distribution', i.e. /area if surface, 
-                or per mass if bulk. Otherwise provide an apporpraite normfunc
-            concentration (float): decay rate of the isotope per dust mass
-                note that ppb_U, ppb_Th, and ppb_K are defined in units
-        """
-        super().__init__(name="Dust (%s)"%isotope, isotope=isotope,**kwargs)
-        self.dustmass = dustmass
-        self.concentration = concentration
+    def __init__(self, dustmass, isotopes, **kwargs):
+        self.isotopes = isotopes
+        specs = [ RadioactiveContam(**iso) if isinstance(iso, dict) else iso
+                  for iso in self.isotopes ]
+        name = kwargs.pop('name', 'Dust')
+        super().__init__(name=name,specs=specs, **kwargs)
+        self.dustmass = ensure_quantity(dustmass)
+        #These should really be setters...
+        for spec in self.getsubspecs():
+            spec.category = self.category
+            spec.normfunc = self.normfunc
+            spec.distribution = self.distribution
+            spec._rate *= self.dustmass
 
-        def getfullspec(self):
-            return "%s, %s"%(self.dustmass,self.concentration)
 
-        def __repr__(self):
-            return "DustAccumulation(%s, %s)"%(self.isotope,self.getfullspec())
-
-        @property
-        def rate(self):
-            return self.dustmass * self*concentration
+    def getfullspec(self):
+        return "dustmass=%s"%self.dustmass
+        
+    #todo: implement setters for things we should override!
+    def todict(self):
+        #remove the 'specs' since those are rebuilt
+        #todo: this is inefficienct since they're built then deleted...
+        result = super().todict()
+        del result['specs']
+        return result        
 
 
 class CosmogenicIsotope(RadioactiveIsotope):
     def __init__(self, halflife, activationrate, name=None):
-        self.activationrate = activationrate
+        self.activationrate = ensure_quantity(activationrate, "1/kg/day")
         super().__init__(halflife, name)
         
         
-class CosmogenicActivation(RadioactiveContam):
+class CosmogenicSource(RadioactiveContam):
     """Production of radioactive isotope within a material from cosmic rays
     
     Many of the cosmic-ray generated isotopes have short half-lives, so 
@@ -299,21 +340,24 @@ class CosmogenicActivation(RadioactiveContam):
         Args:
             isotope (CosmogenicIsotope): Isotope for a given material
             exposure (float): time exposed to sea-level equivalent CR flux
-            cooldown (float): time kept underground after activation before counting
+            cooldown (float): time kept underground after activation before 
+                counting
             integration (float): time over which decay emissions are measured
         """
-        self.isotope = isotope
-        self.exposure = exposure
-        self.cooldown = cooldown
-        self.integration = integration
+        if isinstance(isotope, dict): #handle imports
+           isotope = CosmogenicIsotope(**isotope)
         name = kwargs.get('name',isotope.name)
-        super().__init__(name=name,**kwargs)    
+        super().__init__(name=name, isotope=isotope, **kwargs)    
+        self.exposure = ensure_quantity(exposure, units.day)
+        self.cooldown = ensure_quantity(cooldown, units.day)
+        self.integration = ensure_quantity(integration, units.year)
+        
     
     @property
     def rate(self):
         """Get the average decay rate over the integation interval"""
         tau = self.isotope.halflife / log(2)
-        if self.integration <= 0:
+        if self.integration <= 0*units.day:
             self.integration = tau / 100
         R0 = self.isotope.activationrate * (1-exp(-self.exposure/tau))
         a = self.cooldown
@@ -325,21 +369,21 @@ class CosmogenicActivation(RadioactiveContam):
         (self.exposure, self.cooldown, self.integration)
 
     def __repr__(self):
-        return "CosmogenicActivation(%s, %s)"%(self.name, self.getfullspec())
+        return "CosmogenicSource(%s, %s)"%(self.name, self.getfullspec())
     
 
-#todo: define a combined cosmogenic exposure spec controls expoure, cooldown, integration
-#       for all contained classes
-class MultiCosmogenic(CombinedSpec):
+class CosmogenicActivation(CombinedSpec):
     """Multiple cosmogenically-activated isotopes that share exposure times"""
     def __init__(self,isotopes,exposure, cooldown=0, integration=0,
                  name="Cosmogenic Activation",**kwargs):
-        specs = [ CosmogenicActivation(iso) for iso in isotopes ]
+        specs = [ CosmogenicSource(iso) for iso in isotopes ]
         super().__init__(name=name,specs=specs,**kwargs)
-        self.min_halflife = min([iso.halflife for iso in isotopes])
-        self._cooldown = cooldown
-        self._exposure = exposure
-        self._integration = integration
+        self.isotopes = [CosmogenicIsotope(**iso) if isinstance(iso, dict) 
+                         else iso for iso in isotopes]
+        self.min_halflife = min([iso.halflife for iso in self.isotopes])
+        self.cooldown = cooldown
+        self.exposure = exposure
+        self.integration = integration
         
         
     @property
@@ -347,7 +391,7 @@ class MultiCosmogenic(CombinedSpec):
         return self._exposure
     @exposure.setter
     def exposure(self, newexp):
-        self._exposure = newexp
+        self._exposure = ensure_quantity(newexp, units.day)
         for spec in self._specs:
             spec.exposure = self._exposure
     
@@ -356,9 +400,7 @@ class MultiCosmogenic(CombinedSpec):
         return self._cooldown
     @cooldown.setter
     def cooldown(self, newcool):
-        self._cooldown = newcool
-        if self._cooldown <= 0:
-            self._cooldown = 0
+        self._cooldown = max(ensure_quantity(newcool, units.day), 0*units.day)
         for spec in self._specs:
             spec.cooldown = self._cooldown
     
@@ -367,9 +409,8 @@ class MultiCosmogenic(CombinedSpec):
         return self._integration
     @integration.setter
     def integration(self, newint):
-        self._integration = newint
-        if self._integration <= 0:
-            self._integration = self.min_halflife/100
+        self._integration = max(ensure_quantity(newint, units.year), 
+                                self.min_halflife/100)
         for spec in self._specs:
             spec.integration = self._integration
     
@@ -380,4 +421,16 @@ class MultiCosmogenic(CombinedSpec):
     def __repr__(self):
         return "CosmogenicActivation(%s)"%(self.getfullspec())
             
+    def todict(self):
+        result = super().todict()
+        del result['specs']
+        #this gets calculated automatically
+        del result['min_halflife']
+        return result
         
+def buildspecfromdict(args):
+    """Construct a ComponentSpec from an exported dictionary"""
+    #todo: this is pretty crude and will probably break...
+    return eval(args.pop('__class__'))(**args)
+    
+
