@@ -1,0 +1,28 @@
+{% import "bootstrap/wtf.html" as wtf %}
+
+{# This should only ever be loaded via ajax, so no headers, etc #}
+
+<form action="" method="POST" onsubmit="updateallsubcomps()" >
+    <h2>Edit Component 
+	<span class="glyphicon glyphicon-remove-circle pull-right text-danger" 
+	      onclick="$('#editor').text('');"></span>
+	<span class="btn-group pull-right">
+	    <button type="submit" class="btn btn-primary" >Save</button> 
+	</span>
+	
+    </h2>
+    {{ wtf.quick_form(form) }}
+</form>
+{% if component is defined and component.getcomponents is defined %}
+    <h3>Subcomponents</h3>
+    Drag and drop or create new: 
+    <span class="btn-group push-right">
+	<button class="btn btn-default btn-sm" onclick="newsubcomp('Component')" > Component </button>
+	<button class="btn btn-default btn-sm" onclick="newsubcomp('Assembly')" > Assembly </button>
+    </span>
+    <table id="copycomptable" style="display:none" >
+	{{ printplacement("NEW",editable=true) }}
+    </table>
+    {{ componenttable(component.components,false,"editingsubcomps") }}
+    <div id="spacer"  style="padding-top:1em;"</div>
+{% endif %}

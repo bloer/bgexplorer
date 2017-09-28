@@ -1,0 +1,346 @@
+{# do not load headers, etc if this is an ajax request #}
+{% if not request.is_xhr %}
+
+    {% extends "bootstrap/base.html" %}
+
+    {% block title %}Edit Model{% endblock %}
+
+    {% block styles %}
+	{{ super() }}
+	<style>
+	 /*body, .btn, .form-control, .glyphicon {font-size:small;}*/
+	 .linklike {cursor:pointer; }
+	 .Assembly td:first-child:after {content:"↴"; padding-left:0.15em; color:green;}
+	 #componentsdiv td[data-column=weight] {display:none}
+	 #editor td[data-column=description] {display:none}
+	 td[data-column=weight] input {width:3em;}
+	 .form-inline, .form-inline div.input-group {display:inline-block}
+	 .form-inline.push-right {padding-left:1em;}
+	</style>
+    {% endblock %}
+
+    {% block scripts %}
+	{{ super() }}
+	<script src="http://code.jquery.com/ui/1.11.2/jquery-ui.js" ></script>
+	<script type="text/javascript" >
+	 //$("#assemblytable tbody tr.component, #unplacedtable tbody tr.component").draggable({'helper':'clone'});
+	 //$("#assemblytable tbody").sortable({'helper':"clone", 'placeholder':'warning', 'containment':});
+	 $("#editingsubcomps tbody").sortable({'placeholder':'warning'});
+	 //prevent buttons from looking still depressed
+	 $(".btn").mouseup(function(){
+	     $(this).blur();
+	 });
+	 function newsubcomp(cls, source){
+	     cls = cls || "Component";
+	     var clonerow = $("#copycomptable tr").clone(true);
+	     if(source){
+		 clonerow.data('rawobj') = source;
+		 cls = source.cls || cls;
+	     }
+	     clonerow.addClass(cls);
+	     clonerow.data('rawobj')['__class__'] = cls;
+	     $("#editingsubcomps tbody").append(clonerow);
+	 }
+
+	 function updatesubcomp(input){ //update the data-rawobj attribute for a subcomponent row
+	     var val = input.val();
+	     if(input.attr("name") == "weight")
+		 val = Number(val);
+	     input.parents("tr").data('rawobj')[input.attr('name')] = val;
+	 }
+	 
+	 function updateallsubcomps(){ 
+	     var subcomps = $("#editingsubcomps tbody tr.component").map(function(){ return $(this).data('rawobj'); });
+	     $("#components").val(JSON.stringify(subcomps.get()));
+	     
+	 }
+
+	 function placecomponent(node){
+	     var newnode = $(node).clone(true);
+	     newnode.data('rawobj')['weight'] = 1;
+	     newnode.find("input[name=weight]").val(1);
+	     newnode.appendTo("#editingsubcomps tbody");
+	 }
+
+	 function filtercomponents(){
+	     var filtertext = $("#filtercomponents").val();
+	     var allrows = $("#componentsdiv tr.component");
+	     if(filtertext.length < 2){
+		 allrows.show();
+		 return allrows;
+	     }
+	     var regex = new RegExp(filtertext);
+	     allrows.hide();
+	     allrows.filter(function(){
+		 var rawobj = $(this).data('rawobj');
+		 var mytext = $(this).children("td").text() + " "+
+			      Object.keys(rawobj).map(key => rawobj[key]).join(" ");
+		 return regex.test(mytext);
+		 
+	     }).show();
+	     return allrows;
+	 }
+
+	 //trigger a post action from a link
+	 //args are additional non-url arguments
+	 function dopost(event){
+	     event.preventDefault();
+	     var target = $(event.target);
+	     var cfmessage = target.data("confirm");
+	     if(!cfmessage || confirm(cfmessage)){
+		 var form = $("<form method='POST' action='"+target.attr("href")+"'>");
+		 var args = target.data('form');
+		 if(args){
+		     for(var key in args){
+			 $("<input>").attr("name",key).val(args[key]).appendTo(form);
+		     }
+		 }
+		 form.appendTo("body").submit();
+		 
+	     }
+	 }
+	 
+	</script>
+    {% endblock %}
+{% endif %}
+
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% macro printcompfield(name, value="") %}
+    <input type="text" class="form-control" name="{{ name }}" value="{{ value or ''}}" 
+	   {% if name=='name' %} placeholder="<new component>"{% endif %}
+	   oninput="updatesubcomp($(this));">
+{% endmacro %}
+
+{% macro printplacement(placement="NEW", level=0, editable=false) %}
+    {% if placement == "NEW" %}
+	{% set comp={'id':none, 'name':'<NEW>'} %}
+	{% set dataraw={'weight':1, 'querymod':none} %}
+    {% elif placement.component is defined %}
+	{% set comp=placement.component %}
+	{% set dataraw={'component':comp.id, 'weight': placement.weight, 'querymod': placement.querymod} %}
+    {% else %}
+	{% set comp=placement %}
+	{% set dataraw={'component':comp.id} %}
+    {% endif %}
+
+    <tr class="component {% if component is defined and comp.id == component.id -%} info {%- endif -%}
+	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} " 
+	data-id="{{ comp.id }}" data-rawobj='{{ dataraw | tojson }}' >
+	{% if editable and not comp.id %}
+	<td data-column="name" >{{ printcompfield('name', dataraw.get('name')) }}</td>
+	{% else %}
+	<td data-column="name" style="padding-left:{{ 15*level }}px" >{{ comp.name }}</td>
+	{% endif %}
+	<td data-column="description">{{ comp.description or "" }}</td>
+	<td data-column="weight" > {{ printcompfield('weight', dataraw.get('weight',1)) }} </td>
+	<td data-column="edit" >
+	    {% if comp.id %}{# shorthand for if it's the new component clone target #}
+	    <div class="btn-group" >
+		<a class="btn btn-sm btn-default" type="button" 
+		   href="{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}" >
+		    <span class="glyphicon glyphicon-pencil" ></span>
+		</a>
+		<button class="btn btn-sm btn-default dropdown-toggle" type="button" data-toggle="dropdown">
+		    <span class="caret" ></span>
+		</button>
+
+		<ul class="dropdown-menu dropdown-menu-left" >
+		    {% if comp.placements is defined %}
+			{% set nplacements=comp.placements|length %}
+		    {% else %}
+			{% set nplacements=1 %}
+		    {% endif %}
+		    
+		    <!-- edit options -->
+		    {% if nplacements > 1 %}
+		    <li class="" >
+			<a href="{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}">
+			    Edit all <span class="text-info">{{ nplacements }}</span> instances of this component
+			</a>
+		    </li>
+		    <li>
+			<a href="{{ url_for('.newcomponent',modelid=model.id) }}" onclick="dopost(event);" 
+			   data-form='{"clonefrom": "{{ comp.id }}", "parent": "{{ placement.parent.id }}", 
+				       "replaceAt": {{ placement.parent.components.index(placement) }} }' >
+				Make this instance separate
+			</a>
+		    </li>
+		    {% else %}
+		    <li><a href="{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}">
+			Edit this component
+		    </a></li>
+		    {% endif %}
+		    <li><a href="{{ url_for('.newcomponent',modelid=model.id) }}" onclick="dopost(event);"
+			   data-form='{"clonefrom": "{{ comp.id }}"}'>
+			Clone this component
+		    </a>
+		    
+		    <li role="separator" class="divider" ></li>
+		    <!-- delete options -->
+		    {% if placement.parent is defined %}
+		    <li class="list-group-item-warning" >
+			<a href="{{ url_for('.delplacement',modelid=model.id, parentid=placement.parent.id, 
+						               index=placement.parent.components.index(placement)) }}"
+				 onclick="dopost(event);" >
+			    Remove this placement
+			</a>
+		    </li>
+		    {% endif %}
+		    {% if not comp.isroot %}
+		    <li class="list-group-item-danger" >
+			<a href="{{ url_for('.delcomponent',modelid=model.id, componentid=comp.id) }}"
+			   onclick="dopost(event);" data-confirm="Are you sure you want to completely delete this component?">
+			    Delete all instances of this component
+			</a>
+			</form>
+		    </li>
+		    {% endif %}
+		    
+		</ul>
+	    </div>
+	    {% else %}
+	    <a class="linklike text-danger glyphicon glyphicon-remove" onclick="$(this).parents('tr.component').remove();" ></a>
+	    {% endif %}
+	    
+	    {#  {% if component is not defined or not comp.isparentof(component,deep=True) %}
+		<a href="" class="linklike glyphicon glyphicon-play" onclick="placecomponent($(this).parents('tr'))" ></a>
+	    {% endif %}
+	    #}
+
+	</td>
+    </tr>
+{% endmacro %}
+
+{% macro componenttable(components, recursive=true, id="") %}
+    <table class="table table-condensed table-hover comptable" id="{{ id }}">
+	<thead>
+	    {% if recursive %}
+	    <tr><th>Name</th><th>Description</th><th>Edit</th></tr>
+	    {% else %}
+	    <tr><th>Name</th><th>Quantity</th><th>Edit</th></tr>
+	    {% endif %}
+	</thead>
+	<tbody>
+	    {% for comp in components recursive %}
+		{{ printplacement(comp, loop.depth0, editable=not recursive) }}
+		{% if recursive %}
+		    {% if comp.components is defined %}
+			{{ loop(comp.components) }}
+		    {% elif comp.component is defined and comp.component.components is defined %}
+			{{ loop(comp.component.components) }}
+		    {% endif %}
+		{% endif %}
+		{% if comp == model.assemblyroot %}
+		    <tr><th colspan="3" style="background-color:#f3f3f3;" > Unplaced components</th></tr>
+		{% endif %}
+	    {% endfor %}
+	    
+	</tbody>
+    </table>
+{% endmacro %}
+
+
+{% macro printspec(spec) %}
+    <tr>
+	<td>{{ spec.name }}</td><td>{{ spec.category }}</td><td>{{ spec.distribution }}</td><td>{{ spec.getratestr() }}</td>
+	<td><a class="btn bt-sm" type="button" 
+	       href="{{ url_for('.editspec',modelid=model.id, specid=spec.id) }}">
+	    <span class="glyphicon glyphicon-pencil" ></span>
+	</a> 
+	</td>
+    </tr>
+{% endmacro %}
+
+{% macro spectable(specs, id="") %}
+    <table class="table table-condensed table-hover spectable table-responsive" id="{{ id }}">
+	<thead>
+	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th><th>Edit</th></tr>
+	</thead>
+	<tbody>
+	    {% for spec in specs %}
+		{{ printspec(spec) }}
+	    {% endfor %}
+	</tbody>
+    </table>
+{% endmacro %}
+
+
+
+{% block content %}
+    <div class="page-header"> <h1>Editing Model: <small>{{ model.name }} v{{ model.version }}</small>
+	<span class="" style="padding-left:2em;" >
+	    <button class="btn btn-success">Save New Version</button> 
+	    <button class="btn btn-danger btn-sm">Discard Changes</button>
+	</span>
+    </h1>
+    <small>{{ model.description }}</small>
+    </div>
+    
+    <div class="container-fluid" id="" >
+	<div class="row" >
+	    <div id="componentsdiv" class="col-md-4" >
+		<h2>Components <small>
+		    <form style="display:inline" action="{{ url_for('.newcomponent',modelid=model.id) }}" 
+			  method="POST" class="push-right" >
+			Create new:
+			<span class="btn-group" >
+			    <button type="submit" class="btn btn-default btn-sm" name="class" value="Component" >Component</button>
+			    <button type="submit" class="btn btn-default btn-sm" name="class" value="Assembly" >Assembly</button>
+			</span>
+		    </form></small>
+		</h2>
+		
+		<div class="row h3" style="vertical-align:middle" >
+		    <div class="col-xs-5" >Assembly Tree</div>
+		    <div class="col-xs-7" >
+			<div class="input-group push-right" >
+			    <input type="text" class="form-control" id="filtercomponents" placeholder="Search" 
+				   oninput="filtercomponents()" >
+			    <div class="input-group-btn">
+				<button class="btn btn-default" 
+					onclick="$('#filtercomponents').val('');filtercomponents()" >
+				    <span class="glyphicon glyphicon-remove-sign" ></span>
+				</button>
+			    </div>
+			</div>
+		    </div>
+		</div>
+		{{  componenttable([model.assemblyroot] + model.get_unplaced_components(), true, "assemblytable") }}
+		{# <h3>Unplaced Components </h3>
+		{{ componenttable(model.get_unplaced_components(), true, "unplacedtable") }}#}
+		    
+	    </div>
+	    
+	    <div class="col-md-4" id="specsdiv" >
+		<h2>Specifications <small>
+		    <form class="form-inline push-right" action="{{ url_for('.newspec',modelid=model.id) }}" method="POST">
+			<div class="form-group push-right" >
+			    <label for="newspec">Create new: </label>
+			    <select class="form-control" id="newspec" name="type" onchange="$(this).parents('form').submit();" >
+				<option style="color:gray;font-style:italic"> Select a spec type</option>
+				{% for spectype in spectypes %}
+				<option value="{{ spectype }}">{{ spectype }}</option>
+				{% endfor %}
+			    </select>
+			</div>
+		    </form>
+		</small></h2>
+		{{ spectable(model.specs.values()) }}
+	    </div>
+	    
+	    <div class="col-md-4" >
+		<div id="editor"  >
+		    {% if form is defined %}
+			{% if component is defined %}
+			    {% include "editcomponent.html" %}
+			{% elif spec is defined %}
+			    {% include "editspec.html" %}
+			{% endif %}
+		    {% endif %}
+		</div>
+	    </div>
+	</div>
+	<div class="row clearfix" style="padding-top:10em;" ></div>
+    </div>
+{% endblock %}
