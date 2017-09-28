@@ -14,7 +14,7 @@ from math import log,exp
 from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
 from copy import copy
-
+from math import sqrt
 
 
 
@@ -33,13 +33,12 @@ class ComponentSpec(Mappable):
     """
 
     #have a finite list of allowed distribution types
-    _distribution_types = ("bulk","surface","surface_in","surface_out", 
-                           "flux", "none")
     _default_distribution = "bulk"
         
-    def __init__(self, name="",
+    def __init__(self, name="", 
                  distribution=_default_distribution, normfunc=None,
-                 category="", comment="", reference="", moreinfo=None,
+                 islimit=False, 
+                 category="", comment="", moreinfo=None,
                  appliedto=None,
                  **kwargs):
         """Make a new ComponentSpec
@@ -54,10 +53,10 @@ class ComponentSpec(Mappable):
                 case the variable MUST be named 'component'. The special string
                 'piece' is equivalent to '1'. The 'units' object is also 
                 available to the string. 
+            islimit (bool): Is this an upper limit from a measurement?
             category(str): A descriptive category for higher-order groupings. 
                 for example, Cosmogenic Activation, Radon Daughter
             comment (str) A descriptive comment
-            reference (str) information about the origin of the number
             moreinfo (dict): key-value pairs for any other information
             appliedto (set): set of components this spec is bound to
         """
@@ -65,17 +64,10 @@ class ComponentSpec(Mappable):
 
         self.name = name
         self.distribution = distribution
-        #make sure distribution is valid
-        if distribution not in self._distribution_types:
-             print("Unknown distribution %s for ComponentSpeci %s; using '%s'"
-                    %(distribution,name,self._default_distribution))
-             distribution = self._default_distribution
-
         self.normfunc = normfunc
-
+        self.islimit = islimit
         self.category = category or type(self).__name__
         self.comment = comment
-        self.reference = reference
         self.moreinfo = moreinfo or {}
         self.appliedto = appliedto or set()
         
@@ -87,12 +79,8 @@ class ComponentSpec(Mappable):
                 %(self.name, self.distribution, self.category))
         
     def getcomment(self):
-        comment = ''
-        if self.comment:
-            comment += self.comment+" "
-        if self.reference:
-            comment += "Reference: "+self.reference
-        return comment
+        """Get spec comment. Used to include additional info"""
+        return self.comment
         
     #subclasses should override
     def getfullspec(self):
@@ -103,8 +91,23 @@ class ComponentSpec(Mappable):
         """Get the unnormalized emission rate from this source"""
         return 0
         
+    @property
+    def err(self):
+        """Get the uncertainty in rate from this source as a fraction"""
+        return 0
+        
     def getratestr(self):
-        return str(self.rate.to_base_units().to_compact())
+        try:
+            res=""
+            if self.islimit:
+                res += "<"
+            #res += str(self.rate.to_base_units().to_compact())
+            res += "{:~P}".format(self.rate)
+            if self.err:
+                res += " +/- %d%%"%(self.err*100)
+            return res
+        except:
+            return "undefined"
     
     #concrete classes _should_ override this moethod
     def emissionrate(self,component):
@@ -113,6 +116,9 @@ class ComponentSpec(Mappable):
         if self.normfunc:
             if callable(self.normfunc): #its a function
                 multiplier = self.normfunc(component)
+            elif (normfunc == "piece" or numfunc == "perpiece" 
+                  or normfunc == "per piece" or normfunc == 'per-piece'):
+                multiplier = 1
             elif type(self.normfunc) is str:
                 #evaluate it. the __builtins__ thing somewhat protects 
                 #against malicious stuff. 
@@ -149,52 +155,88 @@ class ComponentSpec(Mappable):
         #all 'appliedto' will get rebuilt on restore
         del result['appliedto']
         result['__class__'] = type(self).__name__
-        return removeclasses(result)
+        return removeclasses(result, replaceids=False)
         
 
 class CombinedSpec(ComponentSpec):
-    """Utility class to group multiple material specs into one"""
-    
-    def __init__(self,name="",specs=None,**kwargs):
+    """Utility class to group multiple specs into one"""
+    def __init__(self,name="",subspecs=None,**kwargs):
         super().__init__(name=name, **kwargs)
-        self._specs=[]
-        if specs:
-            for spec in specs:
-                self.addmaterialspec(spec)
+        #override category if left to default
+        if self.category == 'CombinedSpec':
+            self.category = 'RadioactiveContam'
+        self.subspecs = subspecs or []
         
     @property
     def rate(self):
-        return sum(spec.rate for spec in self._specs)
+        return sum(spec.rate for spec in self._subspecs)
     
+    @property
+    def err(self):
+        return sqrt(sum(spec.err**2 for spec in self._subspecs))
+    
+    @property
+    def islimit(self):
+        #todo: this is probably not a useful definition
+        return any(spec.islimit for spec in self._subspecs)
+    
+    @islimit.setter
+    def islimit(self,val):
+        pass
+
     def emissionrate(self,component):
-        return sum(spec.emissionrate(component) for spec in self._specs)
+        return sum(spec.emissionrate(component) for spec in self._subspecs)
         
-    def getsubspecs(self):
-        return self._specs
+
+    @property
+    def subspecs(self):
+        return self._subspecs
+
+    @subspecs.setter
+    def subspecs(self, newsubspecs=[]):
+        self._subspecs = []
+        for spec in newsubspecs:
+            self.addspec(spec)
     
-    def addmaterialspec(self,spec):
+    
+    _copy_attrs = ['normfunc', 'distribution', 'category', 'appliedto']
+    
+    def addspec(self,spec):
+        if not isinstance(spec, ComponentSpec):
+            spec = buildspecfromdict(spec)
         #todo: is this really a good plan??
-        spec._id = self.id+('-%d'%len(self._specs))
-        spec.appliedto = self.appliedto 
-        self._specs.append(spec)
+        for attr in self._copy_attrs:
+            setattr(spec,attr, getattr(self,attr))
+        self._subspecs.append(spec)
         
     def __repr__(self):
-        return "CombinedSpec('%s', specs=%s)"%(self.name, self._specs)
+        return "CombinedSpec('%s', subspecs=%s)"%(self.name, self.subspecs)
 
     def updatesubspecs(self, attr, val):
-        for sub in self.getsubspecs():
+        for sub in self.subspecs:
             setattr(sub, attr, val)
 
     #overload __getitem__ so we can unpack subspecs directly
     #should we allow deep unpacking???
     def __getitem__(self,key):
-        return self.getspecs()[key]
+        return self.subspecs[key]
 
-    
+    @classmethod
+    def copytosubs(cls, attr):
+        """For the named attribute, copy it to our subspecs on assignment"""
+        hidden = '_'+attr
+        def get(self):
+            return getattr(self, hidden)
+        def set(self,val):
+            self.updatesubspecs(attr, val)
+            return setattr(self, hidden, val)
+
+for attr in CombinedSpec._copy_attrs:
+    CombinedSpec.copytosubs(attr)
         
 
 class RadioactiveIsotope(object):
-    def __init__(self,halflife,name=None):
+    def __init__(self,halflife=1*units.second,name=None):
         self.halflife = ensure_quantity(halflife, units.seconds)
         self.name = name        
 
@@ -207,8 +249,10 @@ class RadioactiveContam(ComponentSpec):
     
     """
 
-    def __init__(self, name='', rate=None, isotope=None, **kwargs):
-        self._rate = ensure_quantity(rate)
+    def __init__(self, name='', rate='0 Bq/kg', err=0, isotope=None, **kwargs):
+        self.rate = rate
+        self.err = err
+                        
         self.isotope = isotope or name
         if isinstance(self.isotope, dict): #handle imports
             self.isotope = RadioactiveIsotope(**self.isotope)
@@ -217,7 +261,33 @@ class RadioactiveContam(ComponentSpec):
     @property
     def rate(self):
         return self._rate
+        
+    @rate.setter
+    def rate(self, newrate):
+        self._rate = ensure_quantity(newrate)
 
+    @property
+    def err(self):
+        return self._err
+
+    @err.setter
+    def err(self,newerr):
+        self._err = newerr
+        if(newerr != 0):
+            if isinstance(newerr,str):
+                newerr = newerr.replace("%","*0.01").replace("percent","*0.01")
+            err = ensure_quantity(newerr)
+            if not err.dimensionless: #convert to fractional error
+                if err.dimensionality == self.rate.dimensionality:
+                    self._err = (err.to(self.rate.u)/self.rate).m
+                else:
+                    msg = "err must be fractional or in same units as rate"
+                    raise untis.DimensionalityError(self.rate.u, err.u,
+                                                    extra_msg=msg)
+            else:
+                self._err = err.m
+                                                    
+        
     def getfullspec(self):
         return self.getratestr()
      
@@ -234,24 +304,25 @@ class RadonExposure(RadioactiveContam):
     exposure. I.e. neither the "cooldown" nor counting/integration time is 
     large compared to the 22.3 year half-life of Pb210. 
     """
+    _mode_types = ("free", "trapped")
     _tau_pb210 = 22.3*units.year / log(2)    
     _tau_rn222 = 3.8 * units.day / log(2)
     _default_column_height = 10*units.cm
     
-    def __init__(self,radonlevel, exposure,  
-                 distribution='surface', name='Pb210',
+    def __init__(self,radonlevel=100*units('Bq/m**3'), exposure=1*units.day,  
+                 distribution='surface', 
                  column_height = _default_column_height, mode="free",
                  **kwargs):
         self.radonlevel = ensure_quantity(radonlevel,"Bq/m^3")
         self.exposure = ensure_quantity(exposure, units.day)
         self.column_height = ensure_quantity(column_height, units.cm)
-        if mode not in ("free","trapped"):
-            print("Uknown mode %s: using 'free'"%mode)
+        if mode not in self._mode_types:
+            print("Uknown mode %s; using 'free'"%mode)
             mode="free"
         self.mode = mode
-        super().__init__(name=name,isotope=kwargs.pop('isotope','Pb210'),
-                         distribution=distribution,
-                         **kwargs)
+        kwargs.setdefault('isotope', 'Pb210')
+        kwargs.setdefault('distribution','surface')
+        super().__init__(**kwargs)
     
     @property                     
     def rate(self):
@@ -268,6 +339,9 @@ class RadonExposure(RadioactiveContam):
             return (self.radonlevel * self.column_height * 
                     (1-exp(-self.exposure / self._tau_pb210)))
     
+    @rate.setter
+    def rate(self,val):
+        pass
         
     def getfullspec(self):
         return "%s, %s, %s"%(self.radonlevel, self.exposure, self.distribution)
@@ -290,35 +364,31 @@ class DustAccumulation(CombinedSpec):
         isotopes(list): list of RadioactiveContams with rates in Bq/kg 
             present in the dust
     """        
-    def __init__(self, dustmass, isotopes, **kwargs):
-        self.isotopes = isotopes
-        specs = [ RadioactiveContam(**iso) if isinstance(iso, dict) else iso
+    def __init__(self, dustmass=100*units('nanogram/cm**2'), 
+                 isotopes=None, **kwargs):
+        self.isotopes = isotopes or []
+        subspecs = [ RadioactiveContam(**iso) if isinstance(iso, dict) else iso
                   for iso in self.isotopes ]
-        name = kwargs.pop('name', 'Dust')
-        super().__init__(name=name,specs=specs, **kwargs)
+        kwargs.setdefault('distribution','surface')
+        super().__init__(subspecs=subspecs, **kwargs)
         self.dustmass = ensure_quantity(dustmass)
-        #These should really be setters...
-        for spec in self.getsubspecs():
-            spec.category = self.category
-            spec.normfunc = self.normfunc
-            spec.distribution = self.distribution
-            spec._rate *= self.dustmass
-
+        #todo: need to override subspecs emissionrate
 
     def getfullspec(self):
         return "dustmass=%s"%self.dustmass
         
     #todo: implement setters for things we should override!
     def todict(self):
-        #remove the 'specs' since those are rebuilt
+        #remove the 'subspecs' since those are rebuilt
         #todo: this is inefficienct since they're built then deleted...
         result = super().todict()
-        del result['specs']
+        del result['subspecs']
         return result        
 
 
 class CosmogenicIsotope(RadioactiveIsotope):
-    def __init__(self, halflife, activationrate, name=None):
+    def __init__(self, halflife=1*units.second, 
+                 activationrate=1*units('1/kg/day'), name=None):
         self.activationrate = ensure_quantity(activationrate, "1/kg/day")
         super().__init__(halflife, name)
         
@@ -374,25 +444,38 @@ class CosmogenicSource(RadioactiveContam):
 
 class CosmogenicActivation(CombinedSpec):
     """Multiple cosmogenically-activated isotopes that share exposure times"""
-    def __init__(self,isotopes,exposure, cooldown=0, integration=0,
-                 name="Cosmogenic Activation",**kwargs):
-        specs = [ CosmogenicSource(iso) for iso in isotopes ]
-        super().__init__(name=name,specs=specs,**kwargs)
+    def __init__(self,isotopes=[],exposure=0, cooldown=0, integration=0,
+                 **kwargs):
+        #subspecs = [ CosmogenicSource(iso) for iso in isotopes ]
+        super().__init__(**kwargs)
         self.isotopes = [CosmogenicIsotope(**iso) if isinstance(iso, dict) 
                          else iso for iso in isotopes]
-        self.min_halflife = min([iso.halflife for iso in self.isotopes])
         self.cooldown = cooldown
         self.exposure = exposure
         self.integration = integration
         
-        
+    @property
+    def isotopes(self):
+        return self._isotopes
+    @isotopes.setter
+    def isotopes(self, newisos):
+        self._isotopes = [CosmogenicIsotope(**iso) if isinstance(iso, dict) 
+                          else iso for iso in newisos]
+        self._subspecs = []
+        for iso in self._isotopes:
+            self.addmaterialspec(CosmogenicSource(iso))
+        if self._isotopes:
+            self.min_halflife = min([iso.halflife for iso in self._isotopes])
+        else:
+            self.min_halflife = 1*units.second
+
     @property
     def exposure(self):
         return self._exposure
     @exposure.setter
     def exposure(self, newexp):
         self._exposure = ensure_quantity(newexp, units.day)
-        for spec in self._specs:
+        for spec in self._subspecs:
             spec.exposure = self._exposure
     
     @property
@@ -401,7 +484,7 @@ class CosmogenicActivation(CombinedSpec):
     @cooldown.setter
     def cooldown(self, newcool):
         self._cooldown = max(ensure_quantity(newcool, units.day), 0*units.day)
-        for spec in self._specs:
+        for spec in self._subspecs:
             spec.cooldown = self._cooldown
     
     @property
@@ -411,7 +494,7 @@ class CosmogenicActivation(CombinedSpec):
     def integration(self, newint):
         self._integration = max(ensure_quantity(newint, units.year), 
                                 self.min_halflife/100)
-        for spec in self._specs:
+        for spec in self._subspecs:
             spec.integration = self._integration
     
     def getfullspec(self):
@@ -423,7 +506,7 @@ class CosmogenicActivation(CombinedSpec):
             
     def todict(self):
         result = super().todict()
-        del result['specs']
+        del result['subspecs']
         #this gets calculated automatically
         del result['min_halflife']
         return result

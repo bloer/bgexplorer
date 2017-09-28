@@ -29,7 +29,7 @@ class TestComponent(unittest.TestCase):
             ]), 5),
         ])
         
-        self.model = BgModel(self.assembly, "Test Model")
+        self.model = BgModel("Test Model", self.assembly)
 
 
     def testSpecRegistry(self):

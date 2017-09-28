@@ -15,12 +15,12 @@ from __future__ import (absolute_import, division,
 import copy
 import uuid
 
-from .component import buildcomponentfromdict
+from .component import buildcomponentfromdict, Assembly
 from .compspec import buildspecfromdict
 
 class BgModel(object):
-    def __init__(self, assemblyroot, 
-                 name=None, version=0, description='',
+    def __init__(self, name=None, assemblyroot=None, 
+                 version=0, description='',
                  derivedFrom=None, editDetails=None,
                  components=None, specs=None,
                  sanitize=True):
@@ -39,8 +39,8 @@ class BgModel(object):
             sanitize(bool): add cross references, etc to model on creation
         """
         
-        self.assemblyroot = assemblyroot
-        self.name = name or assemblyroot.name
+        self.name = name 
+        self.assemblyroot = assemblyroot or Assembly(self.name)
         self.version = version
         self.description = description 
         self.derivedFrom = derivedFrom
@@ -51,6 +51,10 @@ class BgModel(object):
             self.sanitize()
         
 
+    @property
+    def id(self):
+        return getattr(self,'_id')
+        
     def registerobject(self, obj, registry):
         """ Make sure that obj has an _id attribute and add it to registry
         """
@@ -65,13 +69,29 @@ class BgModel(object):
             #now what? 
             raise ValueError(obj._id)
         
-
+    def get_unplaced_components(self, toponly=True):
+        """Get a list of all components not placed into any assembly
+        Args:
+            toponly(bool): If true, return only top-level components 
+                with no placements. Otherwise, return all components
+                that are not a descendent of assemblyroot"""
+        if toponly:
+            res= [comp for comp in self.components.values() 
+                  if not comp.placements and not comp.isroot]
+        else:
+            res = [comp for comp in self.components.values()
+                   if not self.assemblyroot.isparentof(comp, deep=True)]
+        return res
+    
     def sanitize(self, comp=None):
         """Make sure that all objects are fully built and registered"""
 
         if not comp:
             comp = self.assemblyroot
 
+        self.connectreferences(comp)
+
+        
         #make sure that this component has an ID and is in the registry
         self.registerobject(comp, self.components);
         #if the component has CompSpecs, register them too
@@ -93,8 +113,17 @@ class BgModel(object):
         #make sure that the assemblyroot is marked
         if comp is self.assemblyroot:
             comp.isroot = True
+            #make sure unplaced components are handled too
+            for comp in self.get_unplaced_components():
+                self.sanitize(comp)
                     
 
+    @staticmethod
+    def pack(obj):
+        res = obj.todict()
+        res.pop('_id',None)
+        return res
+        
     def todict(self, sanitize=True):
         """Export all of our data to a bare dictionary that can in turn be 
         exported to JSON, stored in a database, etc
@@ -109,19 +138,20 @@ class BgModel(object):
 
         result['assemblyroot'] = self.assemblyroot._id
         result['specs'] = \
-        {key: spec.todict() for key, spec in self.specs.items()}
+        {key: self.pack(spec) for key, spec in self.specs.items()}
         result['components'] = \
-        {key: comp.todict() for key, comp in self.components.items()}
+        {key: self.pack(comp) for key, comp in self.components.items()}
 
         return result
 
     def connectreferences(self, comp):
         """ transform ID references in an exported component to actual objects
         """
-        comp.specs = [self.specs[key] for key in comp.specs]
+        comp.specs = [self.specs.get(key,key) for key in comp.specs]
         for p in getattr(comp, '_components', []):
-            p.component = self.components[p.component]
-            p.component.placements.add(p) #probably redundant, but harmless
+            p.component = self.components.get(p.component, p.component)
+            if hasattr(p.component,'placements'):
+                p.component.placements.add(p) #probably redundant, but harmless
             
     
     @classmethod
@@ -129,19 +159,21 @@ class BgModel(object):
         """ Construct a new BgModel from a dictionary. It's assumed that 
         the dict d was generated from the todict method previously
         """
+        #handle mongo inserting _ids (or should I just make this mappable?)
+        _id = d.pop('_id', None)
         model = cls(**d, sanitize=False)
+        if _id:
+            model._id = _id
 
         #now we need to construct specs and components from their objects
         #this does not convert ID references to objects!
         for key, spec in model.specs.items():
+            spec['_id'] = key
             model.specs[key] = buildspecfromdict(spec)
         for key, comp in model.components.items():
+            comp['_id'] = key
             model.components[key] = buildcomponentfromdict(comp)
                 
-        #now update references
-        for key, comp in model.components.items():
-            model.connectreferences(comp)
-
         #update the assemblyroot to the actual object
         model.assemblyroot = model.components[model.assemblyroot]
         

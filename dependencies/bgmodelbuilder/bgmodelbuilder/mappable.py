@@ -1,4 +1,5 @@
 import uuid
+import copy
 
 class Mappable(object):
     """ Mappable is a basic class to ensure an object has a hashable ID """
@@ -12,3 +13,7 @@ class Mappable(object):
         return self._id
 
 
+    def clone(self):
+        clone = copy.deepcopy(self)
+        clone._id = str(uuid.uuid4())
+        return clone

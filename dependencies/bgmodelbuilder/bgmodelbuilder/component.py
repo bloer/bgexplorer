@@ -61,7 +61,7 @@ q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
 
 class BaseComponent(Mappable):
     """Base class for Components and Assemblies, defines useful functions"""
-    def __init__(self, name=None, description=None, partnum=None, 
+    def __init__(self, name=None, description=None, 
                  comment=None, moreinfo=None, isroot=False,
                  specs=[], querymod=None, **kwargs) : 
         """Create a new BaseComponent.
@@ -69,7 +69,6 @@ class BaseComponent(Mappable):
             name (str): a short, hopefully unique name for the component
             description (str): longer descriptive string
             comment (str): describe current implementation or status
-            partnum (str): Part/drawing number of this piece
             moreinfo (dict): dictionary of additional metadata
             isroot (bool): Indicates if this component is THE root assembly
                 should only ever be true for an Assembly
@@ -84,7 +83,6 @@ class BaseComponent(Mappable):
         self.name = name
         self.description = description
         self.comment = comment
-        self.partnum = partnum
         self.moreinfo = moreinfo or {}
         self.isroot = isroot
         self.placements = set()
@@ -107,14 +105,33 @@ class BaseComponent(Mappable):
     def __repr__(self):
         return "%s('%s')"%(type(self).__name__, self.id)
     
-
-    def addspec(self, spec, querymod=None):
-        self.specs.append(spec)
+    def clone(self):
+        myclone = super().clone()
+        myclone.specs = copy(self.specs)
+        myclone.placements = set()
+        myclone.isroot=False
+        return myclone
+        
+    def addspec(self, spec, querymod=None, index=None):
+        if index is None:
+            index = len(self.specs)
+        self.specs.insert(index, spec)
         if querymod:
             self.querymods[getattr(spec, 'id', spec)] = querymod
         if hasattr(spec, 'appliedto'):
             spec.appliedto.add(self)
-            
+
+    def delspec(self, spec):
+        """Remove this spec from our reference. type(spec) can be a 
+        ComponentSpec or index"""
+        if type(spec) is int:
+            #treat as index
+            spec = self.specs[spec]
+        self.specs.remove(spec)
+        if spec.id in self.querymods:
+            del self.querymods[spec.id]
+        #todo: should we remove ourselves from spec.appliedto?
+
     def findspecs(self, name=None, deep=False, children=False):
         result = copy(self.specs)
         if deep:
@@ -196,6 +213,7 @@ class Component(BaseComponent):
             surface_out (Quantity): same as inner, but for outer surface
             surface_interior (Quantity): total covered area of pieces used to 
                 construct a monolithic component e.g. bricks of lead
+                Note: Not actually used in forms!!!
         """
         super().__init__(name=name, **kwargs)
         self.material = material
@@ -339,7 +357,7 @@ class Placement(object):
 
 class Assembly(BaseComponent):
     """Assembly of multiple components"""
-    def __init__(self, name=None, components=None, **kwargs):
+    def __init__(self, name=None, components=[], **kwargs):
         """Create a new assembly of multiple components
         
         Args:
@@ -349,19 +367,34 @@ class Assembly(BaseComponent):
         """
         super().__init__(name=name, **kwargs)
 
-        self._components = []
+        self.components = components
 
-        #construct the list of components from list of comps or (comp,weight) 
-        #pairs. Can also be bare objects
+    #methods to set components (mostly from a form)
+    @property
+    def components(self):
+        return self._components #should I return by copy here?
+
+    @components.setter
+    def components(self, components):
+        """construct the list of components from list of comps or (comp,weight) 
+        pairs. Can also be bare objects
+        """
+        self._components = []
         for comp in components:
             self.addcomponent(comp)
-        
-    def addcomponent(self, placement):
+
+    def clone(self):
+        myclone = super().clone()
+        myclone._components = copy(self._components)
+        return myclone 
+
+    def addcomponent(self, placement, index=None):
         """Add a new component directly to this assembly
-        the single argument "placement" can take many forms: 
+        the argument "placement" can take many forms: 
            Component/Assembly to attache
            list or tuple of positional arguments to Placement
            dict of kwarg arguments to Placement
+        index indicates the insertion point
         """
         if isinstance(placement, BaseComponent):
             placement = Placement(self, placement)
@@ -370,10 +403,35 @@ class Assembly(BaseComponent):
         elif type(placement) in (tuple, list):
             placement = Placement(self, *placement)
         elif isinstance(placement, dict):
+            if 'component' not in placement:
+                compdict = {'name':placement.pop('name',"<new>"),
+                            '__class__': placement.pop('__class__','Component')}
+                placement['component'] = buildcomponentfromdict(compdict)
             placement = Placement(self, **placement)
         else:
             raise TypeError("Unhandled type %s for placement",type(placement))
-        self._components.append(placement)
+        if index is None:
+            index = len(self._components)
+        self._components.insert(index, placement)
+
+    def delcomponent(self, comp):
+        """Delete a subcomponent. comp can take a few forms:
+           ComponentAssembly owned
+           Placement
+           index
+        """
+        before = len(self._components)
+        if isinstance(comp, Placement) and comp in self._components:
+            self._components.remove(comp)
+        elif isinstance(comp, BaseComponent):
+            for index, placement in enumerate(self._components):
+                if placement.component == comp:
+                    del self._components[index]
+                    break
+        elif type(comp) is int:
+            del self._components[comp]
+        if len(self._components) != before-1:
+            print("Unable to delete component ", comp)
             
     #functions for inspecting the tree of subcomponents
     def getcomponents(self, deep=False, withweight=False, merge=True):

@@ -8,8 +8,20 @@ import pint
 ###### physical units #######
 units = pint.UnitRegistry()
 units.auto_reduce_dimensions = False #this doesn't work right
-units.DimensionalityError = pint.errors.DimensionalityError
-units.default_format = 'P'
+units.errors = pint.errors
+units.default_format = '~P'
+#fix Bq, add ppb units
+units.load_definitions([
+    "Bq = Hz = Bq = Becquerel",
+    "ppb_U = 12 * mBq/kg = ppbU",
+    "ppb_Th = 4.1 * mBq/kg = ppbTh",
+    "ppm_K = 31 * mBq/kg = ppbK",
+    "ppt_U = 0.001 * ppb_U = pptU",
+    "ppt_Th = 0.001 * ppb_Th = pptTh",
+    "ppt_K = 0.001 * ppb_K = pptK",
+])
+    
+    
 #some common unit conversions
 units.ppb_U = 12*units['mBq/kg']
 units.ppb_Th = 4.1*units['mBq/kg']
@@ -32,7 +44,7 @@ def ensure_quantity(value, defunit=None):
         if qval.dimensionality == units.dimensionless.dimensionality:
             qval = units.Quantity(qval.m, defunit)
         else:
-            raise units.DimensionalityError(qval.u, defunit)
+            raise units.errors.DimensionalityError(qval.u, defunit)
     
     return qval
     
