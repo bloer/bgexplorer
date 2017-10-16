@@ -75,12 +75,11 @@ class BgModel(object):
             toponly(bool): If true, return only top-level components 
                 with no placements. Otherwise, return all components
                 that are not a descendent of assemblyroot"""
+        res = [comp for comp in self.components.values()
+               if not self.assemblyroot.isparentof(comp, deep=True)]
         if toponly:
-            res= [comp for comp in self.components.values() 
-                  if not comp.placements and not comp.isroot]
-        else:
-            res = [comp for comp in self.components.values()
-                   if not self.assemblyroot.isparentof(comp, deep=True)]
+            res= [comp for comp in res  if not comp.placements]
+
         return res
     
     def sanitize(self, comp=None):
@@ -112,7 +111,6 @@ class BgModel(object):
         #miscellaneous checks
         #make sure that the assemblyroot is marked
         if comp is self.assemblyroot:
-            comp.isroot = True
             #make sure unplaced components are handled too
             for comp in self.get_unplaced_components():
                 self.sanitize(comp)

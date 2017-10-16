@@ -13,7 +13,9 @@ class Mappable(object):
         return self._id
 
 
-    def clone(self):
+    def clone(self, newname=None):
         clone = copy.deepcopy(self)
         clone._id = str(uuid.uuid4())
+        if hasattr(clone, 'name'):
+            setattr(clone,'name', newname or "Copy of "+clone.name)
         return clone

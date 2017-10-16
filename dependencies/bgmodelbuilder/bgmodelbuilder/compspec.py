@@ -102,9 +102,9 @@ class ComponentSpec(Mappable):
             if self.islimit:
                 res += "<"
             #res += str(self.rate.to_base_units().to_compact())
-            res += "{:~P}".format(self.rate)
+            res += "{:~.3gP}".format(self.rate)
             if self.err:
-                res += " +/- %d%%"%(self.err*100)
+                res += " +/- {:d}%".format(self.err*100)
             return res
         except:
             return "undefined"
@@ -152,20 +152,23 @@ class ComponentSpec(Mappable):
     def todict(self):
         """Export this instance to a plain object"""
         result = copy(self.__dict__)
-        #all 'appliedto' will get rebuilt on restore
-        del result['appliedto']
         result['__class__'] = type(self).__name__
-        return removeclasses(result, replaceids=False)
+        result = removeclasses(result, replaceids=False)
+        #all 'appliedto' will get rebuilt on restore
+        result.pop('appliedto',None)
+        return result
+
         
 
 class CombinedSpec(ComponentSpec):
     """Utility class to group multiple specs into one"""
-    def __init__(self,name="",subspecs=None,**kwargs):
+    def __init__(self,name="",subspecs=[],**kwargs):
+        self._subspecs = []
         super().__init__(name=name, **kwargs)
         #override category if left to default
         if self.category == 'CombinedSpec':
             self.category = 'RadioactiveContam'
-        self.subspecs = subspecs or []
+        self.subspecs = subspecs 
         
     @property
     def rate(self):
@@ -230,6 +233,7 @@ class CombinedSpec(ComponentSpec):
         def set(self,val):
             self.updatesubspecs(attr, val)
             return setattr(self, hidden, val)
+        setattr(cls, attr, property(get, set))
 
 for attr in CombinedSpec._copy_attrs:
     CombinedSpec.copytosubs(attr)
@@ -361,29 +365,26 @@ class DustAccumulation(CombinedSpec):
     Args:
         dustmass(Quantity): mass of dust, units should match distribution
             e.g. dimensionless for bulk, kg/cm2 for surface, or kg for per piece
-        isotopes(list): list of RadioactiveContams with rates in Bq/kg 
-            present in the dust
+        
     """        
     def __init__(self, dustmass=100*units('nanogram/cm**2'), 
-                 isotopes=None, **kwargs):
-        self.isotopes = isotopes or []
-        subspecs = [ RadioactiveContam(**iso) if isinstance(iso, dict) else iso
-                  for iso in self.isotopes ]
+                 **kwargs):
         kwargs.setdefault('distribution','surface')
-        super().__init__(subspecs=subspecs, **kwargs)
+        super().__init__(**kwargs)
         self.dustmass = ensure_quantity(dustmass)
         #todo: need to override subspecs emissionrate
 
     def getfullspec(self):
         return "dustmass=%s"%self.dustmass
         
-    #todo: implement setters for things we should override!
-    def todict(self):
-        #remove the 'subspecs' since those are rebuilt
-        #todo: this is inefficienct since they're built then deleted...
-        result = super().todict()
-        del result['subspecs']
-        return result        
+    @property
+    def dustmass(self):
+        return self._dustmass
+    
+    @dustmass.setter
+    def dustmass(self, newmass):
+        self._dustmass = newmass
+        #do something to subspecs here
 
 
 class CosmogenicIsotope(RadioactiveIsotope):
@@ -433,6 +434,10 @@ class CosmogenicSource(RadioactiveContam):
         a = self.cooldown
         b = a + self.integration
         return R0 * (exp(-a/tau) - exp(-b/tau)) * tau/(self.integration)
+
+    @rate.setter
+    def rate(self, newrate):
+        pass
    
     def getfullspec(self):
         return "exposure=%s, cooldown=%s, integration=%s" %\
@@ -448,12 +453,17 @@ class CosmogenicActivation(CombinedSpec):
                  **kwargs):
         #subspecs = [ CosmogenicSource(iso) for iso in isotopes ]
         super().__init__(**kwargs)
-        self.isotopes = [CosmogenicIsotope(**iso) if isinstance(iso, dict) 
-                         else iso for iso in isotopes]
+        self.min_halflife = 1*units.second
         self.cooldown = cooldown
         self.exposure = exposure
         self.integration = integration
+        self.isotopes = isotopes
         
+
+    _copy_attrs = (CombinedSpec._copy_attrs + 
+                   ['exposure', 'cooldown', 'integration'])
+    
+    
     @property
     def isotopes(self):
         return self._isotopes
@@ -463,7 +473,7 @@ class CosmogenicActivation(CombinedSpec):
                           else iso for iso in newisos]
         self._subspecs = []
         for iso in self._isotopes:
-            self.addmaterialspec(CosmogenicSource(iso))
+            self.addspec(CosmogenicSource(iso))
         if self._isotopes:
             self.min_halflife = min([iso.halflife for iso in self._isotopes])
         else:
@@ -475,8 +485,7 @@ class CosmogenicActivation(CombinedSpec):
     @exposure.setter
     def exposure(self, newexp):
         self._exposure = ensure_quantity(newexp, units.day)
-        for spec in self._subspecs:
-            spec.exposure = self._exposure
+        self.updatesubspecs('exposure', self._exposure)
     
     @property
     def cooldown(self):
@@ -484,8 +493,7 @@ class CosmogenicActivation(CombinedSpec):
     @cooldown.setter
     def cooldown(self, newcool):
         self._cooldown = max(ensure_quantity(newcool, units.day), 0*units.day)
-        for spec in self._subspecs:
-            spec.cooldown = self._cooldown
+        self.updatesubspecs('cooldown', self._cooldown)
     
     @property
     def integration(self):
@@ -494,8 +502,7 @@ class CosmogenicActivation(CombinedSpec):
     def integration(self, newint):
         self._integration = max(ensure_quantity(newint, units.year), 
                                 self.min_halflife/100)
-        for spec in self._subspecs:
-            spec.integration = self._integration
+        self.updatesubspecs('integration', self._integration)
     
     def getfullspec(self):
         return "exposure=%s, cooldown=%s, integration=%s" %\

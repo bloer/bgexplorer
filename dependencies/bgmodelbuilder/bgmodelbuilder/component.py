@@ -62,7 +62,7 @@ q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
 class BaseComponent(Mappable):
     """Base class for Components and Assemblies, defines useful functions"""
     def __init__(self, name=None, description=None, 
-                 comment=None, moreinfo=None, isroot=False,
+                 comment=None, moreinfo=None, 
                  specs=[], querymod=None, **kwargs) : 
         """Create a new BaseComponent.
         Args:
@@ -70,8 +70,6 @@ class BaseComponent(Mappable):
             description (str): longer descriptive string
             comment (str): describe current implementation or status
             moreinfo (dict): dictionary of additional metadata
-            isroot (bool): Indicates if this component is THE root assembly
-                should only ever be true for an Assembly
             specs (list): ComponentSpecifications attached to this component
                 Each item in the list may be either a ComponentSpecification 
                 or a (ComponentSpecification, querymod) pair
@@ -84,7 +82,6 @@ class BaseComponent(Mappable):
         self.description = description
         self.comment = comment
         self.moreinfo = moreinfo or {}
-        self.isroot = isroot
         self.placements = set()
         #basic bookkeeping and descriptive stuff
         self.querymods = dict()
@@ -109,7 +106,6 @@ class BaseComponent(Mappable):
         myclone = super().clone()
         myclone.specs = copy(self.specs)
         myclone.placements = set()
-        myclone.isroot=False
         return myclone
         
     def addspec(self, spec, querymod=None, index=None):
@@ -142,13 +138,21 @@ class BaseComponent(Mappable):
             return set(result)
         return set([a for a in result if a.name == name])
             
-    def gettotalweight(self):
+    def gettotalweight(self, fromroot=None):
         """Get the total weight (usually number of) placed components
         Will be 0 if not placed anywhere in tree or only belong to unplaced 
         assemblies
+        Args:
+            fromroot (Assembly): only count weight belonging to this assembly
+                                 If None, count all weights
         """
-        return (1 if self.isroot 
-                else sum([p.gettotalweight() for p in self.placements]))
+        if not self.placements: #we are a root component
+            if fromroot is None or fromroot is self:
+                return 1
+            else:
+                return 0
+        else:
+            return sum([p.gettotalweight(fromroot) for p in self.placements])
 
     def passingselector(self, selector=None):
         """
@@ -290,7 +294,7 @@ class Placement(object):
     in an experiment, and so will need to be associated to different simulation
     datasets. This lets us avoid copying components. 
     """
-    def __init__(self, parent, component, weight=1, querymod=None, 
+    def __init__(self, parent=None, component=None, weight=1, querymod=None, 
                  simdata=None):
         """Args:
             parent (Assembly): assembly in which we're being placed
@@ -315,8 +319,11 @@ class Placement(object):
         #not sure if spec will be a CompSpec or ID, so make sure to get the ID
         self.simdata[getattr(spec,'id',spec)].append(simdata)
 
-    def gettotalweight(self):
-        parentweight = self.parent.gettotalweight() if self.parent else 1
+    def gettotalweight(self, fromroot=None):
+        if not self.parent:
+            parentweight = 1 if fromroot is None else 0
+        else:
+            parentweight = self.parent.gettotalweight(fromroot)
         return self.weight * parentweight
 
     def getquerymodifiers(self, spec=None):
@@ -347,7 +354,7 @@ class Placement(object):
 
     @property
     def name(self):
-        return self.component.name
+        return self.component.name if self.component else None
 
     def todict(self):
         result = removeclasses(copy(self.__dict__))
