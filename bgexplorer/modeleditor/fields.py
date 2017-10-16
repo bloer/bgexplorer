@@ -5,7 +5,7 @@ from builtins import super
 
 import json
 
-from wtforms.fields import TextAreaField, StringField
+from wtforms.fields import Field, TextAreaField, StringField, HiddenField
 from wtforms.validators import ValidationError
 
 from ..bgmodelbuilder import units
@@ -91,7 +91,17 @@ class DictField(TextAreaField):
     def render_kw(self, render_kw):
         self._render_kw = render_kw
             
-    
+class StaticField(Field):
+    """Render field value as text and never set"""
+    def __call__(self, **kwargs):
+        return str('<p class="form-control-static">%s"</p>'%self.data)
+
+    def populate_obj(self, obj):
+        pass
+
+    def _value(self):
+        return HTMLString(self.data)
+
 
 class JSONField(StringField):
     """JSON-encoded field. Set the 'default' argument to list if this expects

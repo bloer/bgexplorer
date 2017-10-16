@@ -4,25 +4,45 @@
 
 <form action="" method="POST" onsubmit="updateallsubcomps()" >
     <h2>Edit Component 
-	<span class="glyphicon glyphicon-remove-circle pull-right text-danger" 
-	      onclick="$('#editor').text('');"></span>
 	<span class="btn-group pull-right">
 	    <button type="submit" class="btn btn-primary" >Save</button> 
+	    <button class="btn btn-toolbar dropdown-toggle" type="button" data-toggle="dropdown">
+		Other actions<span class="caret" ></span>
+	    </button>
+	    <ul class="dropdown-menu">
+		<li class="list-group-item-warning" >
+		    <a href="{{ url_for('.editcomponent',modelid=model.id, componentid=editcomponent.id) }}"
+		       class="" >Reload (discard changes)</a>
+		</li>
+		<li>
+		    <a href="{{ url_for('.newcomponent',modelid=model.id) }}" onclick="dopost(event);"
+		       data-form='{"clonefrom": "{{ editcomponent.id }}"}'>
+			Clone this component
+		    </a>
+		</li>
+		{% if editcomponent != model.assemblyroot %}
+		<li  class="list-group-item-danger" >
+		    <a href="{{ url_for('.delcomponent',modelid=model.id, componentid=editcomponent.id) }}"
+		       onclick="dopost(event);" data-confirm="Are you sure you want to completely delete this component?">
+			Delete all instances of this component
+		    </a>
+		</li>
+		{% endif %}
+	    </ul>
 	</span>
 	
     </h2>
     {{ wtf.quick_form(form) }}
 </form>
-{% if component is defined and component.getcomponents is defined %}
+{#
+{% if editcomponent is defined and editcomponent.getcomponents is defined %}
     <h3>Subcomponents</h3>
     Drag and drop or create new: 
     <span class="btn-group push-right">
 	<button class="btn btn-default btn-sm" onclick="newsubcomp('Component')" > Component </button>
 	<button class="btn btn-default btn-sm" onclick="newsubcomp('Assembly')" > Assembly </button>
     </span>
-    <table id="copycomptable" style="display:none" >
-	{{ printplacement("NEW",editable=true) }}
-    </table>
-    {{ componenttable(component.components,false,"editingsubcomps") }}
+    { componenttable(editcomponent.components,false,"editingsubcomps") }}
     <div id="spacer"  style="padding-top:1em;"</div>
 {% endif %}
+#}

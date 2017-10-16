@@ -9,21 +9,17 @@ import json
 
 from flask import (Blueprint, render_template, request, redirect, 
                    abort, flash, url_for)
-from flask_bootstrap import Bootstrap, is_hidden_field_filter
+from flask_bootstrap import Bootstrap
 import wtforms.widgets 
 
-from . import forms 
+from . import forms
+from .widgets import is_hidden_field 
 from ..modeldb import ModelDB
 from ..bgmodelbuilder.component import Component, Assembly
 from ..bgmodelbuilder import compspec
 
 
 SpecEntry = namedtuple("SpecEntry","cls form")
-
-def hidden_field_override(field):
-    return (is_hidden_field_filter(field)
-            or isinstance(field.widget, wtforms.widgets.HiddenInput)
-            or getattr(field.widget,'input_type', None) == 'hidden')
     
 
 
@@ -47,8 +43,9 @@ class ModelEditor(object):
                               forms.RadonExposureForm)
         self.registerspectype(compspec.CosmogenicActivation, 
                               forms.CosmogenicActivationForm)
-        self.registerspectype(compspec.DustAccumulation, 
-                              forms.DustAccumulationForm)
+        #dust is not well developed yet...
+        #self.registerspectype(compspec.DustAccumulation, 
+        #forms.DustAccumulationForm)
 
         #apply all our routes
         baseroute = '/edit/<modelid>'
@@ -102,7 +99,7 @@ class ModelEditor(object):
         if not 'bootstrap' in setupstate.app.blueprints:
             Bootstrap(setupstate.app)
         setupstate.app.jinja_env.globals['bootstrap_is_hidden_field'] = \
-            hidden_field_override
+            is_hidden_field
         
         #initialize the modeldb
         #todo: make sure this only gets done once
@@ -187,7 +184,8 @@ class ModelEditor(object):
                 model.version = self.modeldb.get_current_version(model.name)+1
                 self.modeldb.write_model(model, temp=False)
                 flash("Model %s version %d successfully saved"%(model.name, 
-                                                                model.version))
+                                                                model.version),
+                      'success')
                 return redirect(url_for("index"))
 
         return render_template('savemodel.html', model=model, form=form)
@@ -337,9 +335,12 @@ class ModelEditor(object):
         if request.method == 'POST' and form.validate():
             form.populate_obj(comp)
             self.modeldb.write_model(model)
-            flash("Changes to component '%s' successfully saved"%comp.name)
+            flash("Changes to component '%s' successfully saved"%comp.name,
+                  'success')
+            #reload from the DB to make sure all references are populated
+            model = self.getmodelordie(modelid)
         return render_template('editmodel.html', model=model, 
-                               component=comp, form=form)
+                               editcomponent=comp, form=form)
 
     def editspec(self, modelid, specid):
         """return a page with forms for componentspec editing"""
@@ -354,6 +355,10 @@ class ModelEditor(object):
         if request.method == 'POST' and form.validate():
             form.populate_obj(spec)
             self.modeldb.write_model(model)
-        return render_template('editmodel.html', model=model, spec=spec, 
+            flash("Changes to spec '%s' successfully saved"%spec.name,
+                  'success')
+            #reload from the DB to make sure all references are populated
+            model = self.getmodelordie(modelid)
+        return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 

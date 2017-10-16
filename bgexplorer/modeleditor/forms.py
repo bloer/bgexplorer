@@ -3,8 +3,9 @@ from __future__ import (absolute_import, division,
 
 from textwrap import dedent
 from wtforms import (validators, StringField, SubmitField, BooleanField, 
-                     IntegerField, SelectField, FieldList, FormField)
-from wtforms.widgets import HiddenInput
+                     IntegerField, SelectField, FieldList, FormField, 
+                     HiddenField, FloatField)
+from wtforms.widgets import HiddenInput, Select
 from wtforms import Form
 #FlaskForm needed for wtf.simple_form in flask 
 from flask_wtf import FlaskForm
@@ -12,8 +13,8 @@ from flask_wtf import FlaskForm
 from  ..bgmodelbuilder import component
 from ..bgmodelbuilder import compspec
 
-from .fields import DictField, JSONField, validate_units 
-from .widgets import SortableTable, InputChoices
+from .fields import DictField, JSONField, StaticField, validate_units 
+from .widgets import SortableTable, InputChoices, StaticIfExists
 
     
 ################ Model Forms ##############################
@@ -31,6 +32,29 @@ class SaveModelForm(FlaskForm):
     
 
 ################## Component Forms ########################
+
+#this won't work because the default CompSpec will have a class
+#how to pass list of valid classes? 
+class RegisteredSpecForm(Form):
+    """Show mostly static info about a spec registered to a component"""
+    id = HiddenField("ID")
+    name = StringField("Name", widget=StaticIfExists())
+    category = StringField("Category", widghet=StaticIfExists())
+    distribution = StringField("Dist.", widget=StaticIfExists())
+    rate = StaticField("Rate", default='')
+
+    
+    #this won't work because saying "obj=" only overwrites the local name
+    def populate_obj(self, obj):
+        if self.id.data:
+            obj = self.id.data
+        else:
+            #make a new spec
+            obj = compspec.buildspecfromdict({
+                'name': self.name.data,
+                '__class__': self.category.data,
+                'distribution': self.distribution.data
+                })
 
 class BaseComponentForm(FlaskForm):
     """Edit basic info about a component"""
@@ -61,9 +85,49 @@ class ComponentForm(BaseComponentForm):
     surface_out = StringField("Outer Surface", 
                               [validate_units(defcomp.surface_out)])
     
+class PlacementForm(Form):
+    component = HiddenField()
+    name = StringField("Name",widget=StaticIfExists())
+    cls = SelectField("Type",
+                      choices=[(d,d) for d in ('Component','Assembly')],
+                      widget=StaticIfExists(Select()))
+    weight = FloatField("Quantity")
+    edit = StaticField("Edit", default="link goes here");
+    #override BaseForm process to restructure placements
+    class _FakePlacement(object):
+        def __init__(self, placement):
+            self.component = (placement.component.id 
+                              if hasattr(placement.component,'id') 
+                              else placement.component)
+            self.name = placement.name
+            self.cls = (type(placement.component).__name__ 
+                        if self.component else None)
+            self.weight = placement.weight
+
+    def process(self, formdata=None, obj=None, data=None, **kwargs):
+        if isinstance(obj, component.Placement):
+            obj = self._FakePlacement(obj)
+        super().process(formdata=formdata, obj=obj, data=data, **kwargs)
+
+    #override populate_obj to make new component if necessary
+    def populate_obj(self, obj):
+        comp = self.component.data
+        if not comp or comp == str(None):
+            comp = component.buildcomponentfromdict({
+                '__class__': self.cls.data,
+                'name': self.name.data
+            })
+        obj.component = comp
+        obj.weight = self.weight.data
+
 class AssemblyForm(BaseComponentForm):
     """Basic info plus subcomponents"""
-    components = JSONField(default=list, widget=HiddenInput())
+    #components = JSONField(default=list, widget=HiddenInput())
+    components = FieldList(FormField(PlacementForm,
+                                     default=component.Placement),
+                           label="Subcomponents",
+                           widget=SortableTable(),
+                           render_kw={'_class':"table table-condensed"})
     
 
 ############ ComponentSpec forms ##################
@@ -96,13 +160,13 @@ class CompSpecForm(FlaskForm):
 
 class RadioactiveIsotopeForm(Form):
     isotope = StringField("Isotope", [validators.required()],
-                          render_kw={'size':7})
+                          render_kw={'size':7,'class':'form-control'})
     rate = StringField("Decay rate",[validate_units(), 
                                      validators.input_required()],
-                       render_kw={'size':20})
+                       render_kw={'size':20,'class':'form-control'})
     err  = StringField("Uncertainty", 
                        description="Fractional or same units as rate",
-                       render_kw={'size':12})
+                       render_kw={'size':12,'class':'form-control'})
     islimit = BooleanField("Limit?",
                            description="Is this a measurement upper limit?")
 
@@ -126,7 +190,7 @@ class RadonExposureForm(CompSpecForm):
                            [validate_units(defradexp.exposure),
                             validators.required()])
     column_height = StringField("Plateout Column Height",
-                                [validate_units(defradexp.column_height)]),
+                                [validate_units(defradexp.column_height)])
     mode = SelectField("Airflow model", choices = mode_choices)
     
     
@@ -134,7 +198,7 @@ class RadonExposureForm(CompSpecForm):
 class CosmogenicIsotopeForm(Form):
     name = StringField("Isotope",[validators.required()])
     halflife = StringField("Half-life", 
-                           [validate_units('1/s'), validators.required()])
+                           [validate_units('second'), validators.required()])
     activationrate = StringField("Activation Rate",
                                  [validate_units('1/kg/day'), 
                                   validators.required()],
@@ -150,20 +214,20 @@ class CosmogenicActivationForm(CompSpecForm):
                            [validate_units(defcosmic.cooldown)])
     integration = StringField("Measurement time",
                              [validate_units(defcosmic.integration)])
-    isotopes = FieldList(FormField(CosmogenicIsotopeForm))
+    isotopes = FieldList(FormField(CosmogenicIsotopeForm,
+                                   default=compspec.CosmogenicIsotope),
+                         min_entries=1,
+                         label="Isotopes",
+                         widget=SortableTable(),
+                         render_kw={'_class':"table table-condensed"})
 
 
 
-class DustIsotopeForm(Form):
-    name = StringField("IsotopeName",[validators.required()])
-    rate = StringField("Decay rate", [validate_units('Bq/kg'), 
-                                      validators.required()])
 
-class DustAccumulationForm(CompSpecForm):
+class DustAccumulationForm(RadioactiveContamForm):
     dustmass = StringField("Dust mass",[validate_units(),validators.required()],
                            description=("Units match distribution, "
                                         "e.g. kg/cm**2 for surface"))
-    isotopes = FieldList(FormField(DustIsotopeForm))
                                  
 
 
