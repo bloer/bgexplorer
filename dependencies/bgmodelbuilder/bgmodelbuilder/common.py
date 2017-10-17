@@ -9,7 +9,7 @@ import pint
 units = pint.UnitRegistry()
 units.auto_reduce_dimensions = False #this doesn't work right
 units.errors = pint.errors
-units.default_format = '~.3gP'
+units.default_format = '~gP'
 #fix Bq, add ppb units
 units.load_definitions([
     "Bq = Hz = Bq = Becquerel",
@@ -54,9 +54,9 @@ def to_primitive(val, renameunderscores=True, recursive=True,
                  replaceids=True, stringify=(units.Quantity,)):
     """Transform a class object into a primitive object for serialization"""
     
-    if replaceids and hasattr(val, 'id'):
-        val =  val.id
-    elif replaceids and hasattr(val, '_id'):
+    #if replaceids and hasattr(val, 'id'):
+    #    val =  val.id   #id can be a property, so only use _id
+    if replaceids and hasattr(val, '_id'):
         val =  val._id
 
     elif inspect.getmodule(val): #I think this tests for non-builtin classes

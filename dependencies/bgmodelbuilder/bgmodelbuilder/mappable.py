@@ -19,3 +19,12 @@ class Mappable(object):
         if hasattr(clone, 'name'):
             setattr(clone,'name', newname or "Copy of "+clone.name)
         return clone
+        
+    def __eq__(self, other):
+        try:
+            return self.id == other.id
+        except:
+            return False
+
+    def __hash__(self):
+        return hash(self.id)

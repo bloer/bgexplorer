@@ -96,13 +96,16 @@ class ComponentSpec(Mappable):
         """Get the uncertainty in rate from this source as a fraction"""
         return 0
         
-    def getratestr(self):
+    def getratestr(self, sigfigs=None):
         try:
             res=""
             if self.islimit:
                 res += "<"
             #res += str(self.rate.to_base_units().to_compact())
-            res += "{:~.3gP}".format(self.rate)
+            format = ":~gP"
+            if sigfigs:
+                format = ":~.%dgP"%sigfigs
+            res += ("{"+format+"}").format(self.rate)
             if self.err:
                 res += " +/- {:d}%".format(self.err*100)
             return res

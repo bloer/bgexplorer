@@ -145,7 +145,13 @@ class BgModel(object):
     def connectreferences(self, comp):
         """ transform ID references in an exported component to actual objects
         """
-        comp.specs = [self.specs.get(key,key) for key in comp.specs]
+        for boundspec in getattr(comp,'_specs',[]):
+            try:
+                boundspec.spec = self.specs.get(boundspec.spec, boundspec.spec)
+            except TypeError: #in case boundspec.spec isn't hashable
+                pass
+            if hasattr(boundspec.spec,'appliedto'):
+                boundspec.spec.appliedto.add(comp)
         for p in getattr(comp, '_components', []):
             p.component = self.components.get(p.component, p.component)
             if hasattr(p.component,'placements'):

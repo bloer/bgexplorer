@@ -58,6 +58,33 @@ q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
 
     
 
+class BoundSpec(object):
+    """Represents a spec bound to a component with querymods.
+    May eventually hold optional weights and bind to simdata
+    """
+    def __init__(self, spec=None, querymod=None):
+        self.spec = spec
+        self.querymod = querymod 
+        
+    def __eq__(self, other): 
+        if hasattr(other, 'spec'):
+            return self.spec == other.spec
+        return self.spec == other
+        
+    @classmethod
+    def _childattr(cls, attr):
+        """Create an attribute for this class that refers to child"""
+        def get(self):
+            return getattr(self.spec,attr,None)
+
+        setattr(cls, attr, property(get))
+    
+    _copyattrs = ('name','distribution','category','rate','getratestr','id')
+    
+for attr in BoundSpec._copyattrs:
+    BoundSpec._childattr(attr)
+    
+    
 
 class BaseComponent(Mappable):
     """Base class for Components and Assemblies, defines useful functions"""
@@ -84,17 +111,22 @@ class BaseComponent(Mappable):
         self.moreinfo = moreinfo or {}
         self.placements = set()
         #basic bookkeeping and descriptive stuff
-        self.querymods = dict()
-        if querymod:
-            self.querymods[None] = querymod
-        self.specs = []
-        for spec in specs:
+        self.querymod = querymod 
+        self.specs = specs
+        
+
+    @property
+    def specs(self):
+        return self._specs
+
+    @specs.setter
+    def specs(self, newspecs):
+        self._specs = []
+        for spec in newspecs:
             if type(spec) in [tuple, list]:
                 self.addspec(*spec)
             else:
                 self.addspec(spec)
-
-    
 
     def __str__(self):
         return "%s('%s')"%(type(self).__name__, self.name)
@@ -111,9 +143,13 @@ class BaseComponent(Mappable):
     def addspec(self, spec, querymod=None, index=None):
         if index is None:
             index = len(self.specs)
-        self.specs.insert(index, spec)
-        if querymod:
-            self.querymods[getattr(spec, 'id', spec)] = querymod
+        if isinstance(spec, dict):
+            spec = BoundSpec(**spec)
+        if isinstance(spec, BoundSpec):
+            self._specs.insert(index, spec)
+            spec = spec.spec
+        else:
+            self._specs.insert(index, BoundSpec(spec,querymod))
         if hasattr(spec, 'appliedto'):
             spec.appliedto.add(self)
 
@@ -122,14 +158,13 @@ class BaseComponent(Mappable):
         ComponentSpec or index"""
         if type(spec) is int:
             #treat as index
-            spec = self.specs[spec]
-        self.specs.remove(spec)
-        if spec.id in self.querymods:
-            del self.querymods[spec.id]
-        #todo: should we remove ourselves from spec.appliedto?
+            spec = self._specs[spec]
+        self._specs.remove(spec)
+        if hasattr(spec, 'appliedto'):
+            spec.appliedto.remove(self)
 
     def findspecs(self, name=None, deep=False, children=False):
-        result = copy(self.specs)
+        result = [bs.spec for bs in self._specs]
         if deep:
             #concatenate all subspecs
             result = sum((s.getsubspecs() if hasattr(s,'getsubspecs') else [s]
@@ -181,11 +216,6 @@ class BaseComponent(Mappable):
         result['__class__'] = type(self).__name__
         #placements may not have IDs, so delete and assume they'll be rebuilt
         del result['placements']
-        #expect to receive querymods along with their associated specs
-        del result['querymods']
-        result['querymod'] = self.querymods.get(None)
-        result['specs'] = [(spec, self.querymods.get(spec)) 
-                           for spec in result['specs']]
         return result
         
 
@@ -327,7 +357,10 @@ class Placement(object):
         return self.weight * parentweight
 
     def getquerymodifiers(self, spec=None):
-        """Get a list of query modifiers in ascending priority for the spec"""
+        """Get a list of query modifiers in ascending priority for the spec
+        
+        TODO: This method needs a complete overhaul
+        """
         result = []
         if self.parent:
             #how to order multiple placements? should be interleaved I guess
