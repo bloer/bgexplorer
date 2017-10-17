@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division,
 
 import pymongo
 import re
+from pprint import pprint 
 
 from .bgmodelbuilder.bgmodel import BgModel
 
@@ -122,7 +123,6 @@ class ModelDB(object):
             res = self._collection.replace_one({'_id':model['_id']}, model)
         else:
             res = self._collection.insert_one(model)
-
         #todo: test the response!
         return model.get('_id')
 

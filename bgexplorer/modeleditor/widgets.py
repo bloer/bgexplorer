@@ -10,9 +10,11 @@ Defines a few custom widgets for rendering dynamic elements
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 import json
+import types
 from collections import namedtuple
 
-from wtforms.widgets import html_params, HTMLString, HiddenInput, TextInput
+from wtforms.widgets import (html_params, HTMLString, HiddenInput, TextInput,
+                             CheckboxInput, RadioInput)
 from wtforms.utils import unset_value
 
 from flask_bootstrap import is_hidden_field_filter
@@ -29,12 +31,14 @@ class TableRow(object):
         html = []
         kwargs.setdefault('id', field.id)
         kwargs.setdefault('data-prefix', field.name)
+        render_kw = kwargs.pop('render_kw',{})
+        render_kw['class'] = render_kw.get('class','')+" form-control"
         html.append("<tr %s>"%html_params(**kwargs))
         for subfield in field:
             html.append('<td data-column="%s"'%subfield.short_name)
             if is_hidden_field(subfield):
                 html.append(' class="hide"')
-            html.append('>%s</td>'%subfield(**kwargs.get('render_kw',{})))
+            html.append('>%s</td>'%subfield(**render_kw))
         #add remove button
         html.append('<td data-column="delete">'
                     '<a onclick="$(this).parents(\'tr\')'
@@ -135,9 +139,10 @@ class InputChoices(TextInput):
         html.append('<span class="caret"></span></button></div></div>')
         html.append('<ul class="dropdown-menu">')
         for choice in self.choices:
-            html.append('<li><a href="javascript:void();" onclick='
-                        '"$(\'#%s\').val($(this).text());">'
-                        '%s</a></li>'%(kwargs.get('id',field.id),choice))
+            html.append('<li><a href="javascript:void(0)" onclick='
+                        '"$(this).parents(\'.dropdown\').find(\'input\')'
+                        '.val($(this).text());">'
+                        '%s</a></li>'%choice)
         html.append('</ul></div>')
         return HTMLString(''.join(html))
 
@@ -146,6 +151,8 @@ class InputChoices(TextInput):
 class StaticIfExists(object):
     """ If the value is already defined, render it as static
     only create a non-hidden input if _value is empty
+    Args:
+       default (widget): Widget to render if value is not set
     """
     def __init__(self, default=TextInput()):
         self.default = default
@@ -157,7 +164,8 @@ class StaticIfExists(object):
         if not value or value == str(None):
             return self.default(field, **kwargs)
         else:
-            kwargs['class'] = "hide "+kwargs.get('class','')
-            return HTMLString(self.default(field, **kwargs) + 
+            if not hasattr(field, '_value'):
+                field._value = types.MethodType(lambda self: self.data, field)
+            return HTMLString(HiddenInput()(field, **kwargs)+
                               '<p class="form-control-static">'+value
                               +'</p')

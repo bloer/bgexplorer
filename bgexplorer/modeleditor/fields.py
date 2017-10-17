@@ -5,7 +5,8 @@ from builtins import super
 
 import json
 
-from wtforms.fields import Field, TextAreaField, StringField, HiddenField
+from wtforms.fields import (Field, TextAreaField, StringField, HiddenField, 
+                            SelectField)
 from wtforms.validators import ValidationError
 
 from ..bgmodelbuilder import units
@@ -94,7 +95,7 @@ class DictField(TextAreaField):
 class StaticField(Field):
     """Render field value as text and never set"""
     def __call__(self, **kwargs):
-        return str('<p class="form-control-static">%s"</p>'%self.data)
+        return str('<p class="form-control-static">%s</p>'%self.data)
 
     def populate_obj(self, obj):
         pass
@@ -138,7 +139,10 @@ class JSONField(StringField):
         self.data = to_primitive(value)
         
 
-
+class NoValSelectField(SelectField):
+    """Select field that doesn't validate against choices"""
+    def pre_validate(self, form):
+        pass
     
         
 

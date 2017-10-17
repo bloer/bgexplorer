@@ -1,6 +1,6 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-
+from copy import copy
 from textwrap import dedent
 from wtforms import (validators, StringField, SubmitField, BooleanField, 
                      IntegerField, SelectField, FieldList, FormField, 
@@ -13,7 +13,8 @@ from flask_wtf import FlaskForm
 from  ..bgmodelbuilder import component
 from ..bgmodelbuilder import compspec
 
-from .fields import DictField, JSONField, StaticField, validate_units 
+from .fields import (DictField, JSONField, StaticField, validate_units, 
+                     NoValSelectField )
 from .widgets import SortableTable, InputChoices, StaticIfExists
 
     
@@ -31,30 +32,45 @@ class SaveModelForm(FlaskForm):
 
     
 
+############ Shared stuff ####################3
+dist_choices = ('bulk', 'surface_in', 'surface_out')
+dist_widget = InputChoices(choices=dist_choices)
+
+
+
 ################## Component Forms ########################
 
-#this won't work because the default CompSpec will have a class
-#how to pass list of valid classes? 
-class RegisteredSpecForm(Form):
-    """Show mostly static info about a spec registered to a component"""
-    id = HiddenField("ID")
-    name = StringField("Name", widget=StaticIfExists())
-    category = StringField("Category", widghet=StaticIfExists())
-    distribution = StringField("Dist.", widget=StaticIfExists())
-    rate = StaticField("Rate", default='')
 
-    
-    #this won't work because saying "obj=" only overwrites the local name
+spectypes = (('CombinedSpec','RadioactiveContam'), 
+             ('RadonExposure','RadonExposure'), 
+             ('CosmogenicActivation','CosmogenicActivation'))
+
+class BoundSpecForm(Form):
+    """Show mostly static info about a spec registered to a component"""
+    id = HiddenField("Spec ID")
+    name = StringField("Name", widget=StaticIfExists())
+    category = NoValSelectField("Category", 
+                                choices=copy(spectypes),
+                                widget=StaticIfExists(Select()))
+    distribution = StringField("Dist.", default=(compspec.ComponentSpec.
+                                                 _default_distribution),
+                               widget=StaticIfExists(dist_widget))
+    #rate = StaticField("Rate", default='')
+    querymod = JSONField("Querymod")
+    edit = StaticField("Edit", default="edit")
+
+    #override populate_obj to make new spec if necessary
     def populate_obj(self, obj):
-        if self.id.data:
-            obj = self.id.data
-        else:
-            #make a new spec
-            obj = compspec.buildspecfromdict({
-                'name': self.name.data,
+        spec = self.id.data
+        if not spec or spec == str(None):
+            spec = compspec.buildspecfromdict({
                 '__class__': self.category.data,
-                'distribution': self.distribution.data
+                'name': self.name.data,
+                'distribution': self.distribution.data,
                 })
+        obj.spec = spec
+        obj.querymod = self.querymod.data
+
 
 class BaseComponentForm(FlaskForm):
     """Edit basic info about a component"""
@@ -68,9 +84,13 @@ class BaseComponentForm(FlaskForm):
                                          'partnum': "Part number",
                                          'vendor': "Part vendor",
                                          'datasheet': "URL for datasheet"})
-    querymod = JSONField("Query Modifier",
+    querymod = JSONField("Query Modifier", default={},
                          description="JSON object modifying DB queries")
-
+    specs = FieldList(FormField(BoundSpecForm, default=component.BoundSpec),
+                      label="Emission specs",
+                      widget=SortableTable(),
+                      render_kw={'_class':"table table-condensed"})
+                      
 
 #default component to get units right
 defcomp = component.Component()

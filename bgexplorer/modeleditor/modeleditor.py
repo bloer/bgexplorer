@@ -2,7 +2,7 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from datetime import datetime
-from collections import namedtuple
+from collections import namedtuple,OrderedDict
 
 import bson
 import json
@@ -35,7 +35,7 @@ class ModelEditor(object):
         self.modeldb = modeldb or ModelDB()
         
         #set up the spec registry and add the defaults
-        self.specregistry = {}
+        self.specregistry = OrderedDict()
         self.registerspectype(compspec.CombinedSpec, 
                               forms.RadioactiveContamForm,
                               "RadioactiveContam")
@@ -104,6 +104,11 @@ class ModelEditor(object):
         #initialize the modeldb
         #todo: make sure this only gets done once
         self.modeldb.init_app(setupstate.app)
+        
+        #update the spec form choices
+        forms.BoundSpecForm.category.choices = [
+            (val.cls,name) for name, val in self.specregistry.items()
+        ]
 
     def init_app(self, app, url_prefix='/models'):
         app.register_blueprint(self.bp, url_prefix=url_prefix)
@@ -286,7 +291,7 @@ class ModelEditor(object):
         model = self.getmodelordie(modelid)
         spec = self.getspecordie(model, specid)
         #remove all references
-        for comp in spec.appliedto:
+        for comp in list(spec.appliedto):
             comp.delspec(spec)
         del model.specs[spec.id]
         self.modeldb.write_model(model)
