@@ -364,6 +364,8 @@ class DustAccumulation(CombinedSpec):
     Users specify the type and concentration of radioactive contaminants
     in the dust, how the dust distribution is modeled, and the accumulation
     rate, mass per surface area or total mass
+    
+    WARNING: This class doesn't actually work right now!
 
     Args:
         dustmass(Quantity): mass of dust, units should match distribution

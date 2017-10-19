@@ -12,8 +12,7 @@ class TestComponent(unittest.TestCase):
                                surface='50 cm^2')
         self.fixture = Assembly('fixture', components=[self.plate, 
                                                        (self.screw,10) ])
-        self.detector = Assembly('detector', components=[(self.fixture, 10)],
-                                 isroot=True)
+        self.detector = Assembly('detector', components=[(self.fixture, 10)])
 
     def testTotalWeight(self):
         self.assertEqual(self.screw.gettotalweight(), 100)
