@@ -97,7 +97,7 @@ class ComponentSpec(Mappable):
         return 0
         
     def getratestr(self, sigfigs=None):
-        try:
+        #try:
             res=""
             if self.islimit:
                 res += "<"
@@ -107,10 +107,10 @@ class ComponentSpec(Mappable):
                 format = ":~.%dgP"%sigfigs
             res += ("{"+format+"}").format(self.rate)
             if self.err:
-                res += " +/- {:d}%".format(self.err*100)
+                res += " +/- {:.2g}%".format(self.err*100.)
             return res
-        except:
-            return "undefined"
+        #except:
+            #return "undefined"
     
     #concrete classes _should_ override this moethod
     def emissionrate(self,component):
