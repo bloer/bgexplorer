@@ -32,7 +32,6 @@ class TableRow(object):
         kwargs.setdefault('id', field.id)
         kwargs.setdefault('data-prefix', field.name)
         render_kw = kwargs.pop('render_kw',{})
-        render_kw['class'] = render_kw.get('class','')+" form-control"
         html.append("<tr %s>"%html_params(**kwargs))
         for subfield in field:
             html.append('<td data-column="%s"'%subfield.short_name)
@@ -109,12 +108,43 @@ class SortableTable(object):
                   $(this).attr('id',name).attr('name',name);
                 });
             }
-            function addrow(obj){
-                var row = $(obj).find("tr.template").clone()
+            function addrow(obj, valsFrom){
+                obj = $(obj);
+                var row = obj.find("tr.template").clone()
                     .removeClass('hide').removeClass('template');
-                var index = $(obj).find("tbody tr").not('.template').size();
+                if(valsFrom){
+                    valsFrom=$(valsFrom);
+                    //copy data-* for each column we care about
+                    row.children("td").each(function(){
+                        var name=$(this).data('column');
+                        if(!name) return;
+                        var copyval = valsFrom.data(name);
+                        if(!copyval) return;
+                        $(this).find("input, select").val(copyval);
+                        $(this).children().css("display","none");
+                        $("<p class='form-control-static'>")
+                            .text(copyval)
+                            .appendTo($(this));
+                    });
+                    $("<div>")
+                      .attr("class","alert alert-success")
+                      .css("position","absolute")
+                      .css("width",valsFrom.width())
+                      .css("height",valsFrom.height())
+                      .appendTo("body")
+                      .offset(valsFrom.offset())
+                      .animate({
+                          'left':obj.offset().left,
+                          'top':obj.offset().top + obj.height(),
+                      },function(){
+                          obj.children('tbody').append(row);
+                          $(this).remove();
+                      });
+                }
+                var index = obj.find("tbody tr").not('.template').size();
                 setindex(index, row);
-                $(obj).children('tbody').append(row);
+                if(!valsFrom)
+                    obj.children('tbody').append(row);
             }
             function sortIndices(container){
                  $(container).children().not('.template').each(setindex); 
@@ -134,9 +164,10 @@ class InputChoices(TextInput):
         html.append('<div class="input-group" data-toggle="dropdown">')
         html.append(super().__call__(field, **kwargs))
         html.append('<div class="input-group-btn">')
-        html.append('<button class="btn dropdown-toggle" type="button" '
-                    '>')
-        html.append('<span class="caret"></span></button></div></div>')
+        html.append('<button class="btn dropdown-toggle hide" type="button">')
+        #html.append('<span class="caret" style="width:0.5em;"></span>')
+        html.append('</button></div>')
+        html.append('</div>')
         html.append('<ul class="dropdown-menu">')
         for choice in self.choices:
             html.append('<li><a href="javascript:void(0)" onclick='

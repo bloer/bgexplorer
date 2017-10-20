@@ -342,8 +342,9 @@ class ModelEditor(object):
             self.modeldb.write_model(model)
             flash("Changes to component '%s' successfully saved"%comp.name,
                   'success')
-            #reload from the DB to make sure all references are populated
-            model = self.getmodelordie(modelid)
+            return redirect(url_for('.editcomponent',
+                                    modelid=modelid, componentid=componentid))
+            #todo: probably should have separate edit, save endpoints...
         return render_template('editmodel.html', model=model, 
                                editcomponent=comp, form=form)
 
@@ -362,8 +363,9 @@ class ModelEditor(object):
             self.modeldb.write_model(model)
             flash("Changes to spec '%s' successfully saved"%spec.name,
                   'success')
-            #reload from the DB to make sure all references are populated
-            model = self.getmodelordie(modelid)
+            return redirect(url_for('.editspec', 
+                                    modelid=modelid, specid=specid))
+            #todo: probably should have separate edit, save spec endpoints
         return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 

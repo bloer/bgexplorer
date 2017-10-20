@@ -48,16 +48,18 @@ spectypes = (('CombinedSpec','RadioactiveContam'),
 class BoundSpecForm(Form):
     """Show mostly static info about a spec registered to a component"""
     id = HiddenField("Spec ID")
-    name = StringField("Name", widget=StaticIfExists())
-    category = NoValSelectField("Category", 
+    name = StringField("Name", [validators.required()], widget=StaticIfExists(),
+                       render_kw={'class':'form-control'})
+    category = NoValSelectField("Category", render_kw={'class':'form-control'},
                                 choices=copy(spectypes),
                                 widget=StaticIfExists(Select()))
     distribution = StringField("Dist.", default=(compspec.ComponentSpec.
                                                  _default_distribution),
-                               widget=StaticIfExists(dist_widget))
+                               widget=StaticIfExists(dist_widget),
+                               render_kw={'class':'form-control'})
     #rate = StaticField("Rate", default='')
-    querymod = JSONField("Querymod")
-    edit = StaticField("Edit", default="edit")
+    querymod = JSONField("Querymod",render_kw={'class':'form-control'})
+    #edit = StaticField("Edit", default="edit")
 
     #override populate_obj to make new spec if necessary
     def populate_obj(self, obj):
@@ -107,12 +109,15 @@ class ComponentForm(BaseComponentForm):
     
 class PlacementForm(Form):
     component = HiddenField()
-    name = StringField("Name",widget=StaticIfExists())
-    cls = SelectField("Type",
+    name = StringField("Name",[validators.required()], widget=StaticIfExists(),
+                       render_kw={'class':'form-control'})
+    cls = SelectField("Type", [validators.required()],
                       choices=[(d,d) for d in ('Component','Assembly')],
-                      widget=StaticIfExists(Select()))
-    weight = FloatField("Quantity")
-    edit = StaticField("Edit", default="link goes here");
+                      widget=StaticIfExists(Select()),
+                      render_kw={'class':'form-control'})
+    weight = FloatField("Quantity", [validators.required()] ,
+                        render_kw={'size':1, 'class':'form-control'})
+    #edit = StaticField("Edit", default="link goes here");
     #override BaseForm process to restructure placements
     class _FakePlacement(object):
         def __init__(self, placement):

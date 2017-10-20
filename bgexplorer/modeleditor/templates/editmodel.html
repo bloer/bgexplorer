@@ -8,16 +8,24 @@
     {% block styles %}
 	{{ super() }}
 	<style>
+	 html, body {height:100%}
+	 div.container {height:100%}
+	 div.page-header {height:10%, overflow:hide}
+	 div.row {height:85%}
+	 div.page-header div.row {height:100%}
+	 div.scroll {height:100%; overflow:auto}
+	 .childofactive {background-color: #FCF8E3}
+	 div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
 	 h1 {margin-top:0px}
 	 /*body, .btn, .form-control, .glyphicon {font-size:small;}*/
 	 .linklike {cursor:pointer; }
 	 .Assembly td:first-child:after {content:"↴"; padding-left:0.15em; color:green;}
 	 #componentsdiv td[data-column=weight] {display:none}
 	 #editor td[data-column=description] {display:none}
-	 td[data-column=weight] input {width:3em;}
 	 .form-inline, .form-inline div.input-group {display:inline-block}
+	     
 	</style>
-    {% endblock %}
+    {% endblock %} 
 
     {% block scripts %}
 	{{ super() }}
@@ -35,37 +43,6 @@
 	 $(".btn").mouseup(function(){
 	     $(this).blur();
 	 });
-	 function newsubcomp(cls, source){
-	     cls = cls || "Component";
-	     var clonerow = $("#copycomptable tr").clone(true);
-	     if(source){
-		 clonerow.data('rawobj') = source;
-		 cls = source.cls || cls;
-	     }
-	     clonerow.addClass(cls);
-	     clonerow.data('rawobj')['__class__'] = cls;
-	     $("#editingsubcomps tbody").append(clonerow);
-	 }
-
-	 function updatesubcomp(input){ //update the data-rawobj attribute for a subcomponent row
-	     var val = input.val();
-	     if(input.attr("name") == "weight")
-		 val = Number(val);
-	     input.parents("tr").data('rawobj')[input.attr('name')] = val;
-	 }
-	 
-	 function updateallsubcomps(){ 
-	     var subcomps = $("#editingsubcomps tbody tr.component").map(function(){ return $(this).data('rawobj'); });
-	     $("#components").val(JSON.stringify(subcomps.get()));
-	     
-	 }
-
-	 function placecomponent(node){
-	     var newnode = $(node).clone(true);
-	     newnode.data('rawobj')['weight'] = 1;
-	     newnode.find("input[name=weight]").val(1);
-	     newnode.appendTo("#editingsubcomps tbody");
-	 }
 
 	 function filtercomponents(){
 	     var filtertext = $("#filtercomponents").val();
@@ -111,58 +88,47 @@
 
 {% import "bootstrap/wtf.html" as wtf %}
 
-{% macro printcompfield(name, value="") %}
-    <input type="text" class="form-control" name="{{ name }}" value="{{ value or ''}}" 
-	   {% if name=='name' %} placeholder="<new component>"{% endif %}
-	   oninput="updatesubcomp($(this));">
-{% endmacro %}
 
-{% macro printplacement(placement="NEW", level=0, editable=false) %}
-    {% if placement == "NEW" %}
-	{% set comp={'id':none, 'name':'<NEW>'} %}
-	{% set dataraw={'weight':1, 'querymod':none} %}
-    {% elif placement.component is defined %}
-	{% set comp=placement.component %}
-	{% set dataraw={'component':comp.id, 'weight': placement.weight, 'querymod': placement.querymod} %}
-    {% else %}
-	{% set comp=placement %}
-	{% set dataraw={'component':comp.id} %}
-    {% endif %}
-
-    <tr class="linklike component {% if editcomponent is defined and comp.id == editcomponent.id -%} info {%- endif -%}
-	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} " 
-	data-id="{{ comp.id }}" data-rawobj='{{ dataraw | tojson }}' 
-        onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" >
-	{% if editable and not comp.id %}
-	<td data-column="name" >{{ printcompfield('name', dataraw.get('name')) }}</td>
-	{% else %}
+{% macro componentrow(comp, level) %}
+    <tr class="linklike component 
+	       {% if editcomponent is defined %} 
+	       {% if comp.id == editcomponent.id %} info 
+	       {% elif editcomponent.isparentof(comp,deep=False) %} childofactive {% endif %}
+	       {% endif %}
+	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} "
+	       data-component="{{ comp.id }}" 
+	       data-name="{{ comp.name }}" 
+	       data-cls="{{ 'Assembly' if comp.getcomponents is defined else 'Component' }}"
+	       onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" >
 	<td data-column="name" style="padding-left:{{ 15*level }}px" >{{ comp.name }}</td>
-	{% endif %}
 	<td data-column="description">{{ comp.description or "" }}</td>
-	<td data-column="weight" > {{ printcompfield('weight', dataraw.get('weight',1)) }} </td>
+	<td>
+	    {%- if editcomponent is defined and editcomponent.getcomponents is defined and not comp.isparentof(editcomponent) -%}
+		<a class="placecomp" href="javascript:void(0)" 
+		   onclick="event.stopPropagation(); addrow('#components',$(this).parents('tr'))">
+		    <span class="small glyphicon glyphicon-circle-arrow-right"></span>
+		</a>
+	    {%- else -%}
+		<span class="small glyphicon" ></span>
+	    {%- endif -%}
+	</td>
     </tr>
 {% endmacro %}
 
 {% macro componenttable(components, recursive=true, id="") %}
     <table class="table table-condensed table-hover comptable" id="{{ id }}">
 	<thead>
-	    {% if recursive %}
-	    <tr><th>Name</th><th>Description</th></tr>
-	    {% else %}
-	    <tr><th>Name</th><th>Quantity</th></tr>
-	    {% endif %}
+	    <tr><th>Name</th><th>Description</th><th></tr>
 	</thead>
 	<tbody>
 	    {% for comp in components recursive %}
 		{% if comp == model.assemblyroot %}
 		    <tr><th colspan="2" style="background-color:#fafafa;" > Assembly Tree</th></tr>
 		{% endif %}
-		{{ printplacement(comp, loop.depth0, editable=not recursive) }}
+		{{ componentrow(comp, loop.depth0) }}
 		{% if recursive %}
-		    {% if comp.components is defined %}
-			{{ loop(comp.components) }}
-		    {% elif comp.component is defined and comp.component.components is defined %}
-			{{ loop(comp.component.components) }}
+		    {% if comp.getcomponents is defined %}
+			{{ loop(comp.getcomponents(deep=False, withweight=False, merge=False)) }}
 		    {% endif %}
 		{% endif %}
 		{% if comp == model.assemblyroot %}
@@ -175,24 +141,41 @@
 {% endmacro %}
 
 
-{% macro printspec(spec) %}
-    <tr class="linklike spec {% if editspec is defined and spec.id == editspec.id -%} info {%- endif -%}"
-        onclick="window.location='{{ url_for('.editspec',modelid=model.id, specid=spec.id) }}';" >
+{% macro specrow(spec) %}
+    <tr class="linklike spec {% if editspec is defined and spec.id == editspec.id -%} info {%- endif -%}
+	       {%- if editcomponent is defined and spec in editcomponent.findspecs(deep=False) -%} childofactive {%- endif -%}"
+        onclick="window.location='{{ url_for('.editspec',modelid=model.id, specid=spec.id) }}';" 
+	data-id="{{ spec.id }}"
+	data-name="{{ spec.name }}"
+	data-category="{{ spec.category }}"
+	data-distribution="{{ spec.distribution }}"
+	data-rate="{{ spec.getratestr() }}"
+    >
 	<td data-column="name" >{{ spec.name }}</td>
 	<td data-column="category" >{{ spec.category }}</td>
 	<td data-column="distribution" >{{ spec.distribution }}</td>
-	<td data-column="rate" >{{ spec.getratestr(2) }}</td>	
+	<td data-column="rate" >{{ spec.getratestr(2) }}</td>
+	<td>
+	    {%- if editcomponent is defined -%}
+		<a class="placespec" href="javascript:void(0)" 
+		   onclick="event.stopPropagation(); addrow($('#specs'),$(this).parents('tr'))">
+		    <span class="small glyphicon glyphicon-circle-arrow-right"></span>
+		</a>
+	    {%- else -%}
+		<span class="small glyphicon" ></span>
+	    {%- endif -%}
+	</td>
     </tr>
 {% endmacro %}
 
 {% macro spectable(specs, id="") %}
     <table class="table table-condensed table-hover spectable table-responsive" id="{{ id }}">
 	<thead>
-	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th></tr>
+	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th><th></th></tr>
 	</thead>
 	<tbody>
 	    {% for spec in specs %}
-		{{ printspec(spec) }}
+		{{ specrow(spec) }}
 	    {% endfor %}
 	</tbody>
     </table>
@@ -214,7 +197,7 @@
 		    <button class="btn btn-danger btn-sm">Discard Changes</button>
 		</div>
 		<div class="col-sm-5" >
-		    <div id="message">
+		    <div id="messages">
 			{% for cat,msg in get_flashed_messages(with_categories=true) %}
 			    <div class="alert alert-{{ cat }} alert-dismissable" >
 				{{ msg }}
@@ -231,7 +214,7 @@
     
 
 	<div class="row" >
-	    <div class="col-sm-6">
+	    <div class="col-sm-6 scroll">
 		
 		<ul class="nav nav-tabs" >
 		    <li {%- if editspec is not defined %} class="active" {% endif -%}>
@@ -301,7 +284,7 @@
 		</div> {# close tab-content  #}
 	    </div> {# close col-sm-6 #}
 	    
-	    <div class="col-sm-6" >
+	    <div class="col-sm-6 scroll" >
 		<div id="editor"  >
 		    {% if form is defined %}
 			{% if editcomponent is defined %}
@@ -313,6 +296,5 @@
 		</div>
 	    </div>
 	</div>
-	<div class="row clearfix" style="padding-top:10em;" ></div>
     </div>
 {% endblock %}
