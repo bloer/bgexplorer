@@ -5,6 +5,7 @@ from __future__ import (absolute_import, division,
 import pymongo
 import re
 from pprint import pprint 
+import bson
 
 from .bgmodelbuilder.bgmodel import BgModel
 
@@ -71,6 +72,14 @@ class ModelDB(object):
             projection (dict): pymongo projection doc
         """
         self.testconnection()
+        #convert id query to ObjectId if it is a plain string
+        try:
+            if isinstance(query,str):
+                query = bson.ObjectId(query)
+            elif isinstance(query, dict) and '_id' in query:
+                query['_id'] = bson.ObjectId(query['_id'])
+        except bson.errors.InvalidId: #id is not an ObjectId string
+            pass
         #remove our internal metadata
         projection = projection or {}
         if not any(projection.values()):
@@ -165,6 +174,9 @@ class ModelDB(object):
                 version of each model name
             projection (dict): mongodb projection operator to apply to the 
                 selection.  Use None to get the full object
+
+        Returns:
+            (list): list of models as raw dicts
         """
         self.testconnection()
 
