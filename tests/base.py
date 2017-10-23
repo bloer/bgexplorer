@@ -12,7 +12,56 @@ import unittest
 import tempfile
 import logging
 import urllib
+from copy import deepcopy
+import bson
 
+class TestingModelDB(ModelDB):
+    """ Simplified ModelDB used for testing. Models are kept in-memory """
+    
+    class FakeDB(dict):
+        @staticmethod
+        def convert_query(query):
+            if isinstance(query,dict) and '_id' in query:
+                query = query['_id']
+            return str(query)
+
+        def find_one(self, query, projection=None):
+            result = deepcopy(self.get(self.convert_query(query)))
+            if result:
+                if isinstance(projection, dict):
+                    for key,val in projection.items():
+                        if val is False or val is 0:
+                            result.pop(key,None)
+                            
+            return result
+        
+        def replace_one(self, query, model):
+            self[self.convert_query(query)] = model
+            
+        def insert_one(self, model):
+            model['_id'] = str(bson.ObjectId())
+            self[model['_id']] = model
+            
+        def aggregate(self, pipeline):
+            #just return list of all models...
+            return [deepcopy(m) for m in self.values()]
+    
+        def drop(self):
+            self.clear()
+
+    def connect(self, dburi=None):
+        """ Use a db as a fake MongoDB collection. Queries and projections
+        are not treated properly, but should work where the query is an ID
+        """
+        self._collection = self.FakeDB()
+        
+        
+    def get_model_history(self, modelid):
+        raise NotImplementedError("get_model_history")
+
+    def get_current_version(self, modelname, includetemp=False):
+        return 0
+        
 
 class BGExplorerTestCase(unittest.TestCase):
     """ Base Test case for web api.
@@ -44,7 +93,7 @@ class BGExplorerTestCase(unittest.TestCase):
         """
         self.app = Flask("test_flask")    
         Bootstrap(self.app)
-        self.modeldb = ModelDB(app=self.app, collection='unittest')
+        self.modeldb = TestingModelDB(app=self.app, collection='unittest')
         self.modeleditor = ModelEditor(app=self.app, modeldb=self.modeldb)
         self.app.config['DEBUG'] = True
         self.app.config['SERVER_NAME'] = 'localhost:9999'
