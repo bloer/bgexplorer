@@ -63,12 +63,8 @@ class TestModelEditorAPI(BGExplorerTestCase):
 
   def test_getmodelordie(self):
     modelid = self.create_model()
-    try:
-      response = self.client.post('/models/edit/{}/'.format('0'))
-    except:
-      assert(True)
-    else:
-      assert(False)
+    response = self.client.post('/models/edit/{}/'.format('0'))
+    assert(response.status_code == 404)
 
   def test_newcomponent(self):
     modelid = self.create_model()
