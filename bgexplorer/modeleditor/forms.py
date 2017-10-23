@@ -117,6 +117,7 @@ class PlacementForm(Form):
                       render_kw={'class':'form-control'})
     weight = FloatField("Quantity", [validators.required()] ,
                         render_kw={'size':1, 'class':'form-control'})
+    querymod = JSONField("Querymod", default={})
     #edit = StaticField("Edit", default="link goes here");
     #override BaseForm process to restructure placements
     class _FakePlacement(object):
@@ -128,6 +129,7 @@ class PlacementForm(Form):
             self.cls = (type(placement.component).__name__ 
                         if self.component else None)
             self.weight = placement.weight
+            self.querymod = placement.querymod
 
     def process(self, formdata=None, obj=None, data=None, **kwargs):
         if isinstance(obj, component.Placement):
@@ -144,6 +146,7 @@ class PlacementForm(Form):
             })
         obj.component = comp
         obj.weight = self.weight.data
+        obj.querymod = self.querymod.data
 
 class AssemblyForm(BaseComponentForm):
     """Basic info plus subcomponents"""
