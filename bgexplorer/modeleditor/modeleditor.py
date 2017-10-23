@@ -132,8 +132,6 @@ class ModelEditor(object):
     def getmodelordie(self, modelid):
         """try to get model with modelid from the db, else return 404"""
         #todo: enforce that the model is temporary
-        if not isinstance(modelid, bson.ObjectId):
-            modelid = bson.ObjectId(modelid)
         model = self.modeldb.get_model(modelid)
         if not model:
             abort(404, "Model with ID %s not found"%modelid)
