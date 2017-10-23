@@ -14,7 +14,7 @@
 	 div.row {height:85%}
 	 div.page-header div.row {height:100%}
 	 div.scroll {height:100%; overflow:auto}
-	 .childofactive {background-color: #FCF8E3}
+	 .childofactive, .parentofactive {background-color: #FCF8E3}
 	 div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
 	 h1 {margin-top:0px}
 	 /*body, .btn, .form-control, .glyphicon {font-size:small;}*/
@@ -93,9 +93,12 @@
     <tr class="linklike component 
 	       {% if editcomponent is defined %} 
 	       {% if comp.id == editcomponent.id %} info 
-	       {% elif editcomponent.isparentof(comp,deep=False) %} childofactive {% endif %}
+	       {% elif editcomponent.isparentof(comp,deep=False) %} childofactive 
+	       {% elif comp.isparentof(editcomponent, deep=False) %} parentofactive {% endif %}
+	       
 	       {% endif %}
-	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} "
+	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} 
+	       {%- if editspec is defined and editspec in comp.findspecs(deep=False) -%} parentofactive {% endif -%}"
 	       data-component="{{ comp.id }}" 
 	       data-name="{{ comp.name }}" 
 	       data-cls="{{ 'Assembly' if comp.getcomponents is defined else 'Component' }}"
