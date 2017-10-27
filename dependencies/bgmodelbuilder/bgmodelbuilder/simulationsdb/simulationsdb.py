@@ -21,8 +21,15 @@ from hashlib import md5
 from .. import units
 
 class SimulationsDB(object):
-    """Store pre-calculated conversion efficiencies, and calculate 
-    reduced event values
+    """Abstract class to be implemented by user. 
+
+    SimulationsDB serves 2 main purposes: 
+    1. Translate requests for simulation data for a given assembly tree and 
+       material spec into real database queries and find datasets matching
+       those queries. 
+    2. Calculate quantities (e.g. event rates) for matching datasets
+
+    Auxiliary functions include 
     """
     
     def __init__(self, model=None, lastmod=None):
@@ -45,19 +52,17 @@ class SimulationsDB(object):
         self.expirecache(model, lastmod)
 
 
-    def findsimentries(self, component, spec):
-        """Find all conversioneffs that should be associated to comp, spec"""
-        #first, try the cache
-        result = self.findcachedsimentries(component, spec)
-        if result is None:
-            #there is no valid cache, so run the query
-            query = self.calculatequery(component, spec, 
-                                        component.getquerymod())
-            result = self.runquery(query)
-            if result is not None:
-                #we have a new result, update the cache
-                self.cachesimentries(component, spec, result)
-        return result or [] #make sure we can iterate over result
+    def findsimentries(self, request):
+        """Find all SimDataMatches that should be associated to the request. 
+        To allow comparison to previous versions and modification of status
+        values, request should NOT be modified, but SimDataMatches returned
+        as a list. 
+        Args:
+            request (SimDataRequest): contains placement path and spec
+        Returns:
+            List of SimDataMatch objects to be filled for this pair. 
+        """
+        pass 
 
     def evaluate(self, values, compspecs):
         """Evaluate the reduced sum for values over the list of compspecs

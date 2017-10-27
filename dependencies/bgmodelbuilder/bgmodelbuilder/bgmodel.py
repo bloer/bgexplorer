@@ -95,7 +95,7 @@ class BgModel(object):
         self.registerobject(comp, self.components);
         #if the component has CompSpecs, register them too
         #also make sure the reverse reference to owned component exists
-        for spec in comp.findspecs(deep=False):
+        for spec in comp.getspecs(deep=False):
             self.registerobject(spec, self.specs)
             #todo: should we use weakrefs instead? 
             spec.appliedto.add(comp)
