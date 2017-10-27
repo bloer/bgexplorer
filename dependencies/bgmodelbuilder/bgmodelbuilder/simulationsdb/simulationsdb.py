@@ -29,29 +29,58 @@ class SimulationsDB(object):
        those queries. 
     2. Calculate quantities (e.g. event rates) for matching datasets
 
-    Auxiliary functions include 
+    Auxiliary functions include:
+    * listing the types of calculated quantities that the class knows how to 
+      handle (Not yet implemented)
+    
     """
     
-    def __init__(self, model=None, lastmod=None):
-        """Initialize a new DB instance.  The model and lastmod 
+    def __init__(self, *args, **kwargs):
+        """Initialize a new DB instance. Doesn't do anyhing yet."""
+        super().__init__(*args, **kwargs)
 
-        Args:
-            model (id): unique identifier of the model to consider for cache
-            lastmod (timestamp): time the model was last modified, to calculate
-                cache stale state. With None (default), the cache should always
-                be refreshed. A value of 0 should never expire the cache
+
+    def attachsimdata(self, assembly):
+        """ Find all simulation data for the entire assembly and attach 
+        to the appropriate places. Mark the `status` attribute on SimDataMatches
+        to reflect changes against previous values.
         """
-        
-        self.setmodel(model, lastmod)
+        requests = assembly.getsimdata(path=(assemby,), rebuild=True, 
+                                       children=True)
+        for request in requests:
+            newmatches = self.findsimentries(request)
+            for newmatch in newmatches:
+                #shouldn't be necessary, but just to make sure:
+                newmatch.request = request
+
+                #update status
+                #see if there is an existing match with the same query
+                oldmatch = None
+                for match in request.simdata:
+                    if match.query == newmatch.query:
+                        oldmatch = match
+                        break
+
+                if not oldmatch:
+                    newmatch.status += " new "
+                else:
+                    if newmatch.datasets != oldmatch.datasets:
+                        if len(newmatch.datasets) > len(oldmatch.datasets):
+                            newmatch.status += " newdata "
+                        elif len(newmatch.datasets) < len(oldmatch.datasets):
+                            newmatch.status += "dataremoved "
+                        else:
+                            newmatch.status += " datachanged "
+                    if newmatch.weight != oldmatch.weight:
+                        newmatch.status += " weightchanged "
+                    if newmatch.livetime > oldmatch.livetime:
+                        newmatch.status += " livetimeincreased "
+                    elif newmatch.livetime < oldmatch.livetime:
+                        newmatch.status += " livetimedecreased "
+            request.simdata = newmatches
+        return requests
 
         
-    def setmodel(self, model=None, lastmod=None):
-        """Set the model for cache state. See the constructor for details"""
-        self._model = model
-        self._lastmod = lastmod
-        self.expirecache(model, lastmod)
-
-
     def findsimentries(self, request):
         """Find all SimDataMatches that should be associated to the request. 
         To allow comparison to previous versions and modification of status
@@ -61,71 +90,28 @@ class SimulationsDB(object):
             request (SimDataRequest): contains placement path and spec
         Returns:
             List of SimDataMatch objects to be filled for this pair. 
+            Each should have the `query` attribute set, and, if matching 
+            datasets are found, the `weight` and `livetime` attributes
         """
-        pass 
+        raise NotImplementedError
 
-    def evaluate(self, values, compspecs):
+
+    def evaluate(self, values, matches):
         """Evaluate the reduced sum for values over the list of compspecs
         Args:
             values (list): list of identifiers for values. E.g., names
                            of columns in the db entries
-            compspecs (list): list of (component,spec,weight) tuples 
-                              to caluclate these values for
+            matches (list): list of SimDataMatch objects
+                            to caluclate these values for
 
         Returns:
             result (dict): dictionary of results for each key in values
         """
-        if not values or not compspecs:
-            return None
-        #first, try the cache
-        result = self.getcachedreductions(values, compspecs)
-        if result is None or len(result) != len(values):
-            #there is no valid cache, so recalculate
-            #first we need the list of effs for each comp, spec
-            simweights = {}
-            for comp, spec, weight in compspecs:
-                rate = spec.emissionrate(comp)*weight
-                if rate.m > 0: #rate is a pint.Quantity
-                    for sim in self.findsimentries(comp, spec):
-                        simweights[sim] = rate + simweights.get(sim,0)
-
-            #now we have a rolled-up list of conversions, so calculate the vals
-            for key in simweights:
-                simweights[key] = simweights[key].to('1/s').m
-            result = self.reduce(values, simweights)
-            if result is not None:
-                #and reapply the units
-                for key in result:
-                    if key in values:
-                        result[key] *= units['1/s']
-                #we have a new result, update the cache
-                self.cachereductions(values, compspecs, simweights, result)
-                
-        return result
-            
+        raise NotImplementedError
+                    
         
-    def calculatecacheid(self, compspecs):
-        """For the list of (component, spec,weight) pairs in compspecs, 
-        calculate a unique cache value. 
-        By default, convert all individual IDs to 
-        strings, concatenate, and calculate an md5sum base64 encoded
-        """
-        #I think this only works in python3...
-        myhash = md5(b''.join(str(c[0].getspecid(c[1])).encode() 
-                             for c in compspecs)) 
-        return b64encode(myhash.digest())
-        
-    #the following should be overridden by derived classes
-    def expirecache(self, model=None, lastmod=None):
-        """Remove any invalid cache entries"""
-        pass
-    
-    def defaultquery(self, component, spec):
+    def defaultquery(self, request):
         """Generate the default query for the associated component, spec"""
-        pass
-
-    def calculatequery(self, component, spec, compmod, specmod):
-        """Calculate the full query accounting for querymods"""
         pass
 
     def runquery(self, query, idonly=True):
@@ -133,39 +119,4 @@ class SimulationsDB(object):
         """
         pass
         
-    def reduce(self, values, entryweights):
-        """For each entry in values, calculate the result summed over entries
-        
-        Args:
-            values (list): List of the values to calculate. Could be strings or
-                more complicated objects understood by the concrete 
-                implementation. 
-            entryweights (dict): dict of {id: weight} pairs, where ID uniquely 
-                identifies a ConversionEff stored in the DB, or may be an 
-                actual ConversionEff object depending on implementation. 
-
-        Returns:
-             reduced (dict): dict of {value:reduced result}
-        """
-        pass
-
-    def findcachedsimentries(self, component, spec):
-        """Find cached list of conversion effs for this component, spec pair"""
-        return None
-
-    def cachesimentries(self, component, spec, result):
-         """Store newly matched conversions in the cache"""
-         pass
-
-    def getcachedreductions(self, values, compspecs):
-        """Retrieve precalculated reduced vales in the cache"""
-        return None
-
-    def cachereductions(self, values, compspecs, simweights, result):
-        """Store calculated reductions in the cache
-
-        Args: 
-            cacheid (var): index key for the cache entry
-            result (dict): dict of {valuetype: calculated result} pairs
-        """
-        pass
+    

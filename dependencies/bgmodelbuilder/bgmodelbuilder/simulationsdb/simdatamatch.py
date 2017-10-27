@@ -39,7 +39,7 @@ class SimDataMatch(Mappable):
         self.datasets = datasets
         self.weight = weight
         self.livetime = livetime
-        self.status = None
+        self.status = status or ""
 
     def todict(self):
         mydict = copy(self.__dict__)

@@ -21,43 +21,6 @@ def selectany(comp=None, spec=None):
     return True
 
 
-"""
-Querymod operator
-Modifies the query to associate simulation datasets to component,spec pairs
-
-The exact form and implementation of each argument is up to the specific 
-ConversionsDatabase used.  For example, for a MongoDB database, the 
-arguments are objects that will directly modify the pymongo query object.
-
-The operators are:
-    override:  replace the default query
-    union:     return the OR of this test and the default
-    intersect: return the AND of this test and the default
-    exclude:   return the difference (default AND NOT ) with this test
-
-    override_keys
-    union_keys
-    intersect_keys
-    exclude_keys
-
-
-There are two types of operator: <op> and <op>_keys. <op> operators modify
-the query as a whole, while <op>_keys modify individual keys of the query.
-
-For example, assume the original query for a mongodb EffDB would be:
-q0 = {'volume': component.name, 'distribution': spec.distribution}
-
-QueryMod(union={'distribution':'bulk'}) would result in
-q1 = {'$or': [q0, {'distribution':'bulk'}] }.
-
-Whereas
-QueryMod(union_keys={'distribution':'bulk'}) would give
-q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
-                                                       'bulk']} }
-"""
-
-    
-
 class BoundSpec(object):
     """Represents a spec bound to a component with querymods.
     Args:
@@ -367,19 +330,6 @@ class Component(BaseComponent):
         self._surface_interior = ensure_quantity(surface_interior, 'm^2')
     
 
-    
-class SmallComponent(Component):
-    """A small or thin-walled component where the difference between surface
-    and bulk contamination is irrelevant from a simulations point of view. 
-    This is primarily an example of how to use query mods; in this case, 
-    we override surface distributions with bulk
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        qm = self.querymods.get(None,{})
-        qm['union_keys'] = qm.get('union_keys',{})
-        qm['union_keys']['distribution'] = 'bulk'
-        self.querymods[None] = qm
         
 class Placement(object):
     """A class representing an instance of a component placed within an 
@@ -419,35 +369,6 @@ class Placement(object):
             parentweight = self.parent.gettotalweight(fromroot)
         return self.weight * parentweight
 
-    def getquerymodifiers(self, spec=None):
-        """Get a list of query modifiers in ascending priority for the spec
-        
-        TODO: This method needs a complete overhaul
-        """
-        result = []
-        if self.parent:
-            #how to order multiple placements? should be interleaved I guess
-            parentresults = [p.getquerymodifiers() 
-                             for p in self.parent.placements]
-            #todo there must be a better way to interleave too...
-            maxlen = max(len(sub) for sub in parentresults)
-            for i in range(maxlen):
-                for sub in parentresults:
-                    if len(sub)>0:
-                        result.append(sub.pop())
-            #todo: the parent itself may have querymods too
-            result.reverse()
-        #now the bare component, then component, spec
-        if self.component.querymods.get(None):
-            result.append(self.component.querymods[None])
-        if spec and self.component.querymods.get(spec.id):
-            result.append(self.component.querymods[spec.id])
-        #finally our mod
-        if self.querymod:
-            result.append(self.querymod)
-
-        return result
-
     @property
     def name(self):
         return self.component.name if self.component else None
@@ -457,6 +378,7 @@ class Placement(object):
         #replace objects with ID references
         del result['parent'] #this gets reset on construction
         return result
+
 
 class Assembly(BaseComponent):
     """Assembly of multiple components"""
