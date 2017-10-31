@@ -10,6 +10,7 @@ from __future__ import (absolute_import, division,
 from builtins import super
 from functools import wraps, reduce
 import operator
+import copy 
 
 from ..mappable import Mappable
 from ..common import to_primitive
@@ -162,7 +163,7 @@ class SimDataRequest(object):
         
     def todict(self):
         #want to not transform the simdatamatch objects into IDs
-        mydict = copy(self.__dict__)
+        mydict = copy.copy(self.__dict__)
         simdata = to_primitive(mydict.pop('simdata'), replaceids=False)
         mydict = to_primitive(mydict)
         mydict['simdata'] = simdata
