@@ -19,6 +19,7 @@ from base64 import b64encode
 from hashlib import md5
 
 from .. import units
+from .simdatamatch import SimDataMatch
 
 class SimulationsDB(object):
     """Abstract class to be implemented by user. 
@@ -45,11 +46,16 @@ class SimulationsDB(object):
         to the appropriate places. Mark the `status` attribute on SimDataMatches
         to reflect changes against previous values.
         """
-        requests = assembly.getsimdata(path=(assemby,), rebuild=True, 
+        requests = assembly.getsimdata(path=(assembly,), rebuild=True, 
                                        children=True)
         for request in requests:
             newmatches = self.findsimentries(request)
+            if not newmatches: #allow return None
+                continue
             for newmatch in newmatches:
+                if not isinstance(newmatch, SimDataMatch):
+                    raise TypeError("findsimentries must return a list of "
+                                    "SimDataMatch objects, got ",type(newmatch))
                 #shouldn't be necessary, but just to make sure:
                 newmatch.request = request
 
@@ -91,7 +97,11 @@ class SimulationsDB(object):
         Returns:
             List of SimDataMatch objects to be filled for this pair. 
             Each should have the `query` attribute set, and, if matching 
-            datasets are found, the `weight` and `livetime` attributes
+            datasets are found, the `weight` and `livetime` attributes. 
+            Note: a list with SimDataMatches with empty datasets is the 
+            recommended method to indicate that no data was found in the DB
+            BUT an appropriate query can be generated. This can be used to 
+            generate new datasets. 
         """
         raise NotImplementedError
 

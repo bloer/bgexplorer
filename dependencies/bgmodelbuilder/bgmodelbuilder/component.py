@@ -12,6 +12,7 @@ from builtins import super
 
 from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
+from .simulationsdb import SimDataRequest
 
 from collections import OrderedDict
 from copy import copy
@@ -216,8 +217,8 @@ class BaseComponent(Mappable):
                     #generate new empty matches
                     new = []
                     specs = [boundspec.spec]
-                    if hasattr(boundspec.specs,'subspecs'):
-                        specs = boundspec.specs.subspecs
+                    if hasattr(boundspec.spec,'subspecs'):
+                        specs = boundspec.spec.subspecs
                     for spec in specs:
                         foundspec = False
                         for request in found:
@@ -563,9 +564,8 @@ class Assembly(BaseComponent):
                 if len(path) == 0 or path[-1] != self:
                     path = tuple(path) + (self,)
             for child in self.getcomponents(deep=False):
-                if path:
-                    path = path + (child,)
-                mydata.extend(child.getsimdata(path,rebuild,children))
+                cpath = path+(child,) if path else None
+                mydata.extend(child.getsimdata(cpath,rebuild,children))
         return mydata
 
     @property

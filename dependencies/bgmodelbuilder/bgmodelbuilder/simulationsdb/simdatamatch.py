@@ -8,7 +8,8 @@ components under an assembly tree
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from builtins import super
-from functools import wraps
+from functools import wraps, reduce
+import operator
 
 from ..mappable import Mappable
 from ..common import to_primitive
@@ -31,12 +32,12 @@ class SimDataMatch(Mappable):
         status (str): space-separated list of status tags. Will be used as 
                       html classes for web interface
     """
-    def __init__(self, request=None, query=None, datasets=None, 
+    def __init__(self, request=None, query=None, dataset=None, 
                  weight=1, livetime=None, status=None, **kwargs):
         super().__init__(**kwargs)
         self.request = request
         self.query = query
-        self.datasets = datasets
+        self.dataset = dataset
         self.weight = weight
         self.livetime = livetime
         self.status = status or ""
@@ -95,16 +96,21 @@ class SimDataRequest(object):
     def _calcweight(self):
         if self.assemblyPath is not None:
             if (len(self.assemblyPath)>1 and 
-                isinstance(self.assemblyPath[0],component.BaseComponent)):
-                return = sum(p.getchildweight(c) for p,c in 
-                             zip(self.assemblypath[:-1],
-                                 self.assemblyPath[1:]) )
+                isinstance(self.assemblyPath[0],component.Assembly)):
+                #calculate product of weights
+                return reduce(operator.mul,
+                              (p.getchildweight(c) for p,c in 
+                               zip(self.assemblyPath[:-1],
+                                   self.assemblyPath[1:])),
+                              1)
+                          
+
             else:
                 return 1
         return None
 
     def _calcemissionrate(self):
-        if (self._assemblyPath 
+        if (self.assemblyPath 
             and isinstance(self.spec, compspec.ComponentSpec)
             and self.weight is not None):
             return self.weight * self.spec.emissionrate(self.assemblyPath[-1])
