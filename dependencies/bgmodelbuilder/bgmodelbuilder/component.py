@@ -205,7 +205,7 @@ class BaseComponent(Mappable):
                              ourselves to path if provided                
         """
         result = []
-        if path and len(path) == 0 or path[-1] != self:
+        if path is not None and (len(path) == 0 or path[-1] != self):
             path = tuple(path) + (self,)
         for boundspec in self._specs:
             found = [d for d in boundspec.simdata 

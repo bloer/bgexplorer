@@ -138,8 +138,9 @@ class SimDataRequest(object):
         
         #find the BoundSpec this spec belongs to
         for bs in self.component._specs:
-            if (bs.spec == self.spec or 
-                (hasattr(spec,'subspecs') and self.spec in bs.spec.subspecs)):
+            if ((bs.spec == self.spec or 
+                 self.spec in getattr(bs.spec,'subspecs',[]))
+                and bs.querymod):
                 result.append(bs.querymod)
                 #should only appear once. I think?
                 break

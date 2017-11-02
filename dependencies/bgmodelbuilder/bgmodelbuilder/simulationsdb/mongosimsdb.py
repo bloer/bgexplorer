@@ -7,7 +7,7 @@ import pymongo
 import bson
 from time import time
 from copy import copy
-from collections import namdedtuple
+from collections import namedtuple
 #numpy is not a strict requirement
 try:
     import numpy
@@ -15,7 +15,7 @@ except:
     numpy = None
 
 from .. import units
-from .simulationsdb import SimulationsDB
+from .simulationsdb import SimulationsDB, SimDataMatch
 
 
 MatchOverride = namedtuple("MatchOverride",["test", "buildmatch"])
@@ -47,13 +47,12 @@ class MongoSimsDB(SimulationsDB):
     following format:
     
     {
-        "siminfo": {
-            "volume": "<name of simulation volume>",
-            "distribution": "<distribution of primary particles in/on volume>",
-            "primary": "<Name of the primary particle>",
-            "spectrum": "<Emission spectrum of the primary particle>",
-            "nprimaries": <# of primaries in dataset>
-        },
+        "volume": "<name of simulation volume>",
+        "distribution": "<distribution of primary particles in/on volume>",
+        "primary": "<Name of the primary particle>",
+        "spectrum": "<Emission spectrum of the primary particle>",
+        "nprimaries": <# of primaries in dataset>,
+        
         "counts": {
             "<count name 1>": <object1>,
             "<count name 2>": <object2>, 
@@ -74,7 +73,7 @@ class MongoSimsDB(SimulationsDB):
       an isotope. Can be None if the primary matches the name of the spec being 
       queried
 
-    * additional siminfo entries are allowed and will be ignored
+    * additional keys are allowed and will be ignored
 
     * objects in the counts array may take different forms. First, the name 
       is checked against the dictionary of decoding functions in 
@@ -82,12 +81,10 @@ class MongoSimsDB(SimulationsDB):
       If it is found, that function is used to convert the value.  If no 
       decoder is registered for that name, conversion is applied by type:
         * numbers are unchanged
-        * strings are treated as keywords. When summing together strings from
-          multiple datasets, they will be converted to a dict with keys 
-          equal to the strings and values equal to counts of matching entries
-     
-          TODO: implment this! Right now strings break!
-    
+        * strings are evaluated through pint.UnitRegistry. If they are 
+          string representations of numbers, they will be converted to 
+          int or float as appropriate. Expressions and units will also 
+          be interpreted.
         * lists. If list values are numbers, they will be converted to ndarrays
                  if numpy is available. If strings, they will be treated
                  as individual keywords. Mixed type lists are not allowed
@@ -105,18 +102,13 @@ class MongoSimsDB(SimulationsDB):
       particular, querymods simply overwrite keys in the default query. 
 
     """ 
-    def __init__(self, database, collectionname, 
-                 basequery=None, overrides=None, **kwargs):
-        """Create a new db instance, bound to database, which should be 
-        a valid pymongo Database instance. 
+    def __init__(self, collection, basequery=None, overrides=None, **kwargs):
+        """Create a new SimulationsDB interface to a mongodb backend. 
 
         TODO: document and add interface for `decoders`
 
         Args:
-            database: a pymongo Database object, already authenticated 
-
-            collectionname (str): name of the collection where sim data objects
-                                  are stored. 
+            collection : pymongo.Collection holding the simulation data. 
             basequery (dict): a query object that will be prepended to all 
                               queries. For example {"version":{"$gt":2.5}}
             overrides (list): List of MatchOverride tuples to modify default
@@ -125,10 +117,7 @@ class MongoSimsDB(SimulationsDB):
                               primaries. 
         """
         #initialize the DB connection
-        self._db = database
-        self._cache = None #this will be updated in super() constructor
-        self._collectionname = collectionname 
-        self._collection = self._db[self._collectionname]
+        self.collection = collection
         self.basequery = basequery or {}
         self.overrides = overrides or []
         self.decoders = {}
@@ -158,12 +147,13 @@ class MongoSimsDB(SimulationsDB):
 
         #attach and interpret data
         for match in matches:
-            hits = self._collection.find(match.query, {'siminfo':True})
+            hits = tuple(self.collection.find(match.query, {'nprimaries':True}))
             match.dataset = tuple(str(d['_id']) for d in hits)
-            if match.emissionrate:
-                primaries = sum(d['siminfo']['nprimaries'] for d in hits)
+            if match.request and match.request.emissionrate:
+                primaries = sum(float(d['nprimaries']) for d in hits)
                 weight = match.weight or 1
-                match.livetime = primaries / (match.emissionrate*match.weight)
+                match.livetime = primaries / (match.request.emissionrate
+                                              *match.weight)
 
         return matches
             
@@ -186,6 +176,8 @@ class MongoSimsDB(SimulationsDB):
 
         for match in matches:
             dataset = match.dataset
+            if not dataset:
+                continue
             if not isinstance(dataset, (list, tuple)):
                 dataset = (dataset,)
             
@@ -199,12 +191,11 @@ class MongoSimsDB(SimulationsDB):
                 except bson.errors.InvalidId:
                     pass
                     
-                doc = self._collection.find_one({'_id':entry}, projection)
+                doc = self.collection.find_one({'_id':entry}, projection)
                 if not doc:
                     #Entry should have been for an existing document, so 
                     #something went really wrong here...
                     raise KeyError("No document with ID %s in database"%entry)
-
                 counts = self.decodecounts(doc)
                 for key, val in counts.items():
                     #TODO how to handle weird values here: 
@@ -224,6 +215,8 @@ class MongoSimsDB(SimulationsDB):
                                                 
                     else:
                         result[key] += val/match.livetime
+                    #TODO: Need a smarter way to handle non-normalized stuff
+                    
 
         return result
                 
@@ -236,7 +229,8 @@ class MongoSimsDB(SimulationsDB):
         query['distribution'] = request.spec.distribution
         query['primary'] = request.spec.name
         for mod in request.getquerymods():
-            query.update(mod)
+            if mod:
+                query.update(mod)
         return query
 
     def decodecounts(self, doc):
@@ -245,7 +239,7 @@ class MongoSimsDB(SimulationsDB):
         result = dict()
         docunits = doc.get("units", {})
 
-        for key, val in doc['counts']:
+        for key, val in doc['counts'].items():
             if key in self.decoders:
                 val = self.decoders[key](val)
             else:
@@ -268,18 +262,19 @@ class MongoSimsDB(SimulationsDB):
             return numpy.array(val)
         elif isinstance(val, bytes):
             return numpy.frombuffer(val)
-        
-        try:
-            return float(val)
-        except TypeError, ValueError: #this isn't compatible with float
-            return val
+        elif isinstance(val, str):
+            try:
+                return units(val)
+            except units.errors.UndefinedUnitError: #this isn't compatible
+                pass
+        return val
 
     def index_simentries(self):
         """ Create indices on the simulationssdb for faster queries
         """
-        self._collection.create_index([('volume', pymongo.ASCENDING),
-                                       ('distribution',pymongo.ASCENDING)])
-        self._collection.create_index([('primary', pymongo.ASCENDING),
-                                       ('spectrum',pymongo.ASCENDING)])
+        self.collection.create_index([('volume', pymongo.ASCENDING),
+                                      ('distribution',pymongo.ASCENDING)])
+        self.collection.create_index([('primary', pymongo.ASCENDING),
+                                      ('spectrum',pymongo.ASCENDING)])
 
    
