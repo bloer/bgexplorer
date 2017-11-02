@@ -73,9 +73,9 @@ def to_primitive(val, renameunderscores=True, recursive=True,
         if isinstance(val, dict):
             removeclasses(val, renameunderscores, recursive, replaceids, 
                           stringify)
-        elif isinstance(val, list):
-            val = [to_primitive(sub, renameunderscores, recursive, replaceids,
-                                stringify) for sub in val]
+        elif isinstance(val, (list,tuple)):
+            val = type(val)(to_primitive(sub, renameunderscores, recursive, 
+                                         replaceids, stringify) for sub in val)
     return val
     
 

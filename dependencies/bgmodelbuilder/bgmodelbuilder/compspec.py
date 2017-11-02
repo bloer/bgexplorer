@@ -245,8 +245,9 @@ for attr in CombinedSpec._copy_attrs:
     CombinedSpec.copytosubs(attr)
         
 
-class RadioactiveIsotope(object):
-    def __init__(self,halflife=1*units.second,name=None):
+class RadioactiveIsotope(Mappable):
+    def __init__(self,halflife=1*units.second,name=None, **kwargs):
+        super().__init__(**kwargs)
         self.halflife = ensure_quantity(halflife, units.seconds)
         self.name = name        
 
@@ -397,9 +398,10 @@ class DustAccumulation(CombinedSpec):
 
 class CosmogenicIsotope(RadioactiveIsotope):
     def __init__(self, halflife=1*units.second, 
-                 activationrate=1*units('1/kg/day'), name=None):
+                 activationrate=1*units('1/kg/day'), name=None,
+                 **kwargs):
         self.activationrate = ensure_quantity(activationrate, "1/kg/day")
-        super().__init__(halflife, name)
+        super().__init__(halflife, name, **kwargs)
         
         
 class CosmogenicSource(RadioactiveContam):

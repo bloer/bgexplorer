@@ -12,6 +12,7 @@ from builtins import super
 
 from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
+from .simulationsdb import SimDataRequest
 
 from collections import OrderedDict
 from copy import copy
@@ -21,55 +22,30 @@ def selectany(comp=None, spec=None):
     return True
 
 
-"""
-Querymod operator
-Modifies the query to associate simulation datasets to component,spec pairs
-
-The exact form and implementation of each argument is up to the specific 
-ConversionsDatabase used.  For example, for a MongoDB database, the 
-arguments are objects that will directly modify the pymongo query object.
-
-The operators are:
-    override:  replace the default query
-    union:     return the OR of this test and the default
-    intersect: return the AND of this test and the default
-    exclude:   return the difference (default AND NOT ) with this test
-
-    override_keys
-    union_keys
-    intersect_keys
-    exclude_keys
-
-
-There are two types of operator: <op> and <op>_keys. <op> operators modify
-the query as a whole, while <op>_keys modify individual keys of the query.
-
-For example, assume the original query for a mongodb EffDB would be:
-q0 = {'volume': component.name, 'distribution': spec.distribution}
-
-QueryMod(union={'distribution':'bulk'}) would result in
-q1 = {'$or': [q0, {'distribution':'bulk'}] }.
-
-Whereas
-QueryMod(union_keys={'distribution':'bulk'}) would give
-q1 = {'volume': component.name, 'distribution':{'$or':[spec.distribution,
-                                                       'bulk']} }
-"""
-
-    
-
 class BoundSpec(object):
     """Represents a spec bound to a component with querymods.
-    May eventually hold optional weights and bind to simdata
+    Args:
+        spec (ComponentSpec): Spec to attach to component
+        querymod:  Additional info for simulationsDB matching
+        simdata:   List of SimDataMatch objects for binding simulation 
+                   data to spec's subspecs
     """
-    def __init__(self, spec=None, querymod=None):
+    def __init__(self, spec=None, querymod=None, simdata=None):
         self.spec = spec
         self.querymod = querymod 
+        self.simdata=simdata or []
         
     def __eq__(self, other): 
         if hasattr(other, 'spec'):
             return self.spec == other.spec
         return self.spec == other
+        
+    def todict(self):
+        return dict(
+            spec = self.spec,
+            querymod = self.querymod,
+            simdata = self.simdata,
+        )
         
     @classmethod
     def _childattr(cls, attr):
@@ -163,15 +139,20 @@ class BaseComponent(Mappable):
         if hasattr(spec, 'appliedto'):
             spec.appliedto.remove(self)
 
-    def findspecs(self, name=None, deep=False, children=False):
+    def getspecs(self, deep=False, children=False):
+        """Find specs associated with this component. 
+        Args:
+            deep (bool): If False (default), only return top-level specs. 
+                         Otherwise, also include subspecs 
+            children (bool): If True and this component is an assembly, 
+                             also include subcomponents
+        """
         result = [bs.spec for bs in self._specs]
         if deep:
             #concatenate all subspecs
             result = sum((s.getsubspecs() if hasattr(s,'getsubspecs') else [s]
                           for s in result), [])
-        if name is None:
-            return set(result)
-        return set([a for a in result if a.name == name])
+        return set(result)
             
     def gettotalweight(self, fromroot=None):
         """Get the total weight (usually number of) placed components
@@ -202,13 +183,59 @@ class BaseComponent(Mappable):
         """
         if not selector:
             selector = selectany
-        return [(self,s,1) for s in self.findspecs(deep=True) 
+        return [(self,s,1) for s in self.getspecs(deep=True) 
                 if selector(self,s)]
     
     def isparentof(self, component, deep=False):
         """ Are we the parent component? This is a leaf, so only if it is us """
         return component is self
+    
+    def getsimdata(self, path=None, rebuild=False, children=True):
+        """ Get any simulation data associated to this component, and/or 
+        generate empty SimDataRequest objects if missing.
+        Args:
+            path: tuple of parent Assemblies to restrict match to in 
+                  branch to leaf order. If path is None, return all 
+                  simdata, but will not generate "empty" match objects
+            rebuild (bool): If True, recalculate cached values in all match 
+                            objects, and generate empty objects if path is
+                            provided
+            children (bool): If true and this is an Assembly, call 
+                             getsimdata recursively on children, appending 
+                             ourselves to path if provided                
+        """
+        result = []
+        if path is not None and (len(path) == 0 or path[-1] != self):
+            path = tuple(path) + (self,)
+        for boundspec in self._specs:
+            found = [d for d in boundspec.simdata 
+                     if path is None or d.assemblyPath == path]
+            if rebuild:
+                for match in found:
+                    d.recalculate()
+                if path:
+                    #generate new empty matches
+                    new = []
+                    specs = [boundspec.spec]
+                    if hasattr(boundspec.spec,'subspecs'):
+                        specs = boundspec.spec.subspecs
+                    for spec in specs:
+                        foundspec = False
+                        for request in found:
+                            if request.spec == spec:
+                                foundspec = True
+                                break
+                        if not foundspec:
+                            new.append(SimDataRequest(path, spec))
 
+                    found = found+new
+                    boundspec.simdata.extend(new)
+            
+            result.extend(found)
+        return result
+        
+        
+    
     def todict(self):
         """Export this object to a dictionary suitable for storage/transmission
         """
@@ -304,19 +331,6 @@ class Component(BaseComponent):
         self._surface_interior = ensure_quantity(surface_interior, 'm^2')
     
 
-    
-class SmallComponent(Component):
-    """A small or thin-walled component where the difference between surface
-    and bulk contamination is irrelevant from a simulations point of view. 
-    This is primarily an example of how to use query mods; in this case, 
-    we override surface distributions with bulk
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        qm = self.querymods.get(None,{})
-        qm['union_keys'] = qm.get('union_keys',{})
-        qm['union_keys']['distribution'] = 'bulk'
-        self.querymods[None] = qm
         
 class Placement(object):
     """A class representing an instance of a component placed within an 
@@ -356,35 +370,6 @@ class Placement(object):
             parentweight = self.parent.gettotalweight(fromroot)
         return self.weight * parentweight
 
-    def getquerymodifiers(self, spec=None):
-        """Get a list of query modifiers in ascending priority for the spec
-        
-        TODO: This method needs a complete overhaul
-        """
-        result = []
-        if self.parent:
-            #how to order multiple placements? should be interleaved I guess
-            parentresults = [p.getquerymodifiers() 
-                             for p in self.parent.placements]
-            #todo there must be a better way to interleave too...
-            maxlen = max(len(sub) for sub in parentresults)
-            for i in range(maxlen):
-                for sub in parentresults:
-                    if len(sub)>0:
-                        result.append(sub.pop())
-            #todo: the parent itself may have querymods too
-            result.reverse()
-        #now the bare component, then component, spec
-        if self.component.querymods.get(None):
-            result.append(self.component.querymods[None])
-        if spec and self.component.querymods.get(spec.id):
-            result.append(self.component.querymods[spec.id])
-        #finally our mod
-        if self.querymod:
-            result.append(self.querymod)
-
-        return result
-
     @property
     def name(self):
         return self.component.name if self.component else None
@@ -394,6 +379,7 @@ class Placement(object):
         #replace objects with ID references
         del result['parent'] #this gets reset on construction
         return result
+
 
 class Assembly(BaseComponent):
     """Assembly of multiple components"""
@@ -508,6 +494,13 @@ class Assembly(BaseComponent):
             
         return allcomp
 
+    def getchildweight(self, child, deep=False):
+        """Get the total weight of child component"""
+        return sum(w for c,w in self.getcomponents(deep=deep, 
+                                                   withweight=True,
+                                                   merge=True)
+                   if c==child)
+        
     def isparentof(self, component, deep=False):
         """Is this component within our owned tree?"""
         return (component is self 
@@ -534,7 +527,11 @@ class Assembly(BaseComponent):
         return passing
     
     def gethierarchyto(self,component, includeroot=True, includeleaf=True):
-        """Find how this component is related to a parent"""
+        """Find how this component is related to a parent
+        Note that the function returns the first path found to the component. 
+        In the case of multiply-placed components, there may be additional 
+        valid paths. 
+        """
         if not self.isparentof(component,deep=True):
             return None
         tree = [self] if includeroot else []
@@ -551,14 +548,25 @@ class Assembly(BaseComponent):
             tree.append(component)
         return tree
         
-    def findspecs(self, name=None, deep=False, children=False):
-        result = super().findspecs(name=name, deep=deep)
+    def getspecs(self, deep=False, children=False):
+        result = super().getspecs(deep=deep)
         
         if children:
             for comp in self.getcomponents(deep=True, withweight=False):
-                result.update(comp.findspecs(name=name, deep=deep))
+                result.update(comp.get(name=name, deep=deep))
 
         return result
+    
+    def getsimdata(self, path=None, rebuild=False, children=True):
+        mydata = super().getsimdata(path,rebuild,children=False)
+        if children:
+            if path:
+                if len(path) == 0 or path[-1] != self:
+                    path = tuple(path) + (self,)
+            for child in self.getcomponents(deep=False):
+                cpath = path+(child,) if path else None
+                mydata.extend(child.getsimdata(cpath,rebuild,children))
+        return mydata
 
     @property
     def material(self):

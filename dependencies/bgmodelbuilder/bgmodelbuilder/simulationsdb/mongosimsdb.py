@@ -1,227 +1,280 @@
-""" mongosimsdb.py
-
-Define a (mostly) concrete implementation of a SimulationssDB with a MongoDB 
-backend. User classes should inherit from this class and override the 
-following methods: 
-
-index_simentries: create mongodb indexes on the simulations collection
-
-default_query: how to match conversion entries to components?
-               Might be model dependent
-
-reduce: calculate a reduced value. The version in this class assumes
-        all requested values are top-level keys in the document and are 
-        simply summed.  
-
-expirecache: Does 2 things: binds the cache collection to self._cache
-             and removes any entries older than lastmod. Override this 
-             if model is not castable to a string
-""" 
-
 #pythom 2+3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from builtins import super
 
 import pymongo
+import bson
 from time import time
+from copy import copy
+from collections import namedtuple
+#numpy is not a strict requirement
+try:
+    import numpy
+except:
+    numpy = None
 
 from .. import units
-from .simulationsdb import SimulationsDB
+from .simulationsdb import SimulationsDB, SimDataMatch
 
 
-#need a way to get united quantities in and out of the cache
+MatchOverride = namedtuple("MatchOverride",["test", "buildmatch"])
+MatchOverride.__doc__ = """\
+Conditionally override the default query and weight for some request 
+objects. 
+
+Note: In order to order produce multiple matches from one default, one must 
+provide multiple MatchOverrides with the same `test` but different `buildmatch`
+functions. 
+
+Args:
+    test: a function taking a SimDataRequest and returning True to override the 
+          default, False otherwise
+    buildmatch: a function taking a SimDataMatch object with the default
+                query and weights and modifying as necessary, returning the 
+                modified match. 
+"""
+
 
 
 class MongoSimsDB(SimulationsDB):
-    def __init__(self, database, simscollectionname=None, **kwargs):
-        """Create a new db instance, bound to database, which should be 
-        a valid pymongo Database instance. 
+    """
+    Define a (mostly) concrete implementation of a SimulationssDB with a 
+    MongoDB backend. Users may want to use this class as a base or template for 
+    adding their own features. 
+    
+    In this implementation, each dataset document is expected to have the 
+    following format:
+    
+    {
+        "volume": "<name of simulation volume>",
+        "distribution": "<distribution of primary particles in/on volume>",
+        "primary": "<Name of the primary particle>",
+        "spectrum": "<Emission spectrum of the primary particle>",
+        "nprimaries": <# of primaries in dataset>,
+        
+        "counts": {
+            "<count name 1>": <object1>,
+            "<count name 2>": <object2>, 
+        }
+        "units": {
+            "<count name 1>": "<unit>",
+            "<count name 2>": "<unit>"
+        }
+    }
+
+    Some notes:
+    * "primary" may be a fundamental particle e.g. "gamma" or "neutron", or it 
+      may be an isotope like "U238" or an arbitrary string like "MyFunc(a,n)". 
+      In the last case, this must be specified in a querymod somewhere or given 
+      in the override function NOT YET IMPLEMENTED
+    
+    * "spectrum" will normally be the name of a spectrum file corresponding to 
+      an isotope. Can be None if the primary matches the name of the spec being 
+      queried
+
+    * additional keys are allowed and will be ignored
+
+    * objects in the counts array may take different forms. First, the name 
+      is checked against the dictionary of decoding functions in 
+      `self.decoders`. 
+      If it is found, that function is used to convert the value.  If no 
+      decoder is registered for that name, conversion is applied by type:
+        * numbers are unchanged
+        * strings are evaluated through pint.UnitRegistry. If they are 
+          string representations of numbers, they will be converted to 
+          int or float as appropriate. Expressions and units will also 
+          be interpreted.
+        * lists. If list values are numbers, they will be converted to ndarrays
+                 if numpy is available. If strings, they will be treated
+                 as individual keywords. Mixed type lists are not allowed
+        * bytes: a 1D numpy ndarray with float dtype. Will throw an error
+                 if numpy is not available
+      
+      If a unit is listed in the "units" document, it will be applied to the 
+      converted object (using `pint` units).  When combining multiple datasets,
+      numeric types will be normalized by livetime and summed together, 
+      UNLESS the name ends with the exact string "bins". In that case, no 
+      norming or summing will happen, and an error will be generated if 
+      all objects of that name are not identical. 
+    
+    * see `buildquery` for info on how requests are mapped to results. In 
+      particular, querymods simply overwrite keys in the default query. 
+
+    """ 
+    def __init__(self, collection, basequery=None, overrides=None, **kwargs):
+        """Create a new SimulationsDB interface to a mongodb backend. 
+
+        TODO: document and add interface for `decoders`
+
+        Args:
+            collection : pymongo.Collection holding the simulation data. 
+            basequery (dict): a query object that will be prepended to all 
+                              queries. For example {"version":{"$gt":2.5}}
+            overrides (list): List of MatchOverride tuples to modify default
+                              queries/weights. This is useful e.g. for 
+                              sources that expect both gamma and neutron
+                              primaries. 
         """
         #initialize the DB connection
-        self._db = database
-        self._cache = None #this will be updated in super() constructor
-        self._simsname = simscollectionname or 'simulations'
-        self._simscollection = self._db[self._simsname]
-
+        self.collection = collection
+        self.basequery = basequery or {}
+        self.overrides = overrides or []
+        self.decoders = {}
+        
         self.index_simentries()
         
         #initialize the base class
         super().__init__(**kwargs)
         
-    ########## cache functions ########
-    def expirecache(self, model=None, lastmod=None):
-        """Remove old cache entries. lastmod is a timestamp
-        if model is None, disable cache
-        if lastmod is None, clear cache
+    
+
+    ########### required simulationsdb overrides ##############
+    def findsimentries(self, request):
+        """Construct a list of matches for the given request, and 
+        attach data queried from the database. 
+        This queries the map of additional generators registered, otherwise
+        return a single default
         """
-        if model:
-            self._cache = self._db.cache[str(model)]
-            filter_ = {} if lastmod is None else {'timestamp':{'$lt'<lastmod}}
-            self._cache.delete_many(filter_)
-            #now we need to delete any entry older than an associated sim
-            #use a join to minimize number of queries
-            res = self._cache.aggregate([
-                {'$unwind': '$simulations'},
-                {'$lookup': {'from': self._simsname,
-                             'localField': 'simulations',
-                             'foreignField': '_id',
-                             'as': 'simulations'}
-                },
-                {'$addFields': {'age': {'$subtract':
-                                ['$timestamp','$simulations.0.timestamp']}}
-                },
-                {'$match': {'age':{'$lt':0}} },
-                {'$group': {'_id':'$_id'}}
-            ])
-            ids = [d['_id'] for d in res]
-            if ids:
-                self._cache.delete_many({'_id':{'$in':ids}})
+        matches = []
+        query = self.buildquery(request)
+        match = SimDataMatch(request, query=query, weight=1)
+        for test, buildmatch in self.overrides:
+            if test(request):
+                matches.append(buildmatch(match.clone(deep=False)))
+        if not matches:
+            matches = [match]
+
+        #attach and interpret data
+        for match in matches:
+            hits = tuple(self.collection.find(match.query, {'nprimaries':True}))
+            match.dataset = tuple(str(d['_id']) for d in hits)
+            if match.request and match.request.emissionrate:
+                primaries = sum(float(d['nprimaries']) for d in hits)
+                weight = match.weight or 1
+                match.livetime = primaries / (match.request.emissionrate
+                                              *match.weight)
+
+        return matches
             
-        else:
-            self._cache = None
 
-    def findcachedsimentries(self, component, spec):
-        if not self._cache:
-            return None
-        #use the same cacheid as for values
-        _id = self.calculatecacheid(((component, spec),) )
-        doc = self._cache.find_one(_id, projection={'simulations':True})
-        if doc:
-            return doc['simulations']
-        return None
-    
-    def cachesimentries(self, component, spec, result):
-        if self._cache:
-            _id = self.calculatecacheid( ((component, spec),) )
-            sid = component.getspecid(spec)
-            self._cache.update_one({'_id':_id}, 
-                                   {'$set':{'simulations':result,
-                                            'compspecs':[sid],
-                                            'timestamp':time()}},
-                                   upsert=True)
-
-    def getcachedreductions(self, values, compspecs):
-        if not self._cache:
-            return None
-        cacheid = self.calculatecacheid(compspecs)
-        doc = self._cache.find_one(cacheid, projection={'reductions': True})
-        if doc and 'reductions' in doc:
-            red = doc['reductions']
-            return {key:units(red[key]) for key in values if key in red}
-        return None
-
-    def cachereductions(self, values, compspecs, simweights, result):
-        if self._cache:
-            cacheid = self.calculatecacheid(compspecs)
-            setkeys = {'reductions.%s'%key:str(val) #transform Quantity to str
-                       for key,val in result.items()}
-            setkeys['compspecs'] = [c.getspecid(s) for c,s,w in compspecs]
-            setkeys['timestamp'] = time()
-            setkeys['simulations'] = [s for s,w in simweights.items()]
-            self._cache.update_one({'_id':cacheid}, {'$set': setkeys},
-                                   upsert=True)
-    
-
-
-    ############# query functions ####################
-    def calculatequery(self, component, spec, querymod):
-        #first, do we override the whole thing? 
-        query = self.default_query(component, spec)
-        if 'override' in querymod:
-            query = copy(querymod['override'])
-
-        #now go through each key
-        for key in query:
-            if 'override_keys' in querymod and key in querymod['override_keys']:
-                query[key] = querymod['override_keys'][key]
-            if 'union_keys' in querymod and key in querymod['union_keys']:
-                query[key] = {'$or': [query[key], querymod['union_keys'][key]]}
-            if ('intersect_keys' in querymod 
-                and key in querymod['intersect_keys']):
-                query[key] = {'$and': [query[key], 
-                                      querymod['intersect_keys'][key] ]}
-            if 'exclude_keys' in querymod and key in querymod['exclude_keys']:
-                query[key] = {'$and': [query[key], 
-                                       {'$not':querymod['exclude_keys'][key]} ]}
-        #now do combinations on the whole thing
-        if 'union' in querymod:
-            query = {'$or': [query, querymod['union']] }
-        if 'intersect' in querymod:
-            query = {'$and': [query, querymod['intersect']] }
-        if 'exclude' in querymod:
-            query = {'$and': [query, {'$not': querymod['exclude'] }] }
+    def evaluate(self, values, matches):
+        """Sum up each key in values, weighted by livetime.  
+        If entries were all numbers, we could make this more efficient by 
+        using the aggregation pipeline. But that won't work when trying to add
+        histograms, so we just read each value and do the sum ourselves. 
         
+        TODO: Is there an intelligent way to structure histograms to do the sum
+        server-side?
+        
+        TODO: this function needs splitting
+        """
+        result = {v:0 for v in values}
+        projection = {"units":True}
+        for v in values:
+            projection["counts."+v] = True
+
+        for match in matches:
+            dataset = match.dataset
+            if not dataset:
+                continue
+            if not isinstance(dataset, (list, tuple)):
+                dataset = (dataset,)
+            
+            if not match.livetime:
+                raise ValueError("Cannot evaluate match with 0 livetime")
+
+            for entry in dataset:
+                #ID should be an object ID, but don't raise a fuss if not
+                try:
+                    entry = bson.ObjectId(entry)
+                except bson.errors.InvalidId:
+                    pass
+                    
+                doc = self.collection.find_one({'_id':entry}, projection)
+                if not doc:
+                    #Entry should have been for an existing document, so 
+                    #something went really wrong here...
+                    raise KeyError("No document with ID %s in database"%entry)
+                counts = self.decodecounts(doc)
+                for key, val in counts.items():
+                    #TODO how to handle weird values here: 
+                    if val is None:
+                        continue
+                    if key.endswith("bins"):
+                        #make sure they're equal
+                        if numpy and isinstance(result[key], numpy.ndarray):
+                            if not numpy.array_equal(result[key], val):
+                                raise ValueError("Unequal bins found for key "+
+                                                 key)
+                        elif result[key] and result[key] != val:
+                            raise ValueError("Unequal bins found for key "+
+                                             key)
+                        else:
+                            result[key] = val
+                                                
+                    else:
+                        result[key] += val/match.livetime
+                    #TODO: Need a smarter way to handle non-normalized stuff
+                    
+
+        return result
+                
+
+    ########### internal function #################
+    def buildquery(self, request):
+        """Evaluate the query incorporating modifiers """
+        query = copy(self.basequery)
+        query['volume'] = request.component.name
+        query['distribution'] = request.spec.distribution
+        query['primary'] = request.spec.name
+        for mod in request.getquerymods():
+            if mod:
+                query.update(mod)
         return query
-        
-    def runquery(self, query, idonly=True):
-        """Run the query against the DB. Return a list of ConversionEffs or ids
-        The query itself should be a valid pymongo query dictionary
-        What kind of errors can be thrown here? InvalidDocument for sure
-        What do we do with errors????
-        """
-        filter_ = {'_id':True} if idonly else {}
-        result = self._simscollection.find(query, filter_)
-        return [d['_id'] for d in result] if idonly else list(result)
 
-    ############ users should override: #############
-    def default_query(self, component, spec):
-        """Not really adding much to the base here"""
-        return {'volume': component.name,
-                'source': spec.name, 
-                'distribution': spec.distribution,
-               }
-    
+    def decodecounts(self, doc):
+        """Convert a raw database result document into manipulable numbers"""
+
+        result = dict()
+        docunits = doc.get("units", {})
+
+        for key, val in doc['counts'].items():
+            if key in self.decoders:
+                val = self.decoders[key](val)
+            else:
+                val = self.decodebytype(val)
+            if key in docunits:
+                val *= units[docunits[key]]
+            result[key] = val
+
+        return result
+                
+
+    def decodebytype(self, val):
+        """Decode a value based on its type. Currently this will convert lists
+        and bytes objects to numpy arrays, and attempt to convert strings
+        to numbers. 
+        TODO: Is this stupid and slow? 
+        """
+        #check for numpy compatibility
+        if isinstance(val, (list, tuple)):
+            return numpy.array(val)
+        elif isinstance(val, bytes):
+            return numpy.frombuffer(val)
+        elif isinstance(val, str):
+            try:
+                return units(val)
+            except units.errors.UndefinedUnitError: #this isn't compatible
+                pass
+        return val
+
     def index_simentries(self):
-        """ Create any indices on the simulationssdb for faster queries
-        The collection name is assumed to be 'simulations'
+        """ Create indices on the simulationssdb for faster queries
         """
-        self._simscollection.create_index([('volume', pymongo.ASCENDING),
-                                           ('source', pymongo.DESCENDING)])
+        self.collection.create_index([('volume', pymongo.ASCENDING),
+                                      ('distribution',pymongo.ASCENDING)])
+        self.collection.create_index([('primary', pymongo.ASCENDING),
+                                      ('spectrum',pymongo.ASCENDING)])
 
-    def reduce(self, values, entryweights):
-        """For each entry in values, calculate the result summed over entries
-        
-        Args:
-            values (list): List of the values to calculate. Could be strings or
-                more complicated objects understood by the concrete 
-                implementation. Here assumed to be IDs
-            entryweights (list): list of (id, weight) pairs, where ID uniquely 
-                identifies a ConversionEff stored in the DB, or may be an 
-                actual ConversionEff object depending on implementation. 
-
-        Returns:
-             reduced (dict): dict of {value:reduced result}
-
-
-        This version assumes that each 'value' is a key in the objects 
-        in the 'simulations' collection, and that the reduction is simple 
-        addition
-        """
-        if not values or not entryweights:
-            return None
-        
-        #there doesn't seem to be a sensible way to do lookups...
-        simkeys = list(entryweights.keys())
-        getweight = {'$let':{
-            'vars':{'keys': simkeys, 
-                    'weights': list(entryweights.values())},
-            'in':{'$arrayElemAt':["$$weights",
-                                  {'$indexOfArray':["$$keys",'$_id']}] }
-        }}
-        reducer={key:{'$sum':{'$multiply':['$'+key,'$_weight']}} 
-                 for key in values}
-        reducer['_id'] = None
-        pipeline = [
-            #select the entries by id in entryweights
-            {'$match':{'_id':{'$in':simkeys}}},
-            #lookup the entry's weight
-            {'$addFields': {'_weight': getweight}}, 
-            #reduce
-            {'$group': reducer},
-            #remove the '_id' field so length matches
-            {'$project': {'_id':False}}
-        ]
-        #these should be existing documents so there must be a single result
-        return self._simscollection.aggregate(pipeline).next()
-
+   
