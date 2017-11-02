@@ -115,7 +115,9 @@ class SimulationsDB(object):
                             to caluclate these values for
 
         Returns:
-            result (dict): dictionary of results for each key in values
+            result (dict): dictionary of results for each key in values. 
+
+        TODO: How to distinguish incorrect vs empty value requests?
         """
         raise NotImplementedError
                     

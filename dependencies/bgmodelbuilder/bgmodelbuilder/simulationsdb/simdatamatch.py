@@ -114,7 +114,7 @@ class SimDataRequest(object):
         if (self.assemblyPath 
             and isinstance(self.spec, compspec.ComponentSpec)
             and self.weight is not None):
-            return self.weight * self.spec.emissionrate(self.assemblyPath[-1])
+            return self.weight * self.spec.emissionrate(self.component)
         return None
 
     def getquerymods(self):
@@ -122,8 +122,7 @@ class SimDataRequest(object):
         #querymods can be attached to Components, Placements, and BoundSpecs
         if not self.assemblyPath or not self.spec:
             return []
-        leaf = self.assemblyPath[-1]
-        
+                
         result = []
         for parent, child in zip(self.assemblyPath[:-1], self.assemblyPath[1:]):
             if parent.querymod:
@@ -133,12 +132,12 @@ class SimDataRequest(object):
                 if p.component == child and p.querymod:
                     result.append(p.querymod)
 
-        if leaf.querymod:
-            result.append(leaf.querymod)
+        if self.component.querymod:
+            result.append(self.component.querymod)
         
         
         #find the BoundSpec this spec belongs to
-        for bs in leaf._specs:
+        for bs in self.component._specs:
             if (bs.spec == self.spec or 
                 (hasattr(spec,'subspecs') and self.spec in bs.spec.subspecs)):
                 result.append(bs.querymod)
@@ -159,7 +158,9 @@ class SimDataRequest(object):
             self._emissionrate = self._calcemissionrate()
         return self._emissionrate
 
-        
+    @property
+    def component(self):
+        return self.assemblyPath[-1] if self.assemblyPath else None
         
     def todict(self):
         #want to not transform the simdatamatch objects into IDs
