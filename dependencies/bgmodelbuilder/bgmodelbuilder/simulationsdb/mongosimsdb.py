@@ -147,14 +147,13 @@ class MongoSimsDB(SimulationsDB):
 
         #attach and interpret data
         for match in matches:
-            hits = self.collection.find(match.query, {'nprimaries':True})
+            hits = tuple(self.collection.find(match.query, {'nprimaries':True}))
             match.dataset = list(str(d['_id']) for d in hits)
             if match.request and match.request.emissionrate:
                 primaries = sum(float(d['nprimaries']) for d in hits)
                 weight = match.weight or 1
                 match.livetime = primaries / (match.request.emissionrate
                                               *match.weight)
-
         return matches
             
 

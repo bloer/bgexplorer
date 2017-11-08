@@ -118,9 +118,9 @@ class TestMongoSimsDB(unittest.TestCase):
     def test_querymod(self):
         self.component.querymod = {"volume": "V2", "primary": "P2"}
         requests = self.simdb.attachsimdata(self.component)
-        self.assertEqual(len(requests[0].simdata),1)
-        self.assertEqual(len(requests[0].simdata[0].dataset),1)
-        self.assertEqual(requests[0].simdata[0].dataset[0],'dataset2')
+        self.assertEqual(len(requests[0].matches),1)
+        self.assertEqual(len(requests[0].matches[0].dataset),1)
+        self.assertEqual(requests[0].matches[0].dataset[0],'dataset2')
         
     def test_override(self):
         def addspec(match):
@@ -133,15 +133,15 @@ class TestMongoSimsDB(unittest.TestCase):
         override=MatchOverride(lambda m: m.spec.name=="P1", addspec)
         self.simdb.overrides.append(override)
         requests = self.simdb.attachsimdata(self.component)
-        self.assertEqual(len(requests[0].simdata),1)
-        self.assertEqual(requests[0].simdata[0].dataset[0],'dataset2')
-        self.assertAlmostEqual(requests[0].simdata[0].livetime.to('s').m, 1e4)
-        self.assertEqual(len(requests[1].simdata),1)
+        self.assertEqual(len(requests[0].matches),1)
+        self.assertEqual(requests[0].matches[0].dataset[0],'dataset2')
+        self.assertAlmostEqual(requests[0].matches[0].livetime.to('s').m, 1e4)
+        self.assertEqual(len(requests[1].matches),1)
         
 
     def test_eval(self):
         requests = self.simdb.attachsimdata(self.component)
-        matches =  sum((r.simdata for r in requests), [])
+        matches =  sum((r.matches for r in requests), [])
         result = self.simdb.evaluate(("C1", "C2"), matches)
         self.assertEqual(len(result), 2)
         self.assertAlmostEqual(result["C1"].to("1/s").m, 110./1e5)
@@ -152,7 +152,7 @@ class TestMongoSimsDB(unittest.TestCase):
     @unittest.skipUnless(numpy, "requires numpy")
     def test_numpy_eval(self):
         requests = self.simdb.attachsimdata(self.component)
-        matches =  sum((r.simdata for r in requests), [])
+        matches =  sum((r.matches for r in requests), [])
         result = self.simdb.evaluate(("C3",), matches)
         self.assertAlmostEqual(result["C3"][1].to('1/s').m, 11./1e5)
 

@@ -109,9 +109,9 @@ class TestSimsDB(unittest.TestCase):
         """Test that the correct number of matches was returned"""
         for request in self.requests:
             if request.spec.name in ("U238", "Th232"):
-                self.assertEqual(len(request.simdata), 2)
+                self.assertEqual(len(request.matches), 2)
             else:
-                self.assertEqual(len(request.simdata), 1)
+                self.assertEqual(len(request.matches), 1)
 
     def test_emissionrate(self):
         """Test that the emissionrate is as we expect"""
@@ -126,16 +126,16 @@ class TestSimsDB(unittest.TestCase):
 
     def test_livetime(self):
         """Test that the calculated livetime is as we expect"""
-        self.assertEqual(self.requests[0].simdata[0].livetime, 
+        self.assertEqual(self.requests[0].matches[0].livetime, 
                           1.e7/units.mBq )
-        self.assertEqual(self.requests[0].simdata[1].livetime, 
+        self.assertEqual(self.requests[0].matches[1].livetime, 
                           1.e7/(1e-6*units.mBq) )
 
     def test_rates(self):
         """Test that the total calculated rates are as expected"""
         #todo: need convenience method to roll up list of matches
         rates = self.simdb.evaluate(("gammarate", "neutronrate", "rate"),
-                                    sum((r.simdata for r in self.requests), []))
+                                    sum((r.matches for r in self.requests), []))
         #convert to dimensionless numbers to use AlmostEqual and avoid 
         #floating point nonsense. 
         self.assertAlmostEqual(rates['gammarate'].to('1/s').m, 
