@@ -36,9 +36,15 @@ class SimulationsDB(object):
     
     """
     
-    def __init__(self, *args, **kwargs):
-        """Initialize a new DB instance. Doesn't do anyhing yet."""
+    def __init__(self, app=None, *args, **kwargs):
+        """Initialize a new DB instance. 
+        Args:
+            app: a Flask application object to register with
+        """
         super().__init__(*args, **kwargs)
+        self.app = app
+        if app:
+            self.init_app(app)
 
 
     def attachsimdata(self, assembly):
@@ -62,7 +68,7 @@ class SimulationsDB(object):
                 #update status
                 #see if there is an existing match with the same query
                 oldmatch = None
-                for match in request.simdata:
+                for match in request.matches:
                     if match.query == newmatch.query:
                         oldmatch = match
                         break
@@ -70,11 +76,12 @@ class SimulationsDB(object):
                 if not oldmatch:
                     newmatch.status += " new "
                 else:
-                    if newmatch.datasets != oldmatch.datasets:
-                        if len(newmatch.datasets) > len(oldmatch.datasets):
+                    if newmatch.dataset != oldmatch.dataset:
+                        #todo if dataset is a single string this will break
+                        if len(newmatch.dataset) > len(oldmatch.dataset):
                             newmatch.status += " newdata "
-                        elif len(newmatch.datasets) < len(oldmatch.datasets):
-                            newmatch.status += "dataremoved "
+                        elif len(newmatch.dataset) < len(oldmatch.dataset):
+                            newmatch.status += " dataremoved "
                         else:
                             newmatch.status += " datachanged "
                     if newmatch.weight != oldmatch.weight:
@@ -83,7 +90,13 @@ class SimulationsDB(object):
                         newmatch.status += " livetimeincreased "
                     elif newmatch.livetime < oldmatch.livetime:
                         newmatch.status += " livetimedecreased "
-            request.simdata = newmatches
+                    #copy id of same matches to aid caching
+                    if oldmatch == newmatch:
+                        newmatch._id = oldmatch._id
+                if not newmatch.dataset:
+                    newmatch.status += " nodata "
+                        
+            request.matches = newmatches
         return requests
 
         
@@ -132,3 +145,6 @@ class SimulationsDB(object):
         pass
         
     
+    def init_app(self, app):
+        """Register ourselves as the official SimulationsDB extension"""
+        app.extensions['SimulationsDB'] = self

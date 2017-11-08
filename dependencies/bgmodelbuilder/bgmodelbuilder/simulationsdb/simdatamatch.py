@@ -13,7 +13,7 @@ import operator
 import copy 
 
 from ..mappable import Mappable
-from ..common import to_primitive
+from ..common import to_primitive, ensure_quantity
 from .. import component, compspec
 
  
@@ -40,13 +40,23 @@ class SimDataMatch(Mappable):
         self.query = query
         self.dataset = dataset
         self.weight = weight
-        self.livetime = livetime
+        self.livetime = ensure_quantity(livetime, "day")
         self.status = status or ""
 
     def todict(self):
-        mydict = copy(self.__dict__)
+        mydict = copy.copy(self.__dict__)
         mydict.pop('request',None) #will cause circular recursion otherwise!
         return to_primitive(mydict)
+        
+    def __eq__(self, other):
+        try:
+            return (self.request == other.request 
+                    and self.query == other.query
+                    and self.dataset == other.dataset
+                    and self.weight == other.weight
+                    and self.livetime == other.livetime)
+        except AttributeError:
+            return False
         
 class SimDataRequest(object):
     """ Match simulation data to a component within an assembly hierarchy
@@ -65,21 +75,21 @@ class SimDataRequest(object):
                               assembly path. Will be calculated if not provided
         emissionrate (float): Total absolute emission rate for this spec and 
                               component. If not provided, will be calculated
-        simdata:              List of SimDataMatch queries and matching data
+        matches:              List of SimDataMatch queries and matching data
     """
 
     def __init__(self, assemblyPath=None, spec=None, weight=None,
-                 emissionrate=None, simdata=[], **kwargs):
+                 emissionrate=None, matches=[], **kwargs):
         super().__init__(**kwargs)
         self.assemblyPath = assemblyPath
         if isinstance(self.assemblyPath, list):
             self.assemblyPath = tuple(self.assemblyPath)
         self.spec = spec
         self._weight = weight
-        self._emissionrate = emissionrate
-        self.simdata = [SimDataMatch(**ds) if isinstance(ds,dict) else ds
-                        for ds in simdata]
-        for ds in self.simdata:
+        self._emissionrate = ensure_quantity(emissionrate, "1/s")
+        self.matches = [SimDataMatch(**ds) if isinstance(ds,dict) else ds
+                        for ds in matches]
+        for ds in self.matches:
             ds.request = self
         
 
@@ -89,7 +99,7 @@ class SimDataRequest(object):
         oldemissionrate = self._emissionrate
         self._emissionrate = self._calcemissionrate()
         if self._emissionrate:
-            for match in self.simdata:
+            for match in self.matches:
                 if match.livetime:
                     match.livetime *= oldemissionrate / self._emissionrate
         
@@ -166,7 +176,7 @@ class SimDataRequest(object):
     def todict(self):
         #want to not transform the simdatamatch objects into IDs
         mydict = copy.copy(self.__dict__)
-        simdata = to_primitive(mydict.pop('simdata'), replaceids=False)
+        matches = to_primitive(mydict.pop('matches'), replaceids=False)
         mydict = to_primitive(mydict)
-        mydict['simdata'] = simdata
+        mydict['matches'] = matches
         return mydict

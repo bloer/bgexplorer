@@ -267,6 +267,11 @@ class RadioactiveContam(ComponentSpec):
         self.isotope = isotope or name
         if isinstance(self.isotope, dict): #handle imports
             self.isotope = RadioactiveIsotope(**self.isotope)
+        if not name:
+            if isinstance(self.isotope, RadioactiveIsotope):
+                name = self.isotope.name
+            elif self.isotope:
+                name = self.isotope
         super().__init__(name=name, **kwargs)
         
     @property
@@ -427,8 +432,9 @@ class CosmogenicSource(RadioactiveContam):
         """
         if isinstance(isotope, dict): #handle imports
            isotope = CosmogenicIsotope(**isotope)
-        name = kwargs.get('name',isotope.name)
-        super().__init__(name=name, isotope=isotope, **kwargs)    
+        kwargs.setdefault('name', isotope.name)
+        kwargs.setdefault('_id', isotope._id)
+        super().__init__(isotope=isotope, **kwargs)    
         self.exposure = ensure_quantity(exposure, units.day)
         self.cooldown = ensure_quantity(cooldown, units.day)
         self.integration = ensure_quantity(integration, units.year)

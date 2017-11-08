@@ -27,13 +27,16 @@ class BoundSpec(object):
     Args:
         spec (ComponentSpec): Spec to attach to component
         querymod:  Additional info for simulationsDB matching
-        simdata:   List of SimDataMatch objects for binding simulation 
+        simdata:   List of SimDataRequest objects for binding simulation 
                    data to spec's subspecs
     """
     def __init__(self, spec=None, querymod=None, simdata=None):
         self.spec = spec
         self.querymod = querymod 
         self.simdata=simdata or []
+        for i, simd in enumerate(self.simdata):
+            if isinstance(simd, dict):
+                self.simdata[i] = SimDataRequest(**simd)
         
     def __eq__(self, other): 
         if hasattr(other, 'spec'):
@@ -212,7 +215,7 @@ class BaseComponent(Mappable):
                      if path is None or d.assemblyPath == path]
             if rebuild:
                 for match in found:
-                    d.recalculate()
+                    match.recalculate()
                 if path:
                     #generate new empty matches
                     new = []
@@ -338,8 +341,7 @@ class Placement(object):
     in an experiment, and so will need to be associated to different simulation
     datasets. This lets us avoid copying components. 
     """
-    def __init__(self, parent=None, component=None, weight=1, querymod=None, 
-                 simdata=None):
+    def __init__(self, parent=None, component=None, weight=1, querymod=None):
         """Args:
             parent (Assembly): assembly in which we're being placed
                 Unlike components, placements should be unique
@@ -355,13 +357,8 @@ class Placement(object):
         self.component = component
         self.weight = weight
         self.querymod = querymod
-        self.simdata = simdata or {}
         if hasattr(component, 'placements'): #it might still be a reference
             component.placements.add(self)
-
-    def addsimdata(self, spec, simdata):
-        #not sure if spec will be a CompSpec or ID, so make sure to get the ID
-        self.simdata[getattr(spec,'id',spec)].append(simdata)
 
     def gettotalweight(self, fromroot=None):
         if not self.parent:
@@ -560,11 +557,12 @@ class Assembly(BaseComponent):
     def getsimdata(self, path=None, rebuild=False, children=True):
         mydata = super().getsimdata(path,rebuild,children=False)
         if children:
-            if path:
-                if len(path) == 0 or path[-1] != self:
-                    path = tuple(path) + (self,)
+            if path is None or len(path) == 0:
+                path = (self,)
+            elif path[-1] != self:
+                path = tuple(path) + (self,)
             for child in self.getcomponents(deep=False):
-                cpath = path+(child,) if path else None
+                cpath = path+(child,)
                 mydata.extend(child.getsimdata(cpath,rebuild,children))
         return mydata
 

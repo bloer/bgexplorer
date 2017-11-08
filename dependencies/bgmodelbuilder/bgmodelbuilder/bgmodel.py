@@ -16,7 +16,7 @@ import copy
 import uuid
 
 from .component import buildcomponentfromdict, Assembly
-from .compspec import buildspecfromdict
+from .compspec import ComponentSpec, buildspecfromdict
 
 class BgModel(object):
     def __init__(self, name=None, assemblyroot=None, 
@@ -152,6 +152,21 @@ class BgModel(object):
                 pass
             if hasattr(boundspec.spec,'appliedto'):
                 boundspec.spec.appliedto.add(comp)
+            for simdata in boundspec.simdata:
+                if hasattr(simdata, 'assemblyPath') and simdata.assemblyPath:
+                    simdata.assemblyPath = tuple(self.components.get(c, c) 
+                                                 for c in simdata.assemblyPath)
+                if (hasattr(simdata, 'spec') 
+                    and not isinstance(simdata.spec,ComponentSpec)):
+                    #this may refer to a subspec of boundspec.spec
+                    if getattr(boundspec.spec,'id',None) == simdata.spec:
+                        simdata.spec = boundspec.spec
+                    else:
+                        for subspec in getattr(boundspec.spec,'subspecs',[]):
+                            if simdata.spec == getattr(subspec,'id'):
+                                simdata.spec = subspec
+                                break
+                    
         for p in getattr(comp, '_components', []):
             p.component = self.components.get(p.component, p.component)
             if hasattr(p.component,'placements'):
