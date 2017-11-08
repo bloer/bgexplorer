@@ -17,6 +17,7 @@ from .widgets import is_hidden_field
 from ..modeldb import ModelDB
 from ..bgmodelbuilder.component import Component, Assembly
 from ..bgmodelbuilder import compspec
+from ..utils import get_simsdb
 
 
 SpecEntry = namedtuple("SpecEntry","cls form")
@@ -24,7 +25,9 @@ SpecEntry = namedtuple("SpecEntry","cls form")
 
 
 class ModelEditor(object):
-    """Factory class for creating model editor views"""
+    """Factory class for creating model editor views
+    TODO: write documentation
+    """
     def __init__(self, app=None, modeldb=None):
         self.bp = Blueprint('modeleditor', __name__, 
                             static_folder='static', 
@@ -77,18 +80,20 @@ class ModelEditor(object):
                              view_func=self.attachspec,
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/detachspec/<compid>/<int:index>',
-                       view_func=self.detachspec,
+                             view_func=self.detachspec,
                              methods=('POSt',))
         self.bp.add_url_rule(baseroute+'/setquerymod/<compid>/<specid>', 
-                       view_func=self.setquerymod,
+                             view_func=self.setquerymod,
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/editcomponent/<componentid>', 
-                       view_func=self.editcomponent,
+                             view_func=self.editcomponent,
                              methods=('GET', 'POST'))
         self.bp.add_url_rule(baseroute+'/editspec/<specid>', 
-                       view_func=self.editspec,
+                             view_func=self.editspec,
                              methods=('GET', 'POST'))
-    
+        self.bp.add_url_rule(baseroute+'/bindsimdata',
+                             view_func=self.bindsimdata,
+                             methods=('GET', 'POST'))
         
         if app:
             self.init_app(app)
@@ -109,6 +114,7 @@ class ModelEditor(object):
         forms.BoundSpecForm.category.choices = [
             (val.cls,name) for name, val in self.specregistry.items()
         ]
+        
 
     def init_app(self, app, url_prefix='/models'):
         app.register_blueprint(self.bp, url_prefix=url_prefix)
@@ -367,3 +373,42 @@ class ModelEditor(object):
         return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 
+    def bindsimdata(self, modelid):
+        """Look for updated simulation data and return a highlight view
+        Confirm whether to save new bindings or cancel. 
+
+        TODO: This seems like the place to implement manual binding
+        """
+        simsdb = get_simsdb()
+        if not simsdb:
+            abort(501, "No registered SimulationsDB")
+            
+        model = self.getmodelordie(modelid)
+        simreqs = simsdb.attachsimdata(model.assemblyroot)
+        matches = sum((r.matches for r in simreqs),[])
+        #sort the requests by spec and assembly
+        bypath = {}
+        byspec = {}
+        for req in simreqs:
+            pathstr = ' / '.join(c.name for c in req.assemblyPath)
+            bypath.setdefault(pathstr, [])
+            bypath[pathstr].append(req)
+            byspec.setdefault(req.spec, [])
+            byspec[req.spec].append(req)
+        
+        #form = forms.BindSimDataForm(request.form)
+        if request.method == 'POST': # and form.validate():
+            istemp = self.modeldb.is_model_temp(modelid)
+            newid = str(self.modeldb.write_model(model, bumpversion=0.1, 
+                                                 temp=istemp))
+            if istemp:
+                return redirect(url_for('.editmodel', modelid=newid))
+            else:
+                #TODO: add a url for viewmodel here
+                return redirect(url_for('index'))
+        return render_template('bindsimdata.html', model=model,
+                               #form=form,
+                               matches=matches, requests=simreqs,
+                               bypath=bypath, byspec=byspec)
+        
+        

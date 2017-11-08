@@ -1,0 +1,76 @@
+{% extends "bootstrap/base.html" %}
+
+{% block title %}Simulation Data{% endblock %}
+
+{% block styles %}
+    {{ super() }}
+    <style>
+     li > ul {margin-left:1px; padding-left:2px}
+     ul.speclist li {float:left; display:inline-block; min-width: 1em; padding-left:2px; padding-right:2px; margin:2px;
+         border: 1px solid lightgray}
+     li.list-group-item { padding-bottom:3px;}
+
+     li.spec.matches0 { border: 1px solid red; background-color:#ffdddd}
+
+     li.match {font-size:small}
+     li.match.new {background-color:#eeffee }
+     li.match.newdata::after { content:"+"; color:green; font-weight:bolder}
+     li.match.dataremoved::after { content:"-"; color: red; font-weight:bolder}
+     li.match.datachanged::after { content:"?"; color: blue; font-weight:bold;}
+     li.match.nodata {color:red}
+     li.match.nodata .livetime {display:none}
+     li.match.livetimeincreased .livetime::after{content:"▲"; color:green; }
+     li.match.livetimedecreased .livetime::after{content:"▼"; color:red; }
+     
+     
+    </style>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+{% endblock %}
+
+
+{% block content %}
+    <div class="container" >
+	<div class="page-header">
+	    <div class="row">
+		<div class="col-sm-6">
+		    <h1>Simdata for model <small>{{ model.name }} v{{ model.version }}</small></h1>
+		</div>
+		<div class="col-sm-6" >
+		    <form id="confirmform" method="POST" >
+			<input type="submit" class="btn btn-success" name="confirm" value="Confirm changes" >
+			<a class="btn btn-danger" href="javascript:history.back()">Cancel</a>
+		    </form>
+		</div>
+	    </div>
+	</div>
+	
+
+	<ul id="requestlist" class="list-group" >
+	    {% for path, reqs in bypath.items() %}
+		<li class="list-group-item clearfix request">
+		    <h5 class="assemblyPath list-group-item-heading">{{ path }}</h5>
+		    <ul class="speclist">
+			{% for req in reqs %}
+			    <li class="list-group-item-text spec matches{{ req.matches | length }}">
+				{{ req.spec.name }} {{ req.spec.distribution }} 
+				<small>({{ "%.2e" | format(req.emissionrate.to('1/day').m) }} / day)</small>
+				<ul class="matchlist" >{% for match in req.matches %}
+				    <li class="match {{ match.status }}">
+					{{ match.query }} 
+					{% set livetime=match.livetime.to('day').m %}<small>
+					<span class="livetime" data-livetime="{{ livetime }}">
+					({{ "%.2e" | format(livetime) }} days) </span></small>
+				{% endfor %}</ul>
+			    </li>
+			{% endfor %}
+		    </ul>
+		</li>
+	    {% endfor %}
+	</ul>
+
+	
+    </div>
+{% endblock %}

@@ -86,6 +86,16 @@ class ModelDB(object):
             projection.update({'__modeldb_meta':False})
         return self._collection.find_one(query, projection)
         
+    def is_model_temp(self, modelid):
+        """Is the model with id modelid temporary? Only temporary models
+        are writeable!
+        """
+        model = self.get_raw_model({'_id':modelid}, {'__modeldb_meta':True})
+        #todo: should we just return false here? 
+        if not model:
+            raise KeyError("No model with ID ",modelid)
+        return model['__modeldb_meta']['temporary']
+
     def get_model_history(self, modelid):
         """Helper function to get the editDetails chain for a model
            returns the models projected to edit history in a list
@@ -116,22 +126,45 @@ class ModelDB(object):
         return BgModel.buildfromdict(raw) if raw else None
 
     #todo: implement password-locking for models    
-    def write_model(self, model, temp=True):
-        """Write a modified model to the database. No checks are done 
-        to make sure version and name are unique!
-        Returns _id of model written. 
+    def write_model(self, model, temp=True, bumpversion=1.0):
+        """Write a modified model to the database.  Only temporary models
+        may be directly modified. Attempting to overwrite a non-temporary
+        model will result in a new model being generated
 
         Args:
-            model (dict or BgModel): The data to be stored
+            model (dict or BgModel): The data to be stored. If the model has 
+                an '_id' attribute, will attempt to overwrite an existing model
+
+            temp (bool): If true, mark this entry as temporary. Existing non-
+                temporay models cannot become temporary
+          
+            bumpversion (float): By how much should we increment the version 
+                number?  In general this should be a power of 10, i.e. `1` for
+                major bumps or `0.1` for minor bumps. Ignored for temp models.
         """
         self.testconnection()
         if isinstance(model, BgModel):
             model = model.todict()
         model['__modeldb_meta'] = {'temporary':temp}
+        if not temp:
+            model['version'] = (self.get_current_version(model.get('name')) + 
+                                bumpversion)
+            
         if '_id' in model:
-            res = self._collection.replace_one({'_id':model['_id']}, model)
-        else:
+            #can only overwrite existing models if temporary!
+            try:
+                if self.is_model_temp(model['_id']):
+                    res = self._collection.replace_one({'_id':model['_id']}, 
+                                                       model)
+                else:
+                    del model['_id']
+            except KeyError: #expected if this model isn't in the DB already
+                pass
+
+        #can't use elif since might have been removed in previous step
+        if '_id' not in model: 
             res = self._collection.insert_one(model)
+        
         #todo: test the response!
         return model.get('_id')
 
@@ -150,17 +183,14 @@ class ModelDB(object):
             model = self.get_raw_model(derivedFrom)
             if not model:
                 raise KeyError("Model with id %s not found",
-                                          derivedFrom)
+                               derivedFrom)
         else:
             model = BgModel(name="<new>").todict()
             
-        #make sure it's sane
-        model['version'] = 1 + self.get_current_version(model['name'],
-                                                        includetemp=temp)
         if '_id' in model:
             del model['_id']
             
-        self.write_model(model, temp=temp)
+        self.write_model(model, temp=temp, bumpversion=1.0)
         #should be able to just return model, but just to be safe
         return self.get_model(model['_id'])
         

@@ -98,7 +98,7 @@
 	       
 	       {% endif %}
 	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} 
-	       {%- if editspec is defined and editspec in comp.findspecs(deep=False) -%} parentofactive {% endif -%}"
+	       {%- if editspec is defined and editspec in comp.getspecs(deep=False) -%} parentofactive {% endif -%}"
 	       data-component="{{ comp.id }}" 
 	       data-name="{{ comp.name }}" 
 	       data-cls="{{ 'Assembly' if comp.getcomponents is defined else 'Component' }}"
@@ -146,7 +146,7 @@
 
 {% macro specrow(spec) %}
     <tr class="linklike spec {% if editspec is defined and spec.id == editspec.id -%} info {%- endif -%}
-	       {%- if editcomponent is defined and spec in editcomponent.findspecs(deep=False) -%} childofactive {%- endif -%}"
+	       {%- if editcomponent is defined and spec in editcomponent.getspecs(deep=False) -%} childofactive {%- endif -%}"
         onclick="window.location='{{ url_for('.editspec',modelid=model.id, specid=spec.id) }}';" 
 	data-id="{{ spec.id }}"
 	data-name="{{ spec.name }}"
@@ -198,6 +198,7 @@
 		<div class="col-sm-3" >
 		    <button class="btn btn-success">Save New Version</button> 
 		    <button class="btn btn-danger btn-sm" disabled="disabled" >Discard Changes</button>
+		    <a class="btn btn-default" href="{{ url_for('.bindsimdata',modelid=model.id) }}" > Check simulation data</a>
 		</div>
 		<div class="col-sm-5" >
 		    <div id="messages">
