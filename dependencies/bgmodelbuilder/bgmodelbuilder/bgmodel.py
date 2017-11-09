@@ -40,7 +40,7 @@ class BgModel(object):
         """
         
         self.name = name 
-        self.assemblyroot = assemblyroot or Assembly(self.name)
+        self.assemblyroot = assemblyroot or Assembly(self.name or "World")
         self.version = version
         self.description = description 
         self.derivedFrom = derivedFrom
