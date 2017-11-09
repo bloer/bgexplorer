@@ -23,12 +23,17 @@ class SaveModelForm(FlaskForm):
     """Form for editing basic bgmodel details"""
     name = StringField('Model Name', [validators.required()])
     version = IntegerField("Version", render_kw={'disabled':'disabled'})
-    description = StringField("Description", 
-                              description="What does this model include?")
-    editDetails = DictField("Change log", 
-                            required_keys={'user': 'Your name',
-                                           'comment': 'Describe your edits'})
-    submit = SubmitField()
+    description = StringField("Description", [validators.required()])
+    user = StringField("Your name", [validators.required()])
+    comment = StringField("Describe your edits", [validators.required()])
+    
+    def populate_obj(self, obj):
+        obj.name = self.name.data
+        obj.version = self.version.data
+        obj.description = self.description.data
+        obj.editDetails.update(dict(user=self.user.data, 
+                                    comment=self.comment.data))
+    
 
     
 

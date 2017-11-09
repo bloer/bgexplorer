@@ -1,5 +1,6 @@
 from flask import Flask, render_template
 from flask_bootstrap import Bootstrap
+import itertools
 
 from .modeleditor.modeleditor import ModelEditor
 from .modeldb import ModelDB
@@ -21,8 +22,12 @@ def create_app(config_filename=None):
 
     @app.route('/')
     def index():
-        return render_template("listmodels.html",
-                               models=modeldb.get_models_list())
+        models = modeldb.get_models_list(mostrecentonly=False)
+        mgroups = list((n,list(g)) for n, g in 
+                        itertools.groupby(models, lambda m: m['name']))
+        print(mgroups)
+        return render_template("listmodels.html", models=models, 
+                               modelgroups=mgroups)
 
     return app
 

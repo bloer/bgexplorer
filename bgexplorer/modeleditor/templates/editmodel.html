@@ -1,12 +1,11 @@
 {# do not load headers, etc if this is an ajax request #}
 {% if not request.is_xhr %}
 
-    {% extends "bootstrap/base.html" %}
+    {% extends "base.html" %}
 
     {% block title %}Edit Model{% endblock %}
 
-    {% block styles %}
-	{{ super() }}
+    {% block mystyles %}
 	<style>
 	 html, body {height:100%}
 	 div.container {height:100%}
@@ -27,22 +26,24 @@
 	</style>
     {% endblock %} 
 
-    {% block scripts %}
-	{{ super() }}
+    {% block myscripts %}
 	<script src="http://code.jquery.com/ui/1.11.2/jquery-ui.js" ></script>
 	<script type="text/javascript" >
-	 //$("#assemblytable tbody tr.component, #unplacedtable tbody tr.component").draggable({'helper':'clone'});
-	 //$("#assemblytable tbody").sortable({'helper':"clone", 'placeholder':'warning', 'containment':});
 	 
-	 //necessary script for sortable table widget
-	 $("tbody.sortable").sortable({
-	     'placeholder':'warning',
-	     'update':function(event, ui){sortIndices(event.target);},
-	 });
-	 //prevent buttons from looking still depressed
-	 $(".btn").mouseup(function(){
-	     $(this).blur();
-	 });
+	 $(document).ready(function(){
+	     //$("#assemblytable tbody tr.component, #unplacedtable tbody tr.component").draggable({'helper':'clone'});
+	     //$("#assemblytable tbody").sortable({'helper':"clone", 'placeholder':'warning', 'containment':});
+	     
+	     //necessary script for sortable table widget
+	     $("tbody.sortable").sortable({
+		 'placeholder':'warning',
+		 'update':function(event, ui){sortIndices(event.target);},
+	     });
+	     //prevent buttons from looking still depressed
+	     $(".btn").mouseup(function(){
+		 $(this).blur();
+	     });
+	 }
 
 	 function filtercomponents(){
 	     var filtertext = $("#filtercomponents").val();
@@ -81,7 +82,6 @@
 		 
 	     }
 	 }
-	 
 	</script>
     {% endblock %}
 {% endif %}
@@ -126,7 +126,7 @@
 	<tbody>
 	    {% for comp in components recursive %}
 		{% if comp == model.assemblyroot %}
-		    <tr><th colspan="2" style="background-color:#fafafa;" > Assembly Tree</th></tr>
+		    <tr><th colspan="5" style="background-color:#fafafa;" > Assembly Tree</th></tr>
 		{% endif %}
 		{{ componentrow(comp, loop.depth0) }}
 		{% if recursive %}
@@ -135,7 +135,7 @@
 		    {% endif %}
 		{% endif %}
 		{% if comp == model.assemblyroot %}
-		    <tr><th colspan="2" style="background-color:#fafafa;" > Unplaced components</th></tr>
+		    <tr><th colspan="5" style="background-color:#fafafa;" > Unplaced components</th></tr>
 		{% endif %}
 	    {% endfor %}
 	    
@@ -186,118 +186,124 @@
 
 
 
-{% block content %}
-    <div class="container" id="" >
-	<div class="page-header"> 
-	    <div class="row" >
-		<div class="col-sm-4"> 
-		    <h1>Editing Model: <small>{{ model.name }} v{{ model.version }}
-		    </small></h1>
-		    <small>{{ model.description }}</small>
+{% block pageheader %}
+    <div class="row" >
+	<div class="col-sm-7"> 
+	    <h1>Editing Model: <small>{{ model.name }} v{{ model.version }}
+	    </small></h1>
+	    <small>{{ model.description }}</small>
+	</div>
+	<div class="col-sm-5" >
+	    <button class="btn btn-success" data-toggle="modal" data-target="#savemodeldialog" >Save</button> 
+	    {# <button class="btn btn-danger btn-sm"> Discard Changes</button> #}
+	    <a class="btn btn-default" href="{{ url_for('.bindsimdata',modelid=model.id) }}" > Bind simulation data</a>
+	</div>
+    </div>
+{% endblock %}
+
+{% block pagecontent %}
+    <!-- save model dialog -->
+    <div id="savemodeldialog" class="modal fade" role="dialog" >
+	<div class="modal-dialog" >
+	    <div class="modal-content" >
+		<div class="modal-header">
+		    <button type="button" class="close" data-dismiss="modal">&times;</button>
+		    <h4 class="modal-title">Save model</h4>
 		</div>
-		<div class="col-sm-3" >
-		    <button class="btn btn-success">Save New Version</button> 
-		    <button class="btn btn-danger btn-sm" disabled="disabled" >Discard Changes</button>
-		    <a class="btn btn-default" href="{{ url_for('.bindsimdata',modelid=model.id) }}" > Check simulation data</a>
+		<div class="modal-body">
+		    {{ wtf.quick_form(savemodelform(model), method="POST", id="savemodelform", 
+			action=url_for('.savemodel', modelid=model.id)) }}
 		</div>
-		<div class="col-sm-5" >
-		    <div id="messages">
-			{% for cat,msg in get_flashed_messages(with_categories=true) %}
-			    <div class="alert alert-{{ cat }} alert-dismissable" >
-				{{ msg }}
-				<a href="#"  class="close" data-dismiss="alert" >
-				    &times;
-				</a>
-			    </div>
-			{% endfor %}
-		    </div>
+		<div class="modal-footer">
+		    <button type="submit" class="btn btn-primary" form="savemodelform" onclick="$('#savemodelform').submit()" >
+			Save new version </button>
+		    <button type="button" class="btn btn-default"  data-dismiss="modal">Cancel</button>
 		</div>
 	    </div>
-	    
 	</div>
-    
+    </div>
+	
 
-	<div class="row" >
-	    <div class="col-sm-6 scroll">
-		
-		<ul class="nav nav-tabs" >
-		    <li {%- if editspec is not defined %} class="active" {% endif -%}>
-			<a data-toggle="tab" href="#componentsdiv">Components</a>
-		    </li>
-		    <li {%- if editspec is defined %} class="active" {% endif -%}>
-			<a data-toggle="tab" href="#specsdiv">Specifications</a>
-		    </li>
-		    <li>
-			<div class="input-group pull-right" >
-			    <input type="text" class="form-control" id="filtercomponents" placeholder="Search" 
-				   oninput="filtercomponents()" size="30" >
-			    <div class="input-group-btn">
-				<button class="btn btn-default" 
-					onclick="$('#filtercomponents').val('');filtercomponents()" >
-				    <span class="glyphicon glyphicon-remove" ></span>
-				</button>
-			    </div>
+    <div class="row" >
+	<div class="col-sm-6 scroll">
+	    
+	    <ul class="nav nav-tabs" >
+		<li {%- if editspec is not defined %} class="active" {% endif -%}>
+		    <a data-toggle="tab" href="#componentsdiv">Components</a>
+		</li>
+		<li {%- if editspec is defined %} class="active" {% endif -%}>
+		    <a data-toggle="tab" href="#specsdiv">Specifications</a>
+		</li>
+		<li>
+		    <div class="input-group pull-right navbar-form" >
+			<input type="text" class="form-control" id="filtercomponents" placeholder="Search" 
+			       oninput="filtercomponents()" size="30" >
+			<div class="input-group-btn">
+			    <button class="btn btn-default" 
+					   onclick="$('#filtercomponents').val('');filtercomponents()" >
+				<span class="glyphicon glyphicon-remove" ></span>
+			    </button>
 			</div>
-		    </li>
-		</ul>
+		    </div>
+		</li>
+	    </ul>
+	    
+	    <div class="tab-content" >
 		
-		<div class="tab-content" >
+		<div id="componentsdiv" class="tab-pane fade {% if editspec is not defined %}in active{% endif %}" >
+		    <h2>Components <small>
+			<form action="{{ url_for('.newcomponent',modelid=model.id) }}" 
+			      method="POST" class="pull-right form-inline" >
+			    <label>Create new:</label>
+			    <span class="btn-group" >
+				<button type="submit" class="btn btn-default btn-sm" name="class" value="Component" >
+				    Component
+				</button>
+				<button type="submit" class="btn btn-default btn-sm" name="class" value="Assembly" >
+				    Assembly
+				</button>
+			    </span>
+			</form></small>
+		    </h2>
 		    
-		    <div id="componentsdiv" class="tab-pane fade {% if editspec is not defined %}in active{% endif %}" >
-			<h2>Components <small>
-			    <form action="{{ url_for('.newcomponent',modelid=model.id) }}" 
-				  method="POST" class="pull-right form-inline" >
-				<label>Create new:</label>
-				<span class="btn-group" >
-				    <button type="submit" class="btn btn-default btn-sm" name="class" value="Component" >
-					Component
-				    </button>
-				    <button type="submit" class="btn btn-default btn-sm" name="class" value="Assembly" >
-					Assembly
-				    </button>
-				</span>
-			    </form></small>
-			</h2>
-		
-			
-			{{  componenttable([model.assemblyroot] + model.get_unplaced_components(), true, "assemblytable") }}
-			{# <h3>Unplaced Components </h3>
-			{{ componenttable(model.get_unplaced_components(), true, "unplacedtable") }}#}
-			
-		    </div> {# close components div #}
+		    
+		    {{  componenttable([model.assemblyroot] + model.get_unplaced_components(), true, "assemblytable") }}
+		    {# <h3>Unplaced Components </h3>
+		    {{ componenttable(model.get_unplaced_components(), true, "unplacedtable") }}#}
+		    
+		</div> {# close components div #}
 
-	    
-		    <div id="specsdiv" class="tab-pane fade {% if editspec is defined %}in active{% endif %}" >
-			<h2>Specifications <small>
-			    <form class="form-inline pull-right" action="{{ url_for('.newspec',modelid=model.id) }}" 
-				  method="POST">
-				<div class="form-group push-right" >
-				    <label for="newspec">Create new: </label>
-				    <select class="form-control" id="newspec" name="type" 
-					    onchange="$(this).parents('form').submit();" >
-					<option style="color:gray;font-style:italic"> Select a spec type</option>
-					{% for spectype in spectypes %}
-					    <option value="{{ spectype }}">{{ spectype }}</option>
-					{% endfor %}
-				    </select>
-				</div>
-			    </form>
-			</small></h2>
-			{{ spectable(model.specs.values()) }}
-		    </div> {# close specsdiv #}
-		</div> {# close tab-content  #}
-	    </div> {# close col-sm-6 #}
-	    
-	    <div class="col-sm-6 scroll" >
-		<div id="editor"  >
-		    {% if form is defined %}
-			{% if editcomponent is defined %}
-			    {% include "editcomponent.html" %}
-			{% elif editspec is defined %}
-			    {% include "editspec.html" %}
-			{% endif %}
+		
+		<div id="specsdiv" class="tab-pane fade {% if editspec is defined %}in active{% endif %}" >
+		    <h2>Specifications <small>
+			<form class="form-inline pull-right" action="{{ url_for('.newspec',modelid=model.id) }}" 
+			      method="POST">
+			    <div class="form-group push-right" >
+				<label for="newspec">Create new: </label>
+				<select class="form-control" id="newspec" name="type" 
+					onchange="$(this).parents('form').submit();" >
+				    <option style="color:gray;font-style:italic"> Select a spec type</option>
+				    {% for spectype in spectypes %}
+					<option value="{{ spectype }}">{{ spectype }}</option>
+				    {% endfor %}
+				</select>
+			    </div>
+			</form>
+		    </small></h2>
+		    {{ spectable(model.specs.values()) }}
+		</div> {# close specsdiv #}
+	    </div> {# close tab-content  #}
+	</div> {# close col-sm-6 #}
+	
+	<div class="col-sm-6 scroll" >
+	    <div id="editor"  >
+		{% if form is defined %}
+		    {% if editcomponent is defined %}
+			{% include "editcomponent.html" %}
+		    {% elif editspec is defined %}
+			{% include "editspec.html" %}
 		    {% endif %}
-		</div>
+		{% endif %}
 	    </div>
 	</div>
     </div>

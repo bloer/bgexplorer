@@ -1,40 +1,77 @@
-{% extends "bootstrap/base.html" %}
+{% extends "base.html" %}
 
-{% block title %}Models{% endblock %}
+{% block title %}List Models{% endblock %}
 
-{% macro newmodelbutton(derivedFrom='', label="Edit") -%}
-    <form action="{{ url_for('modeleditor.newmodel') }}" method="POST">
-	{% if derivedFrom -%}<input type="hidden" name="derivedFrom" 
-				    value="{{ derivedFrom }}"><{%- endif -%}
-	<input type="submit" value="{{ label }} " >
+{% block mystyles %}
+    <style>
+     tbody.oldversions {color:gray; font-style:italic; background-color:#fffff8}
+     tbody.oldversions tr td:first-child {padding-left:1em; }
+     button[data-toggle="collapse"]::after { content:"▲"}
+     button[data-toggle="collapse"].collapsed::after {content:"▼"}
+     form.form-inline {display: inline}
+    </style>
+{% endblock %}
+
+
+{% macro newmodelbutton(derivedFrom='', label="Edit", class="") -%}
+    <form action="{{ url_for('modeleditor.newmodel') }}" class="form-inline" method="POST">
+	{% if derivedFrom -%}
+	    <input type="hidden" name="derivedFrom" 
+		   value="{{ derivedFrom }}">
+	{%- endif -%}
+	<button type="submit" class="btn btn-primary btn-sm {{ class }}">{{ label }}</button>
     </form>
 {%- endmacro %}
 
-{% macro printmodel(model) %}
-    <tr class="model">
-	<td>{{ model.name }}</td>
-	<td>{{ model.version }}</td>
-	<td>{{ model.editDetails.date }} by {{ model.editdetails.user }}</td>
-	<td>{{ model.description }}</td>
-	<td>{{ newmodelbutton(model.id) }}</td>
+
+{% macro printmodel(model, expandtarget, class="") %}
+    <tr class="model {{ class }}">
+	<td>{{ model['name'] }}</td>
+	<td>{{ model['version'] }}
+	    {%- if expandtarget %} 
+		<button class="btn btn-default btn-xs collapsed" data-toggle="collapse" data-target="#{{ expandtarget }}" ></button>
+	    {%- endif -%}
+	</td>
+	<td>{{ model['description'] }}</td>
+	<td>{{ model['editDetails']['date'] }} by {{ model['editDetails']['user'] }}</td>
+	<td>{{ model['editDetails']['comment'] }}</td>
+	<td>{{ newmodelbutton(model['_id']) }}</td>
     </tr>
 {% endmacro %}
 
-{% block content %}
-    <h1>List of Models</h1>
-    {{ newmodelbutton(label="Create New") }}
-    <table id="modelist">
+
+{% block pageheader %}
+    <h1>List of Models</h1> 
+    {{ newmodelbutton(label="Create New", class="") }}
+{% endblock %}
+
+
+    
+
+{% block pagecontent %}
+    <table id="modelist" class="table" >
 	<thead>
 	    <tr>
-		<th>Name</th><th>Version</th><th>Last Edited</th>
-		<th>Description</th><th>Edit</th>
+		<th>Name</th><th>Version</th><th>Description</th>
+		<th>Last Edited</th><th>Comment</th><th></th>
 	    </tr>
 	</thead>
-	<tbody>
+	{% for name, models in modelgroups %}
+	    {% if models | length > 1 %}
+		{% set target="modelgroup-"+name %}
+	    {% else %}
+		{% set target=none %}
+	    {% endif %}
 	    {% for model in models %}
-		{{ printmodel(model) }}
+		{% if loop.index0 == 0 %}
+		    <tbody> {{ printmodel(model, target) }} </tbody>
+		{% else %}
+		    {% if loop.index0 == 1 %}<tbody id="{{ target }}" class="collapse oldversions" >{% endif %}
+			{{ printmodel(model) }}
+		    {% if loop.revindex0 == 0 %}</tbody>{% endif %}    
+		{% endif %}
 	    {% endfor %}
-	</tbody>
+	{% endfor %}
     </table>
     
 {% endblock %}

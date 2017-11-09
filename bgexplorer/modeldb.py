@@ -6,7 +6,8 @@ import pymongo
 import re
 from pprint import pprint 
 import bson
-
+from datetime import datetime
+from collections import OrderedDict
 from .bgmodelbuilder.bgmodel import BgModel
 
 class ModelDB(object):
@@ -52,9 +53,12 @@ class ModelDB(object):
             self._database = self._client.get_database('test')
         self._collection = self._database.get_collection(self._collectionName)
         #make sure the collection is properly indexed
+        partialFilter = {'__modeldb_meta.temporary':False}
         self._collection.create_index((('name', pymongo.ASCENDING),
                                        ('version', pymongo.DESCENDING)),
-                                      unique=True);
+                                      name='name_version',
+                                      unique=True,
+                                      partialFilterExpression=partialFilter);
         
     def testconnection(self):
         """Make sure we're connected to the database, otherwise raise exception
@@ -116,7 +120,7 @@ class ModelDB(object):
         if not includetemp:
             query.update({'__modeldb_meta.temporary':False})
         result = self.get_raw_model(query,{'version':True})
-        return result['version'] if result else 0
+        return result['version'] if result else "0.0"
         
     def get_model(self, query, projection=None):
         """Load the model from query built into a BgModel object
@@ -126,7 +130,7 @@ class ModelDB(object):
         return BgModel.buildfromdict(raw) if raw else None
 
     #todo: implement password-locking for models    
-    def write_model(self, model, temp=True, bumpversion=1.0):
+    def write_model(self, model, temp=True, bumpversion="major"):
         """Write a modified model to the database.  Only temporary models
         may be directly modified. Attempting to overwrite a non-temporary
         model will result in a new model being generated
@@ -138,18 +142,27 @@ class ModelDB(object):
             temp (bool): If true, mark this entry as temporary. Existing non-
                 temporay models cannot become temporary
           
-            bumpversion (float): By how much should we increment the version 
-                number?  In general this should be a power of 10, i.e. `1` for
-                major bumps or `0.1` for minor bumps. Ignored for temp models.
+            bumpversion (str): One of "major" or "minor" 
         """
         self.testconnection()
         if isinstance(model, BgModel):
             model = model.todict()
         model['__modeldb_meta'] = {'temporary':temp}
+        model['editDetails']['date'] = datetime.utcnow().strftime("%F %R UTC")
         if not temp:
-            model['version'] = (self.get_current_version(model.get('name')) + 
-                                bumpversion)
-            
+            #figure out the version
+            oldversion = str(self.get_current_version(model.get('name')))
+            oldversion = [int(p) for p in oldversion.split('.')]
+            if len(oldversion) < 2:
+                oldversion.append(0)
+            if bumpversion == "minor":
+                newversion = "%d.%d"%(oldversion[0], oldversion[1]+1)
+            else: #treat any other argument as "major"
+                newversion = "%d.0"%(oldversion[0]+1)
+            model['version'] = newversion
+        else:
+            del model['version']
+                        
         if '_id' in model:
             #can only overwrite existing models if temporary!
             try:
@@ -185,12 +198,12 @@ class ModelDB(object):
                 raise KeyError("Model with id %s not found",
                                derivedFrom)
         else:
-            model = BgModel(name="<new>").todict()
+            model = BgModel(name="").todict()
             
         if '_id' in model:
             del model['_id']
             
-        self.write_model(model, temp=temp, bumpversion=1.0)
+        self.write_model(model, temp=temp, bumpversion="major")
         #should be able to just return model, but just to be safe
         return self.get_model(model['_id'])
         
@@ -222,9 +235,12 @@ class ModelDB(object):
         if not includetemp:
             match = {'$match': {'__modeldb_meta.temporary':False}}
             pipeline.append(match)
+        pipeline.append({'$sort': 
+                         OrderedDict((('name',pymongo.ASCENDING),
+                                      ('version',pymongo.DESCENDING)))
+                         })
         if mostrecentonly:
             pipeline.extend([
-                {'$sort': {'version': pymongo.DESCENDING}},
                 {'$group': {'_id':'$name', 'mostrecent': {'$first': '$$ROOT'}}},
                 {'$replaceRoot': {'newRoot': '$mostrecent'}}
             ])

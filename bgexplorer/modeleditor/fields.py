@@ -20,13 +20,13 @@ class DictField(TextAreaField):
         suggested_keys(dict): dictionary of suggested keys with descriptions
             will be presented to form, but deleted if left default
     """
-    def __init__(self, label=None, required_keys=None, suggested_keys=None,
+    def __init__(self, label=None, required_keys={}, suggested_keys={},
                  *args, **kwargs):
 
         super().__init__(label, *args, **kwargs)
 
-        self.required_keys = required_keys or {}
-        self.suggested_keys = suggested_keys or {}
+        self.required_keys = dict(required_keys)
+        self.suggested_keys = dict(suggested_keys)
 
         for key, val in self.required_keys.items():
             self.required_keys[key] = self.paramize(val+" (REQUIRED)")
@@ -47,7 +47,7 @@ class DictField(TextAreaField):
             if key not in self.data or self.data[key] == val:
                 raise ValidationError("Key '%s' is required"%key)
         for key, val in self.suggested_keys.items():
-            if self.data[key] == val:
+            if self.data.get(key) == val:
                 del self.data[key]
 
     def process_formdata(self, valuelist):

@@ -1,0 +1,80 @@
+{# reimplementation of bootstrap/base.html #}
+{% block doc -%}
+<!DOCTYPE html>
+<html{% block html_attribs %}{% endblock html_attribs %}>
+{%- block html %}
+  <head>
+    {%- block head %}
+	<title>{% block title %}{{title|default}}{% endblock title %}</title>
+
+	{%- block metas %}
+	    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	    <link rel="icon" href="{{ url_for('static', filename="favicon.ico") }}">
+	{%- endblock metas %}
+
+	{%- block styles %}
+	    <!-- Bootstrap -->
+	    <link href="{{bootstrap_find_resource('css/bootstrap.css', cdn='bootstrap')}}" rel="stylesheet">
+	    <style>
+	     nav img {max-height:50px}
+	    </style>
+	    {% block mystyles %}{% endblock %}
+	{%- endblock styles %}
+	
+	{% block scripts %}
+	    <script src="{{bootstrap_find_resource('jquery.js', cdn='jquery')}}"></script>
+	    <script src="{{bootstrap_find_resource('js/bootstrap.js', cdn='bootstrap')}}"></script>
+	    {% block myscripts %}{% endblock %}
+	{%- endblock scripts %}	
+    
+    {%- endblock head %}
+  </head>
+  <body{% block body_attribs %}{% endblock body_attribs %}>
+    {% block body -%}
+
+    {% block navbar %}
+	<nav class="navbar navbar-default" >
+	    <div class="container-fluid" >
+		<div class="navbar-header">
+		    <a class="navbar-left" href="https:bgexplorer.readthedocs.io/en/develop">
+			{% block brand %}
+			<img src="{{ url_for('static', filename="bgexplorer_brand.png") }}" alt="Background Explorer" 
+			class="brand" >
+			{% endblock %}
+		    </a>
+		    <a class="navbar-brand" href="{% block mybrandurl %}{% endblock %}">{% block mybrand %}{% endblock %}</a>
+		</div>
+		<div class="collapse navbar-collapse" id="navbarcontent" >
+		    <ul class="nav navbar-nav" >
+			<li><a href="{{ url_for('index') }}">Home</a></li>
+			{% block navbarlinks %}{% endblock %}
+		    </ul>
+		    {% block navbarextra %}{% endblock %}
+		</div>
+	    </div>
+	</nav>
+
+    {%- endblock navbar %}
+
+    {% block content -%}
+	<div id="content" class="container">
+	    <div id="pageheader" class="pageheader" >{% block pageheader %}{% endblock %}</div>
+	    <div id="pagecontent" >{% block pagecontent %}{% endblock %}</div>
+	    <div id="messages">
+		{% for cat,msg in get_flashed_messages(with_categories=true) %}
+		    <div class="alert alert-{{ cat }} alert-dismissable" >
+			{{ msg }}
+			<a href="#"  class="close" data-dismiss="alert" >
+			    &times;
+			</a>
+		    </div>
+		{% endfor %}
+	    </div>
+	</div>
+    {%- endblock content %}    
+
+    {%- endblock body %}
+  </body>
+{%- endblock html %}
+</html>
+{% endblock doc -%}

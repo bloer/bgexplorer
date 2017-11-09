@@ -1,7 +1,6 @@
 #python 2/3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from datetime import datetime
 from collections import namedtuple,OrderedDict
 
 import bson
@@ -35,6 +34,10 @@ class ModelEditor(object):
         self.bp.record(self.onregister)
         self.bp.context_processor(self.context_processor)
 
+        @self.bp.app_template_global()
+        def savemodelform(model):
+            return forms.SaveModelForm(obj=model, prefix='savemodel')
+
         self.modeldb = modeldb or ModelDB()
         
         #set up the spec registry and add the defaults
@@ -58,7 +61,7 @@ class ModelEditor(object):
                              methods=('GET', 'POST'))
         self.bp.add_url_rule(baseroute+'/save', 
                              view_func=self.savemodel,
-                             methods=('GET','POST',))
+                             methods=('POST',))
         self.bp.add_url_rule(baseroute+'/newcomponent', 
                              view_func=self.newcomponent,
                              methods=('POST',))
@@ -159,6 +162,23 @@ class ModelEditor(object):
                   (model._id, specid))
         return spec
 
+    def addlinks(self, form, modelid):
+        """Replace names in subfield forms with links"""
+        for field in form:
+            if hasattr(field,'entries'):
+                for entry in field:
+                    href=None
+                    if entry.form_class is forms.PlacementForm:
+                        href = url_for('.editcomponent',modelid=modelid,
+                                       componentid=entry['component'].data)
+                    elif entry.form_class is forms.BoundSpecForm:
+                        href = url_for('.editspec', modelid=modelid,
+                                       specid=entry['id'].data)
+                    if href:
+                        entry['name'].data = ("<a href='%s'>%s</a>"
+                                              %(href, entry['name'].data))
+
+                                              
 
     ##### modeleditor API #######
     #todo: implement some caching here!
@@ -183,21 +203,18 @@ class ModelEditor(object):
         validated
         """
         model = self.getmodelordie(modelid)
-        if 'date' in model.editDetails:
-            del model.editDetails['date']
-            form = forms.SaveModelForm(request.form, model)
-            if request.method == 'POST' and form.validate():
-                form.update_obj(model)
-                model.editDetails['date'] = str(datetime.now())
-                #this should already be set, but just to make sure:
-                model.version = self.modeldb.get_current_version(model.name)+1
-                self.modeldb.write_model(model, temp=False)
-                flash("Model %s version %d successfully saved"%(model.name, 
-                                                                model.version),
-                      'success')
-                return redirect(url_for("index"))
+        model.editDetails = {}
+        form = forms.SaveModelForm(request.form, obj=model, prefix='savemodel')
+        if request.method == 'POST' and form.validate():
+            form.populate_obj(model)
+            self.modeldb.write_model(model, temp=False, bumpversion="major")
+            flash("Model '%s' version %s successfully saved"%(model.name, 
+                                                            model.version),
+                  'success')
+            return redirect(url_for("index"))
 
-        return render_template('savemodel.html', model=model, form=form)
+        #we should only get here if the form failed...
+        return redirect(url_for('.editmodel', modelid=modelid))
 
     #todo: implement delete functionality
 
@@ -341,6 +358,7 @@ class ModelEditor(object):
         model = self.getmodelordie(modelid)
         comp = self.getcomponentordie(model, componentid)
         form = forms.get_form(request.form, comp)
+        self.addlinks(form, modelid)
         if request.method == 'POST' and form.validate():
             form.populate_obj(comp)
             self.modeldb.write_model(model)
@@ -362,6 +380,7 @@ class ModelEditor(object):
         if len(possibleforms) < 1:
             abort(404,"No form defined for class %s",type(spec).__name__)
         form = possibleforms[0](request.form, obj=spec)
+        self.addlinks(form, modelid)
         if request.method == 'POST' and form.validate():
             form.populate_obj(spec)
             self.modeldb.write_model(model)
@@ -399,7 +418,7 @@ class ModelEditor(object):
         #form = forms.BindSimDataForm(request.form)
         if request.method == 'POST': # and form.validate():
             istemp = self.modeldb.is_model_temp(modelid)
-            newid = str(self.modeldb.write_model(model, bumpversion=0.1, 
+            newid = str(self.modeldb.write_model(model, bumpversion="minor", 
                                                  temp=istemp))
             if istemp:
                 return redirect(url_for('.editmodel', modelid=newid))
