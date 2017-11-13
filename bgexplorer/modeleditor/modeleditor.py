@@ -138,12 +138,18 @@ class ModelEditor(object):
         return dict(spectypes=list(self.specregistry.keys()))
     
     ###### Utility functions for DB access ##########
-    def getmodelordie(self, modelid):
-        """try to get model with modelid from the db, else return 404"""
+    def getmodelordie(self, modelid, toedit=True):
+        """try to get model with modelid from the db, else return 404. 
+        If we're trying to edit this model (toedit=True) and it's not temp,
+        return a 403 forbidden
+        """
         #todo: enforce that the model is temporary
         model = self.modeldb.get_model(modelid)
         if not model:
             abort(404, "Model with ID %s not found"%modelid)
+        if toedit and not self.modeldb.is_model_temp(modelid):
+            abort(403, "Can not edit non-temporary model")
+            
         return model
 
     def getcomponentordie(self, model, compid):
@@ -402,7 +408,7 @@ class ModelEditor(object):
         if not simsdb:
             abort(501, "No registered SimulationsDB")
             
-        model = self.getmodelordie(modelid)
+        model = self.getmodelordie(modelid, toedit=False)
         simreqs = simsdb.attachsimdata(model.assemblyroot)
         matches = sum((r.matches for r in simreqs),[])
         #sort the requests by spec and assembly

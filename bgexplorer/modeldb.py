@@ -170,6 +170,7 @@ class ModelDB(object):
                     res = self._collection.replace_one({'_id':model['_id']}, 
                                                        model)
                 else:
+                    model['editDetails']['derivedFrom'] = model['_id']
                     del model['_id']
             except KeyError: #expected if this model isn't in the DB already
                 pass
@@ -200,12 +201,8 @@ class ModelDB(object):
         else:
             model = BgModel(name="").todict()
             
-        if '_id' in model:
-            del model['_id']
-            
-        self.write_model(model, temp=temp, bumpversion="major")
-        #should be able to just return model, but just to be safe
-        return self.get_model(model['_id'])
+        newid = self.write_model(model, temp=temp, bumpversion="major")
+        return self.get_model(newid)
         
     def get_models_list(self, includetemp=False, mostrecentonly=True,
                         projection=None):
