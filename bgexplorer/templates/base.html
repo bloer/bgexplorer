@@ -16,7 +16,12 @@
 	    <!-- Bootstrap -->
 	    <link href="{{bootstrap_find_resource('css/bootstrap.css', cdn='bootstrap')}}" rel="stylesheet">
 	    <style>
+	     html, body {height:100%}
+	     body {background-color: #D9EDF7}
+	     #content {background-color: white; margin-top:0px; min-height:90%}
+	     nav.navbar { margin-bottom: 0px; background-color: #FCF8E3}
 	     nav img {max-height:50px}
+	     
 	    </style>
 	    {% block mystyles %}{% endblock %}
 	{%- endblock styles %}
@@ -58,7 +63,7 @@
 
     {% block content -%}
 	<div id="content" class="container">
-	    <div id="pageheader" class="pageheader" >{% block pageheader %}{% endblock %}</div>
+	    <div id="pageheader" class="page-header" >{% block pageheader %}{% endblock %}</div>
 	    <div id="pagecontent" >{% block pagecontent %}{% endblock %}</div>
 	    <div id="messages">
 		{% for cat,msg in get_flashed_messages(with_categories=true) %}

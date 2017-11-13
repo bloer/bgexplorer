@@ -7,11 +7,12 @@
 
     {% block mystyles %}
 	<style>
+	 /* all this crap is needed to get scrolling to work */
 	 html, body {height:100%}
-	 div.container {height:100%}
-	 div.page-header {height:10%, overflow:hide}
-	 div.row {height:85%}
-	 div.page-header div.row {height:100%}
+	 div#content { height: 92% }
+	 /*div.page-header {height:10%, overflow:hide} */
+	 div#pagecontent {height:82%}
+	 div.row {height:99%}
 	 div.scroll {height:100%; overflow:auto}
 	 .childofactive, .parentofactive {background-color: #FCF8E3}
 	 div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
