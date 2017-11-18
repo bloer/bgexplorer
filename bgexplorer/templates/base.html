@@ -55,6 +55,11 @@
 			{% block navbarlinks %}{% endblock %}
 		    </ul>
 		    {% block navbarextra %}{% endblock %}
+		    {% if g.permalink %}
+			<ul class="nav navbar-nav navbar-right" >
+			    <li><a id="permalink" href="{{ g.permalink }}"><small>permalink to this page</small></a></li>
+			</ul>
+		    {% endif %}
 		</div>
 	    </div>
 	</nav>
@@ -74,6 +79,9 @@
 			</a>
 		    </div>
 		{% endfor %}
+	    </div>
+	    <div id="footer" >
+		{% block pagefooter %}{% endblock %}
 	    </div>
 	</div>
     {%- endblock content %}    

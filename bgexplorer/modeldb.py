@@ -106,12 +106,12 @@ class ModelDB(object):
            with the most recent first
         """
         result = []
-        projection = {'editDetails':True, 'derivedFrom':True}
+        projection = {'name': True, 'version': True, 'editDetails':True}
         while modelid:
             model = self.get_raw_model(modelid, projection)
             if model:
                 result.append(model)
-                modelid = model.get('derivedFrom', None)
+                modelid = model.get('editDetails', {}).get('derivedFrom',None)
         return result
 
     def get_current_version(self, modelname, includetemp=False):
@@ -178,7 +178,6 @@ class ModelDB(object):
         #can't use elif since might have been removed in previous step
         if '_id' not in model: 
             res = self._collection.insert_one(model)
-        
         #todo: test the response!
         return model.get('_id')
 

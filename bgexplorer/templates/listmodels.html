@@ -26,7 +26,7 @@
 
 {% macro printmodel(model, expandtarget, class="") %}
     <tr class="model {{ class }}">
-	<td>{{ model['name'] }}</td>
+	<td><a href="{{ url_for('modelviewer.overview', model=model, permalink=(not expandtarget)) }}">{{ model['name'] }}</a></td>
 	<td>{{ model['version'] }}
 	    {%- if expandtarget %} 
 		<button class="btn btn-default btn-xs collapsed" data-toggle="collapse" data-target="#{{ expandtarget }}" ></button>
@@ -58,7 +58,7 @@
 	</thead>
 	{% for name, models in modelgroups %}
 	    {% if models | length > 1 %}
-		{% set target="modelgroup-"+name %}
+		{% set target="modelgroup-"+name|replace(" ","_") %}
 	    {% else %}
 		{% set target=none %}
 	    {% endif %}

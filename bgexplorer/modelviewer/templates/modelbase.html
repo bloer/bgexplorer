@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% set longname = g.model.name + " v" + g.model.version %}
+
+{% block title %}bgexplorer: {{ g.model.name }}{% endblock %}
+
+{% block navbarextra %}
+    <p class="navbar-right navbar-text">Exploring '{{ longname }}'</p>
+{% endblock %}
+
+{% block navbarlinks %}
+    <li style="border-left:1px" ><a href="#">Overview</a></li>
+    <li><a href="{{ url_for('.componentview') }}" >Components</a></li>
+    <li><a href="{{ url_for('.emissionsoverview') }}" >Emissions</a></li>
+    <li><a href="{{ url_for('.simulationsoverview') }}" >Simulations</a></li>
+    <li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#">Results<span class="caret"></span></a>
+	<ul class="dropdown-menu">
+	    <li> <a href="#">Tables</a></li>
+	    <li> <a href="#">Spectra</a></li>
+	    <li> <a href="#">Pie charts</a></li>
+	</ul>
+    </li>
+{% endblock %}
+    
+    
+

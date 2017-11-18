@@ -3,6 +3,7 @@ from flask_bootstrap import Bootstrap
 import itertools
 
 from .modeleditor.modeleditor import ModelEditor
+from .modelviewer.modelviewer import ModelViewer
 from .modeldb import ModelDB
 from .bgmodelbuilder.simulationsdb.mongosimsdb import MongoSimsDB
 
@@ -19,13 +20,13 @@ def create_app(config_filename=None):
     modeldb = ModelDB(app=app)
     modeleditor = ModelEditor(app=app, modeldb=modeldb)
     simsdb = MongoSimsDB(modeldb._database['simdata'], app=app)
+    modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb)
 
     @app.route('/')
     def index():
         models = modeldb.get_models_list(mostrecentonly=False)
         mgroups = list((n,list(g)) for n, g in 
                         itertools.groupby(models, lambda m: m['name']))
-        print(mgroups)
         return render_template("listmodels.html", models=models, 
                                modelgroups=mgroups)
 

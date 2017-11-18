@@ -1,0 +1,41 @@
+{% extends "modelbase.html" %}
+
+{% block title %}Overview: {{ longname }}{% endblock %}
+
+{% block pageheader %}
+    <h1>{{ g.model.name }} <small>v{{ g.model.version }}</small></h1>
+    Last modified on {{ g.model.editDetails.get('date') }} by {{ g.model.editDetails.get('user') }}
+{% endblock %}
+
+{% block pagecontent %}
+    <h3>Description</h3>
+    <p>{{ g.model.description }}</p>
+    
+    <h3>Additional Details</h3>
+    <dl class="dl-horizontal" >
+	{% for key, val in g.model.editDetails.items() %}
+	    {% if key not in ("date", "user", "derivedFrom") %} 
+		<dt class="" >{{ key }}</dt>
+		<dd class="" >{{ val }}</dd>
+	    {% endif %}
+	{% endfor %}
+    </dl>
+    
+    {% if history %}
+	<h3>History</h3>
+	<table id="historytable" class="table table-compact">
+	    <thead>
+		<tr><th>Name</th><th>Comment</th><th>Saved</th></tr>
+	    </thead>
+	    <tbody>
+		{% for oldmodel in history %}<tr>
+		    <td><a href="{{ url_for('.overview', model=oldmodel, permalink=True) }}">
+			{{ oldmodel['name'] }} v{{ oldmodel['version'] }}</a>{%- if loop.index0==0 %} (current){%- endif -%}</td>
+		    <td>{{ oldmodel['editDetails']['comment'] }}</td>
+		    <td>{{ oldmodel['editDetails']['date'] }} by {{ oldmodel['editDetails']['user'] }}</td>
+		{% endfor %}</tr>
+		    
+	    </tbody>
+	</table>
+    {% endif %}
+{% endblock %}

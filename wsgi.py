@@ -14,5 +14,5 @@ if __name__ == '__main__':
     app.secret_key = "not very secret is it?"
     #force template reloading, even though it shouldn't be necessary
     templates = glob("bgexplorer/templates/*.html")
-    templates.extend(glob("bgexplorer/modeleditor/templates/*.html"))
+    templates.extend(glob("bgexplorer/*/templates/*.html"))
     app.run(host='0.0.0.0', port=5001, extra_files=templates)           
