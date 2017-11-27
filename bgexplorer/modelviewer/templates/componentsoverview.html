@@ -1,0 +1,33 @@
+{% extends "modelbase.html" %}
+
+
+{% block title %}Components{% endblock %}
+
+{% block pageheader %}
+    <h1> Components </h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <table class="table" id="componentstable">
+	<thead>
+	    <tr>
+		<th>Name</th><th>Weight</th><th>Description</th></tr>
+	    </tr>
+	</thead>
+	<tbody>{% for placement in [g.model.assemblyroot] recursive %}
+	    {% set component = placement.component or placement %}
+	    {% set weight = placement.weight or "" %}
+	    <tr class="comp" >
+		<td style="padding-left: {{loop.depth0}}em" >
+		    <a href="{{ url_for('.componentview', component=component) }}">{{ component.name }}</a>
+		</td>
+		<td>{{ weight }}</td>
+		<td>{{ component.description }}</td>
+		{% if component.components %}
+		    {{ loop(component.components) }}
+		{% endif %}
+	    </tr>
+	    
+	{% endfor %}</tbody>
+    </table>
+{% endblock %}

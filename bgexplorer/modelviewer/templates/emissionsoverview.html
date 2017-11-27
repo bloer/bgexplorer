@@ -1,4 +1,14 @@
 {% extends "modelbase.html" %}
+{% block mystyles %}
+    <style>
+     tr.spec { background-color:rgb(245, 245, 245) }
+     tr.subspec { background-color:initial }
+     tr.subspec td:first-child { padding-left: 2em; }
+     td .comp::before { content:", " }
+     td .comp:first-child::before { content:"" }
+    </style>
+{% endblock %}
+
 {% block title %}Emission Specs{% endblock %}
 
 {% block pageheader %}
@@ -6,5 +16,26 @@
 {% endblock %}
 
 {% block pagecontent %}
-    Content
+    <table class="table" id="emissionstable" >
+	<thead>
+	    <tr>
+		<th>Name</th><th>Category</th><th>Distribution</th><th>Spec</th><th>Rate</th><th>Components</th></tr>
+	    </tr>
+	</thead>
+	<tbody>{% for spec in g.model.specs.values() recursive %}
+	    <tr class="spec {%- if loop.depth0 %} subspec {% endif -%}" >
+		<td>{% if loop.depth0==0 %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif -%}
+		    {{ spec.name }}
+		{%- if loop.depth0==0 %}</a>{%- endif -%}</td>
+		<td>{{ spec.category }}</td>
+		<td>{{ spec.distribution }}</td>
+		<td>{{ spec.getfullspec() }}</td>
+		<td>{{ spec.getratestr(2) }}</td>
+		<td>{% for comp in spec.appliedto %}
+		    <a class="comp" href="{{ url_for('.componentview', component=comp) }}">{{ comp.name }}</a>
+		{% endfor %}</td>
+	    </tr>
+	    {% if spec.subspecs %}{{ loop(spec.subspecs) }}{% endif %}
+	{% endfor %}</tbody>
+    </table>
 {% endblock %}

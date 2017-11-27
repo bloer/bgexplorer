@@ -68,11 +68,16 @@ class ModelViewer(object):
                     values.setdefault('version', version)
                 else:
                     values.setdefault('version',self.defaultversion)
-                
+            #transform components, specs into IDs
+            if 'component' in values:
+                values['componentid'] = values.pop('component').id
+            if 'spec' in values:
+                values['specid'] = values.pop('spec').id
+            if 'match' in values:
+                values['matchid'] = values.pop('match').id
 
         @self.bp.url_value_preprocessor
         def find_model(endpoint, values):
-            print(values)
             query = None
             if 'modelid' in values:
                 query = values.pop('modelid')
@@ -97,21 +102,55 @@ class ModelViewer(object):
             return render_template('overview.html', history=history)
         
         @self.bp.route('/component/')
-        @self.bp.route('/component/<compid>') #should be uuid type?
-        def componentview(compid=None):
-            if compid:
-                component = utils.getcomponentordie(g.model, compid)
+        @self.bp.route('/component/<componentid>') #should be uuid type?
+        def componentview(componentid=None):
+            if componentid:
+                component = utils.getcomponentordie(g.model, componentid)
+                return render_template("componentview.html", 
+                                       component=component)
             else:
-                component = g.model.assemblyroot
-            return render_template("componentview.html", component=component)
+                return render_template("componentsoverview.html")
+
 
         @self.bp.route('/emissions/')
         def emissionsoverview():
             return render_template("emissionsoverview.html")
 
+        @self.bp.route('/emission/<specid>')
+        def emissionview(specid):
+            spec = utils.getspecordie(g.model, specid)
+            #find all simulation datasets associated to this spec
+            datasets = []
+            for comp in spec.appliedto:
+                for simd in comp.getsimdata(rebuild=False, children=False):
+                    if (simd.spec is spec 
+                        or simd.spec in getattr(spec,'subspecs',[])):
+                        for match in simd.matches:
+                            if match.dataset:
+                                datasets.append(match.dataset)
+            return render_template('emissionview.html', spec=spec, 
+                                   datasets=datasets)
+
         @self.bp.route('/simulations/')
         def simulationsoverview():
             return render_template("simulationsoverview.html")
+         
+        @self.bp.route('/dataset/<dataset>')
+        def datasetview(dataset):
+            detail = detail=self.simsdb.getdatasetdetails(dataset)
+            return render_template("datasetview.html", dataset=dataset, 
+                                   detail = detail)
+                                   
+        @self.bp.route('/simdatamatch/<matchid>')
+        def simdatamatchview(matchid):
+            match = utils.getsimdatamatchordie(g.model, matchid)
+            #might not be able to generate a link to a subspec, so build here
+            linkspec = match.request.spec
+            if not hasattr(linkspec,'id') or linkspec.id not in g.model.specs:
+                for spec in match.request.assemblyPath[-1].getspecs():
+                    if hasattr(spec,'subspecs') and linkspec in spec.subspecs:
+                        linkspec = spec
+                        break
+            return render_template("simdatamatchview.html", match=match,
+                                   linkspec=linkspec)
             
-        
-    

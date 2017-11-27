@@ -37,12 +37,20 @@ def getspecordie(model, specid):
     """try to find the compspec with ID specid in model or return 404"""
     spec = model.specs.get(specid)
     if not spec:
-        abort(404, "Model %s has no component soec with ID %s" %
+        abort(404, "Model %s has no component spec with ID %s" %
               (model._id, specid))
-        return spec
+    return spec
 
 def getdatasetordie(datasetid, simsdb=None):
     simsdb = simsdb or get_simsdb()
     if not simsdb:
         abort(501, "No registered simulations database")
     return simsdb.getdatasetdetails(dataset)
+
+def getsimdatamatchordie(model, matchid):
+    """try to find the SimDataMatch with matchid or return 404"""
+    match = model.simdatamatches.get(matchid)
+    if not match:
+        abort(404, "Model %s has no SimDataMatch with ID %s" %
+              (model._id, specid))
+    return match

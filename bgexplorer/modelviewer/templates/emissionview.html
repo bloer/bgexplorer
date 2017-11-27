@@ -1,0 +1,70 @@
+{% extends "modelbase.html" %}
+{% block title %}Emission Spec {{ spec.name }}{% endblock %}
+
+{% block pageheader %}
+    <h1> {{ spec.name }} <small>Radioactive Emission</small></h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <div class="row">
+	<div>
+	    <h3>General Info</h3>
+	    <dl class="dl-horizontal">
+		<dt>Name</dt> <dd> {{ spec.name }}</dd>
+		<dt>Category </dt>  <dd> {{ spec.category }}</dd>
+		<dt>Distribution </dt>  <dd> {{ spec.distribution }}</dd>
+		<dt>Comment </dt>  <dd> {{ spec.comment }}</dd>
+		<dt> </dt>  <dd> </dd>
+		<dt> </dt>  <dd> </dd>
+	    </dl>
+	    {% if spec.moreinfo %}
+		<h3>Additional Info</h3>
+		<dl class="dl-horizontal">
+		    {% for key,val in spec.moreinfo.items() %}
+			<dt>{{ key }}</dt><dd>{{ val }}</dd>
+		    {% endfor %}
+		</dl>
+	    {% endif %}
+	    
+	    {% if spec.appliedto %}
+		<h3>Associated with components:</h3>
+		<ul class="list-group" >{% for comp in spec.appliedto %}
+		    <li class="component list-group-item">
+			<a href="{{ url_for('.componentview',component=comp) }}">{{ comp.name }}</a>
+			{{ comp.description }}
+		    </li>
+		{% endfor %}</ul>
+	    {% endif %}
+	    
+	    {% if datasets %}
+		<h3>Associated with simulation datasets:</h3>
+		<ul class="list-group" >{% for dataset in datasets %}
+		    <li class="dataset list-group-item">
+			<a href="{{ url_for('.datasetview', dataset=dataset) }}">{{ dataset }}</a>
+		    </li>
+		{% endfor %}</ul>
+	    {% endif %}
+	    <h3>Specification</h3>
+	    <dl class="dl-horizontal" >
+		<dt> Spec</dt>  <dd>{{ spec.getfullspec() }} </dd>
+		<dt> Rate</dt>  <dd>{{ spec.getratestr() }}</dd>
+	    </dl>
+	    
+	    {% if spec.subspecs %}
+		<h3>Subspecs</h3>
+		<table class="table table-condensed">
+		    <thead>
+			<tr><th>Name</th><th>Spec</th><th>Rate</th></tr>
+		    </thead>
+		    <tbody>{% for subspec in spec.subspecs %}
+			<tr class="subspec">
+			    <td>{{ subspec.name }}</td>
+			    <td>{{ subspec.getfullspec() }}</td>
+			    <td>{{ subspec.getratestr() }}</td>
+			</tr>
+		    {% endfor %}</tbody>
+		</table>
+	    {% endif %}
+	</div><!-- end column -->
+    </div><!-- end row -->
+{% endblock %}

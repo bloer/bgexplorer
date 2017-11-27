@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block navbarlinks %}
-    <li style="border-left:1px" ><a href="#">Overview</a></li>
+    <li style="border-left:1px" ><a href="{{ url_for('.overview') }}">Overview</a></li>
     <li><a href="{{ url_for('.componentview') }}" >Components</a></li>
     <li><a href="{{ url_for('.emissionsoverview') }}" >Emissions</a></li>
     <li><a href="{{ url_for('.simulationsoverview') }}" >Simulations</a></li>

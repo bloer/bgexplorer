@@ -1,4 +1,12 @@
 {% extends "modelbase.html" %}
+
+{% block mystyles %}
+    <style>
+	td .breadcrumb { margin:0px; padding:0px }
+    </style>
+{% endblock %}
+
+
 {% block title %}Simdata{% endblock %}
 
 {% block pageheader %}
@@ -6,5 +14,36 @@
 {% endblock %}
 
 {% block pagecontent %}
-    Content
+    <table class="table" id="simdatatable">
+	<thead>
+	    <tr><th>Placement</th><th>Emission Spec<th>Emission Rate (/day)</th>
+		<th>Query</th><th>Dataset</th><th>Livetime</th></tr>
+	</thead>
+	<tbody>{% for request in g.model.assemblyroot.getsimdata() %}{% for match in request.matches %}
+	    <tr class="simdata">
+		{% if loop.index0 == 0 %}
+		<td><ol class="breadcrumb assemblyPath">
+		    {%- for comp in request.assemblyPath -%}
+			<li><a href="{{ url_for('.componentview', component=comp) }}" class="component">
+			    {{ comp.name }}
+			</a></li>
+		    {%- endfor -%}
+		</ol></td>
+		<td class="spec">{{ request.spec.name }} FIXME</td>
+		<td>{{ "%.3e" | format(request.emissionrate.to('1/day').m) }}</td>
+		{% else %}
+		<td colspan="3"></td>
+		{% endif %}
+		<td class="query" >
+		    <a href="{{ url_for('.simdatamatchview', match=match) }}">{{ match.query }}</a>
+		</td>
+		<td class="dataset" >{% if match.dataset -%}
+		    <a href="{{ url_for('.datasetview',dataset=match.dataset) }}">{{ match.dataset }}</a>
+		{%- endif -%}</td>
+		<td class="livetime" data-livetime="{{ match.livetime.to('day').m }}">
+		    {{ match.livetime.to('day') }}
+		</td>
+	    </tr>
+	{% endfor %}{% endfor %}</tbody>
+    </table>
 {% endblock %}
