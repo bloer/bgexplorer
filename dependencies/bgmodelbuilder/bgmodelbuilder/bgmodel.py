@@ -22,7 +22,7 @@ class BgModel(object):
     def __init__(self, name=None, assemblyroot=None, 
                  version=0, description='',
                  derivedFrom=None, editDetails=None,
-                 components=None, specs=None,
+                 components=None, specs=None,simdatamatches=None,
                  sanitize=True):
         """Store additional info about the model for bookeeping. 
         Params:
@@ -36,6 +36,7 @@ class BgModel(object):
                 (e.g. username, date, comment); 
             components (dict): dictionary mapping IDs to components
             specs (dict): dictionary mapping IDs to CompSpecs
+            simdatamatches(dict): dictionary mapping IDs to SimDataMatch objects
             sanitize(bool): add cross references, etc to model on creation
         """
         
@@ -47,6 +48,7 @@ class BgModel(object):
         self.editDetails = editDetails or {}
         self.components = components or {}
         self.specs = specs or {}
+        self.simdatamatches = simdatamatches or {}
         if sanitize:
             self.sanitize()
         
@@ -82,11 +84,14 @@ class BgModel(object):
 
         return res
     
-    def sanitize(self, comp=None):
+    def sanitize(self, comp=None, updatesimdata=False):
         """Make sure that all objects are fully built and registered"""
 
         if not comp:
             comp = self.assemblyroot
+
+        if comp is self.assemblyroot and updatesimdata:
+            comp.getsimdata(path=(comp,), rebuild=True, children=True)
 
         self.connectreferences(comp)
 
@@ -99,6 +104,11 @@ class BgModel(object):
             self.registerobject(spec, self.specs)
             #todo: should we use weakrefs instead? 
             spec.appliedto.add(comp)
+
+        for simrequest in comp.getsimdata(path=None, rebuild=False, 
+                                          children=False):
+            for match in simrequest.matches:
+                self.registerobject(match, self.simdatamatches)
 
         #now recurse for subcomponents in assembly
         if hasattr(comp, '_components'):
@@ -129,7 +139,7 @@ class BgModel(object):
         
         #first make sure all objects are registered and built sanely
         if sanitize:
-            self.sanitize()
+            self.sanitize(updatesimdata=True)
         
         #now convert all objects to dicts, and all references to IDs
         result = copy.copy(self.__dict__)
@@ -139,7 +149,7 @@ class BgModel(object):
         {key: self.pack(spec) for key, spec in self.specs.items()}
         result['components'] = \
         {key: self.pack(comp) for key, comp in self.components.items()}
-
+        del result['simdatamatches'] #these are kept by the components
         return result
 
     def connectreferences(self, comp):
