@@ -182,7 +182,8 @@ class CombinedSpec(ComponentSpec):
     
     @property
     def err(self):
-        return sqrt(sum(spec.err**2 for spec in self._subspecs))
+        return (sum((spec.err*spec.rate)**2 for spec in self._subspecs)**0.5 
+                / self.rate).m
     
     @property
     def islimit(self):
@@ -456,8 +457,11 @@ class CosmogenicSource(RadioactiveContam):
         pass
    
     def getfullspec(self):
-        return "exposure=%s, cooldown=%s, integration=%s" %\
-        (self.exposure, self.cooldown, self.integration)
+        #return "exposure=%s, cooldown=%s, integration=%s" %\
+        #(self.exposure, self.cooldown, self.integration)
+        #TODO: find a way to make standalone and subspec make sense
+        return "halflife=%s, activationrate=%s" %\
+            (self.isotope.halflife, self.isotope.activationrate)
 
     def __repr__(self):
         return "CosmogenicSource(%s, %s)"%(self.name, self.getfullspec())
