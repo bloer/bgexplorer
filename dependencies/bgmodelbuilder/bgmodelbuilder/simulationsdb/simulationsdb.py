@@ -33,6 +33,8 @@ class SimulationsDB(object):
     Auxiliary functions include:
     * listing the types of calculated quantities that the class knows how to 
       handle (Not yet implemented)
+
+    TODO: Add an argument to attach a caching layer here
     
     """
     
@@ -135,6 +137,10 @@ class SimulationsDB(object):
         raise NotImplementedError
                     
         
+    def getdatasetdetails(self, datasetid):
+        """Return an object with detailed info about a dataset"""
+        raise NotImplementedError
+    
     def defaultquery(self, request):
         """Generate the default query for the associated component, spec"""
         pass

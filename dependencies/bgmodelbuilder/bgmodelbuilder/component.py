@@ -349,8 +349,6 @@ class Placement(object):
             weight (numeric): Usually, how many of this component, but could 
                 be fractional in some cases
             querymod (dict): modifier to DB query to locate sim datasets
-            simdata (dict): map simulation data to specs for this component
-                should have the form {spec: simdata}
             
         """
         self.parent = parent
@@ -500,8 +498,14 @@ class Assembly(BaseComponent):
         
     def isparentof(self, component, deep=False):
         """Is this component within our owned tree?"""
-        return (component is self 
-                or component in self.getcomponents(deep=deep, withweight=False))
+        if component is self:
+            return True
+        for sub in self.getcomponents(deep=False):
+            if sub == component:
+                return True
+            if deep and sub.isparentof(component, deep=deep):
+                return True
+        return False
     
     def passingselector(self, selector=None):
         """ Override leaf-level method to add component weights """
@@ -523,27 +527,26 @@ class Assembly(BaseComponent):
             passing.extend([(c,s,w*weight) for c,s,w in childpass])
         return passing
     
-    def gethierarchyto(self,component, includeroot=True, includeleaf=True):
+    def gethierarchyto(self,component, placements=False):
         """Find how this component is related to a parent
-        Note that the function returns the first path found to the component. 
-        In the case of multiply-placed components, there may be additional 
-        valid paths. 
+        Returns None if component can not be reached or a list of tuples
+        containing all possible routes. 
+        If `placements` is True, return tuple of placements instead of 
+        components. 
         """
         if not self.isparentof(component,deep=True):
             return None
-        tree = [self] if includeroot else []
-        for subcomp in self.getcomponents(deep=False):
+        result = []
+        tree = tuple() if placements else (self,)
+        for placement in self.components:
+            subcomp = placement.component
+            mytree = tree+(placement if placement else subcomp,)
             if subcomp is component:
-                break
-            elif hasattr(subcomp,'gethierarchyto'):
-                subtree = subcomp.gethierarchyto(component, includeroot=True, 
-                                                 includeleaf=False)
-                if subtree:
-                    tree.extend(subtree)
-                    break
-        if includeleaf:
-            tree.append(component)
-        return tree
+                result.append(mytree)
+            elif subcomp.isparentof(component, deep=True):
+                for subtree in subcomp.gethierarchyto(component, placements):
+                    result.append(mytree+subtree)
+        return result
         
     def getspecs(self, deep=False, children=False):
         result = super().getspecs(deep=deep)
