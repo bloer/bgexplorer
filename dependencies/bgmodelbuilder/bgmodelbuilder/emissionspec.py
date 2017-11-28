@@ -122,8 +122,7 @@ class EmissionSpec(Mappable):
         if self.normfunc:
             if callable(self.normfunc): #its a function
                 multiplier = self.normfunc(component)
-            elif (normfunc == "piece" or numfunc == "perpiece" 
-                  or normfunc == "per piece" or normfunc == 'per-piece'):
+            elif self.normfunc in ("piece","perpiece","per piece","per-piece"):
                 multiplier = 1
             elif type(self.normfunc) is str:
                 #evaluate it. the __builtins__ thing somewhat protects 
