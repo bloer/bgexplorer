@@ -14,17 +14,15 @@
 		<th>Name</th><th>Weight</th><th>Description</th></tr>
 	    </tr>
 	</thead>
-	<tbody>{% for placement in [g.model.assemblyroot] recursive %}
-	    {% set component = placement.component or placement %}
-	    {% set weight = placement.weight or "" %}
+	<tbody>{% for component,weight in [(g.model.assemblyroot,'')] recursive %}
 	    <tr class="comp" >
 		<td style="padding-left: {{loop.depth0}}em" >
 		    <a href="{{ url_for('.componentview', component=component) }}">{{ component.name }}</a>
 		</td>
 		<td>{{ weight }}</td>
 		<td>{{ component.description }}</td>
-		{% if component.components %}
-		    {{ loop(component.components) }}
+		{% if component.getcomponents %}
+		    {{ loop(component.getcomponents(deep=False, withweight=True)) }}
 		{% endif %}
 	    </tr>
 	    

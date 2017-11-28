@@ -10,7 +10,12 @@
 
 {% block navbarlinks %}
     <li style="border-left:1px" ><a href="{{ url_for('.overview') }}">Overview</a></li>
-    <li><a href="{{ url_for('.componentview') }}" >Components</a></li>
+    <li class="dropdown" ><a class="dropdown-toggle" data-toggle="dropdown" href="#" >Components<span class="caret"></span></a>
+	<ul class="dropdown-menu" >
+	    <li> <a href="{{ url_for('.componentview') }}" >Quick List</a></li>
+	    <li> <a href="{{ url_for('.billofmaterials') }}">Bill Of Materials</a></li>
+	</ul>
+    </li>
     <li><a href="{{ url_for('.emissionsoverview') }}" >Emissions</a></li>
     <li><a href="{{ url_for('.simulationsoverview') }}" >Simulations</a></li>
     <li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#">Results<span class="caret"></span></a>
