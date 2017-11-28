@@ -34,7 +34,7 @@ def getcomponentordie(model, compid):
     return comp
 
 def getspecordie(model, specid):
-    """try to find the compspec with ID specid in model or return 404"""
+    """try to find the emissionspec with ID specid in model or return 404"""
     spec = model.specs.get(specid)
     if not spec:
         abort(404, "Model %s has no component spec with ID %s" %

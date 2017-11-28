@@ -1,7 +1,7 @@
 import unittest
 
 from ..component import Component, Assembly
-from ..compspec import RadioactiveContam, CombinedSpec
+from ..emissionspec import RadioactiveContam, CombinedSpec
 from ..bgmodel import BgModel
 from ..common import units
 from ..simulationsdb import SimulationsDB, SimDataMatch

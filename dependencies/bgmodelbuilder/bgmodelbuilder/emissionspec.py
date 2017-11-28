@@ -18,7 +18,7 @@ from math import sqrt
 
 
 
-class ComponentSpec(Mappable):
+class EmissionSpec(Mappable):
     """ Define a specification to determine emissions from some component.
     
     Each component will define a list of specs mapping to one or more
@@ -41,7 +41,7 @@ class ComponentSpec(Mappable):
                  category="", comment="", moreinfo=None,
                  appliedto=None,
                  **kwargs):
-        """Make a new ComponentSpec
+        """Make a new EmissionSpec
 
         Args:
             name (str): Usually the name of the isotope
@@ -75,7 +75,7 @@ class ComponentSpec(Mappable):
         return "%s('%s')"%(type(self).__name__, self.name)
         
     def __repr__(self):
-        return ("ComponentSpec('%s',distribution='%s',category='%')"
+        return ("EmissionSpec('%s',distribution='%s',category='%')"
                 %(self.name, self.distribution, self.category))
         
     def getcomment(self):
@@ -166,7 +166,7 @@ class ComponentSpec(Mappable):
 
         
 
-class CombinedSpec(ComponentSpec):
+class CombinedSpec(EmissionSpec):
     """Utility class to group multiple specs into one"""
     def __init__(self,name="",subspecs=[],**kwargs):
         self._subspecs = []
@@ -212,7 +212,7 @@ class CombinedSpec(ComponentSpec):
     _copy_attrs = ['normfunc', 'distribution', 'category', 'appliedto']
     
     def addspec(self,spec):
-        if not isinstance(spec, ComponentSpec):
+        if not isinstance(spec, EmissionSpec):
             spec = buildspecfromdict(spec)
         #todo: is this really a good plan??
         for attr in self._copy_attrs:
@@ -252,7 +252,7 @@ class RadioactiveIsotope(Mappable):
         self.halflife = ensure_quantity(halflife, units.seconds)
         self.name = name        
 
-class RadioactiveContam(ComponentSpec):
+class RadioactiveContam(EmissionSpec):
     """ Spec for a (long-lived) radioactive isotope.
     
     The specification is defined by the isotope name, the distribution 
@@ -539,7 +539,7 @@ class CosmogenicActivation(CombinedSpec):
         return result
         
 def buildspecfromdict(args):
-    """Construct a ComponentSpec from an exported dictionary"""
+    """Construct a EmissionSpec from an exported dictionary"""
     #todo: this is pretty crude and will probably break...
     return eval(args.pop('__class__'))(**args)
     

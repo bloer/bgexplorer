@@ -12,7 +12,7 @@ except:
 
 from ..simulationsdb.mongosimsdb import MongoSimsDB, MatchOverride
 from ..component import Component
-from ..compspec import RadioactiveContam
+from ..emissionspec import RadioactiveContam
 from .. import units
 
 #TODO: Don't hardcode the DB connection parameters

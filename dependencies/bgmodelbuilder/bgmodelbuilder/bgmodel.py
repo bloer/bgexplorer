@@ -16,7 +16,7 @@ import copy
 import uuid
 
 from .component import buildcomponentfromdict, Assembly
-from .compspec import ComponentSpec, buildspecfromdict
+from .emissionspec import EmissionSpec, buildspecfromdict
 
 class BgModel(object):
     def __init__(self, name=None, assemblyroot=None, 
@@ -167,7 +167,7 @@ class BgModel(object):
                     simdata.assemblyPath = tuple(self.components.get(c, c) 
                                                  for c in simdata.assemblyPath)
                 if (hasattr(simdata, 'spec') 
-                    and not isinstance(simdata.spec,ComponentSpec)):
+                    and not isinstance(simdata.spec,EmissionSpec)):
                     #this may refer to a subspec of boundspec.spec
                     if getattr(boundspec.spec,'id',None) == simdata.spec:
                         simdata.spec = boundspec.spec

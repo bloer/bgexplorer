@@ -1,25 +1,25 @@
 import unittest
 import json
 
-from .. import compspec
-from ..compspec import units
+from .. import emissionspec
+from ..emissionspec import units
 
-class TestCompSpec(unittest.TestCase):
+class TestEmissionspec(unittest.TestCase):
     def setUp(self):
         """Build some simple specs"""
-        self.radio = compspec.RadioactiveContam("U238", rate="10*Bq/kg")
-        self.radio1 = compspec.RadioactiveContam("Th232", rate="15*Bq/kg")
-        self.combo = compspec.CombinedSpec("combo",
+        self.radio = emissionspec.RadioactiveContam("U238", rate="10*Bq/kg")
+        self.radio1 = emissionspec.RadioactiveContam("Th232", rate="15*Bq/kg")
+        self.combo = emissionspec.CombinedSpec("combo",
                                            subspecs=[self.radio, self.radio1])
-        self.radon = compspec.RadonExposure(radonlevel="130 Bq/m^3",
+        self.radon = emissionspec.RadonExposure(radonlevel="130 Bq/m^3",
                                             exposure="300 days")
-        self.cosmotopes = [compspec.CosmogenicIsotope(name='Co60', 
+        self.cosmotopes = [emissionspec.CosmogenicIsotope(name='Co60', 
                                              activationrate="30/kg/day",
                                              halflife="100 year"),
                            {'name':'Mn54', 'activationrate':"3/kg/day",
                             'halflife':'1 year'},
                            ]
-        self.cosmo = compspec.CosmogenicActivation(isotopes=self.cosmotopes,
+        self.cosmo = emissionspec.CosmogenicActivation(isotopes=self.cosmotopes,
                                                    exposure="200 days")
         self.specs = [self.radio, self.combo, self.radon, self.cosmo]
 
@@ -31,7 +31,7 @@ class TestCompSpec(unittest.TestCase):
             self.assertIsInstance(export, dict)
             string = json.dumps(export)
             self.assertIsInstance(string, str)
-            clone = compspec.buildspecfromdict(export)
+            clone = emissionspec.buildspecfromdict(export)
             self.assertIs(type(spec), type(clone))
             self.assertEqual(spec.todict(), clone.todict())
             self.assertEqual(spec.rate, clone.rate)

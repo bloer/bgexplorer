@@ -14,7 +14,7 @@ import copy
 
 from ..mappable import Mappable
 from ..common import to_primitive, ensure_quantity
-from .. import component, compspec
+from .. import component, emissionspec
 
  
 class SimDataMatch(Mappable):
@@ -69,7 +69,7 @@ class SimDataRequest(object):
     Args:
         assemblyPath (tuple): Path from assembly root to component which "owns"
                               the specs, ordered from branch to leaf
-        spec (ComponentSpec): Reference to the relevant spec with non-zero 
+        spec (EmissionSpec): Reference to the relevant spec with non-zero 
                               emission rate
         weight (float):       Total weight of the leaf component summed over the
                               assembly path. Will be calculated if not provided
@@ -122,7 +122,7 @@ class SimDataRequest(object):
 
     def _calcemissionrate(self):
         if (self.assemblyPath 
-            and isinstance(self.spec, compspec.ComponentSpec)
+            and isinstance(self.spec, emissionspec.EmissionSpec)
             and self.weight is not None):
             return self.weight * self.spec.emissionrate(self.component)
         return None

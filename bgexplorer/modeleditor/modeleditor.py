@@ -15,7 +15,7 @@ from . import forms
 from .widgets import is_hidden_field 
 from ..modeldb import ModelDB
 from ..bgmodelbuilder.component import Component, Assembly
-from ..bgmodelbuilder import compspec
+from ..bgmodelbuilder import emissionspec
 from ..utils import get_simsdb
 
 
@@ -42,15 +42,15 @@ class ModelEditor(object):
         
         #set up the spec registry and add the defaults
         self.specregistry = OrderedDict()
-        self.registerspectype(compspec.CombinedSpec, 
+        self.registerspectype(emissionspec.CombinedSpec, 
                               forms.RadioactiveContamForm,
                               "RadioactiveContam")
-        self.registerspectype(compspec.RadonExposure, 
+        self.registerspectype(emissionspec.RadonExposure, 
                               forms.RadonExposureForm)
-        self.registerspectype(compspec.CosmogenicActivation, 
+        self.registerspectype(emissionspec.CosmogenicActivation, 
                               forms.CosmogenicActivationForm)
         #dust is not well developed yet...
-        #self.registerspectype(compspec.DustAccumulation, 
+        #self.registerspectype(emissionspec.DustAccumulation, 
         #forms.DustAccumulationForm)
 
         #apply all our routes
@@ -123,10 +123,10 @@ class ModelEditor(object):
         app.register_blueprint(self.bp, url_prefix=url_prefix)
 
     def registerspectype(self, cls, form, name=None):
-        """Register a new ComponentSpec class and form for editing
+        """Register a new EmissionSpec class and form for editing
         Args:
-            cls: class or constructor, should inherit from ComponentSpec
-            form: WTForm for editing, should inherit from CompSpecForm
+            cls: class or constructor, should inherit from EmissionSpec
+            form: WTForm for editing, should inherit from EmissionspecForm
             name (str): Name for this class, if None, use cls.__name__
         """
         name = name or cls.__name__
@@ -161,7 +161,7 @@ class ModelEditor(object):
         return comp
 
     def getspecordie(self, model, specid):
-        """try to find the compspec with ID specid in model or return 404"""
+        """try to find the emissionspec with ID specid in model or return 404"""
         spec = model.specs.get(specid)
         if not spec:
             abort(404, "Model %s has no component soec with ID %s" %
@@ -305,7 +305,7 @@ class ModelEditor(object):
         else:
             spectype = request.values.get('type', 'RadioactiveContam')
             if spectype not in self.specregistry:
-                abort(404, "Unknown ComponentSpec type ", spectype)
+                abort(404, "Unknown EmissionSpec type ", spectype)
             newspec = self.specregistry[spectype].cls()
 
         model.specs[newspec.id] = newspec
