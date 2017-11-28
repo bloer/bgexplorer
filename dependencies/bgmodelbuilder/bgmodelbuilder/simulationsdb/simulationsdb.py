@@ -122,7 +122,7 @@ class SimulationsDB(object):
 
 
     def evaluate(self, values, matches):
-        """Evaluate the reduced sum for values over the list of compspecs
+        """Evaluate the reduced sum for values over the list of emissionspecs
         Args:
             values (list): list of identifiers for values. E.g., names
                            of columns in the db entries

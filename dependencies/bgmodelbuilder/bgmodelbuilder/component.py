@@ -25,7 +25,7 @@ def selectany(comp=None, spec=None):
 class BoundSpec(object):
     """Represents a spec bound to a component with querymods.
     Args:
-        spec (ComponentSpec): Spec to attach to component
+        spec (EmissionSpec): Spec to attach to component
         querymod:  Additional info for simulationsDB matching
         simdata:   List of SimDataRequest objects for binding simulation 
                    data to spec's subspecs
@@ -76,9 +76,9 @@ class BaseComponent(Mappable):
             description (str): longer descriptive string
             comment (str): describe current implementation or status
             moreinfo (dict): dictionary of additional metadata
-            specs (list): ComponentSpecifications attached to this component
-                Each item in the list may be either a ComponentSpecification 
-                or a (ComponentSpecification, querymod) pair
+            specs (list): EmissionSpecifications attached to this component
+                Each item in the list may be either a EmissionSpecification 
+                or a (EmissionSpecification, querymod) pair
             querymod (dict): modify the default query to find ConversionEffs
                 for all specs associated with this component. See the 
                 specific DB implementation for the expected format
@@ -134,7 +134,7 @@ class BaseComponent(Mappable):
 
     def delspec(self, spec):
         """Remove this spec from our reference. type(spec) can be a 
-        ComponentSpec or index"""
+        EmissionSpec or index"""
         if type(spec) is int:
             #treat as index
             spec = self._specs[spec]
@@ -177,7 +177,7 @@ class BaseComponent(Mappable):
         """
         Get a list of all component specifications that pass the given selector
         Args:
-            selector(function): accepts a Component and ComponentSpecification
+            selector(function): accepts a Component and EmissionSpecification
                                 and returns true or false
         Returns:
             passing (list): list of (component, spec, weight) tuples that
