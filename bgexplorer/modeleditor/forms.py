@@ -11,7 +11,7 @@ from wtforms import Form
 from flask_wtf import FlaskForm
 
 from  ..bgmodelbuilder import component
-from ..bgmodelbuilder import compspec
+from ..bgmodelbuilder import emissionspec
 
 from .fields import (DictField, JSONField, StaticField, validate_units, 
                      NoValSelectField )
@@ -58,7 +58,7 @@ class BoundSpecForm(Form):
     category = NoValSelectField("Category", render_kw={'class':'form-control'},
                                 choices=copy(spectypes),
                                 widget=StaticIfExists(Select()))
-    distribution = StringField("Dist.", default=(compspec.ComponentSpec.
+    distribution = StringField("Dist.", default=(emissionspec.EmissionSpec.
                                                  _default_distribution),
                                widget=StaticIfExists(dist_widget),
                                render_kw={'class':'form-control'})
@@ -70,7 +70,7 @@ class BoundSpecForm(Form):
     def populate_obj(self, obj):
         spec = self.id.data
         if not spec or spec == str(None):
-            spec = compspec.buildspecfromdict({
+            spec = emissionspec.buildspecfromdict({
                 '__class__': self.category.data,
                 'name': self.name.data,
                 'distribution': self.distribution.data,
@@ -163,13 +163,13 @@ class AssemblyForm(BaseComponentForm):
                            render_kw={'_class':"table table-condensed"})
     
 
-############ ComponentSpec forms ##################
+############ EmissionSpec forms ##################
 #distribution_choices = [(d,d) for d 
-#                        in compspec.ComponentSpec._distribution_types]
+#                        in emissionspec.EmissionSpec._distribution_types]
 #distribution_choices = [(d,d) for d in ('bulk','surface_in','surface_out')]
 dist_choices = ('bulk', 'surface_in', 'surface_out')
 
-class CompSpecForm(FlaskForm):
+class EmissionspecForm(FlaskForm):
     name = StringField("Name", [validators.required()])
     distribution = StringField("Distribution",[validators.required()],
                                description=("Choices are suggestions; "
@@ -203,9 +203,9 @@ class RadioactiveIsotopeForm(Form):
     islimit = BooleanField("Limit?",
                            description="Is this a measurement upper limit?")
 
-class RadioactiveContamForm(CompSpecForm):
+class RadioactiveContamForm(EmissionspecForm):
     subspecs = FieldList(FormField(RadioactiveIsotopeForm,
-                                   default=compspec.RadioactiveContam), 
+                                   default=emissionspec.RadioactiveContam), 
                          min_entries=1,
                          label="Isotopes",
                          widget=SortableTable(),
@@ -213,9 +213,9 @@ class RadioactiveContamForm(CompSpecForm):
     
                                    
                    
-defradexp = compspec.RadonExposure()
-mode_choices = [(d,d) for d in compspec.RadonExposure._mode_types]
-class RadonExposureForm(CompSpecForm):
+defradexp = emissionspec.RadonExposure()
+mode_choices = [(d,d) for d in emissionspec.RadonExposure._mode_types]
+class RadonExposureForm(EmissionspecForm):
     radonlevel = StringField("Radon Level", 
                              [validate_units(defradexp.radonlevel),
                               validators.required()])
@@ -238,8 +238,8 @@ class CosmogenicIsotopeForm(Form):
                                  description=("Sea level activation "
                                               "atoms/mass/time"))
     
-defcosmic = compspec.CosmogenicActivation()
-class CosmogenicActivationForm(CompSpecForm):
+defcosmic = emissionspec.CosmogenicActivation()
+class CosmogenicActivationForm(EmissionspecForm):
     exposure = StringField("Exposure time", 
                            [validate_units(defcosmic.exposure),
                             validators.required()])
@@ -248,7 +248,7 @@ class CosmogenicActivationForm(CompSpecForm):
     integration = StringField("Measurement time",
                              [validate_units(defcosmic.integration)])
     isotopes = FieldList(FormField(CosmogenicIsotopeForm,
-                                   default=compspec.CosmogenicIsotope),
+                                   default=emissionspec.CosmogenicIsotope),
                          min_entries=1,
                          label="Isotopes",
                          widget=SortableTable(),
@@ -270,7 +270,7 @@ def get_form(form, obj):
     """Get the correct form for a component
     Args:
         form: formdata returned from request, passed to Form class
-        obj:  object to populate, should be BaseComponent or CompSpec
+        obj:  object to populate, should be BaseComponent or Emissionspec
     """
     cls = None
     if isinstance(obj, component.Component):
