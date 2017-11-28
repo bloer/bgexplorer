@@ -2,7 +2,7 @@ import unittest
 import json
 
 from ..component import Component, Assembly
-from ..compspec import RadioactiveContam
+from ..emissionspec import RadioactiveContam
 from ..bgmodel import BgModel
 from ..common import units
 
