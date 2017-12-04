@@ -14,7 +14,7 @@
 
 	{%- block styles %}
 	    <!-- Bootstrap -->
-	    <link href="{{bootstrap_find_resource('css/bootstrap.css', cdn='bootstrap')}}" rel="stylesheet">
+        <link href="{{ url_for('static',filename='css/bootstrap.min.css') }}" rel="stylesheet">
 	    <style>
 	     html, body {height:100%}
 	     body {background-color: #D9EDF7} 
@@ -27,8 +27,8 @@
 	{%- endblock styles %}
 	
 	{% block scripts %}
-	    <script src="{{bootstrap_find_resource('jquery.js', cdn='jquery')}}"></script>
-	    <script src="{{bootstrap_find_resource('js/bootstrap.js', cdn='bootstrap')}}"></script>
+        <script src="{{ url_for('static',filename='js/jquery.min.js') }}"></script>
+        <script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>        
 	    {% block myscripts %}{% endblock %}
 	{%- endblock scripts %}	
     
