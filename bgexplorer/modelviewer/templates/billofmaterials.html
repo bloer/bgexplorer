@@ -10,6 +10,7 @@
      th {border:1px solid black}
      table.dataTable tbody td {white-space: nowrap; padding: 4px 4px}
      table tbody tr.assembly {background-color:#f5f5f5}
+     tr.assembly td:nth-child(2)::after {content:"↴"; padding-left:0.15em; color:green;}
      .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
      .truncate:hover {white-space: normal}
       
@@ -23,11 +24,12 @@
 {% block myscripts %}
     <script type="text/javascript" src="{{ url_for('.static', filename='DataTables/datatables.min.js') }}"></script>
     <script type="text/javascript">
+     
      $(document).ready(function(){
          var table = $('#bomtable').DataTable({
              paging: false,
              ordering: false,
-             scrollY: 600,
+             scrollY: $(window).height() - $("#pagecontent").offset().top - 80,
              scrollX: true,
              //select: true,
              scrollCollapse: true,
@@ -36,7 +38,7 @@
              //    fixedColumnsLeft: 1,
              //},
              fixedColumns: {
-                 leftColumns: 1,
+                 leftColumns: 2,
                  heightMatch: 'none',
              },
              buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv', 
@@ -59,17 +61,23 @@
     <table id="bomtable" class="table table-condensed table-bordered" width="100%" >
         <thead>
             <tr>
+                <!-- fixed columns -->
+                <th>#</th>
                 <th>Name</th>
-                <th>Weight</th>
-                <th>Description</th>
+                <!-- user overridable -->
+                {% for key in bomcols %}
+                <th>{{ key }}</th>
+                {% endfor %}
             </tr>
         </thead>
         {% set  outline = 'foobar' %}
         <tbody>{% for row in bomrows %}
             <tr class="component {%- if row.component.getcomponents is defined %} assembly{% endif %}" >
-                <td><small>{{ row.outline }}</small> {{ row.component.name }}</td>
-                <td>{{ row.weight }} {%- if row.totalweight != row.weight %} ({{ row.totalweight }}){% endif %}</td>
-                <td>{{ row.component.description }}</td>
+                <td><span style="font-family:monospace" >{{ row.outline }}</span></td>
+                <td><a href="{{ url_for('.componentview',component=row.component) }}">{{ row.component.name }}</a></td>
+                {% for val in bomcols.values() %}
+                <td>{{ val(row) }}</td>
+                {% endfor %}
             </tr>
         {% endfor %}</tbody>
     </table>

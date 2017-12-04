@@ -3,32 +3,10 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 
 from flask import Blueprint, render_template, request, abort, url_for, g
-from collections import namedtuple
 from .. import utils
 
+from . import billofmaterials as bomfuncs
 
-BOMRow = namedtuple('BOMRow',('outline','path','component',
-                              'weight','totalweight'))
-
-def getbomrows(row, includeself=False, form="%02d"):
-    """Recursive function to generate list of bomrows
-    """
-    myrows = [row] if includeself else []
-    parent = row.component
-    if hasattr(parent,'getcomponents'):
-        form = "%02d" if len(parent.components)>10 else "%d"
-        for index, cw in enumerate(parent.getcomponents(deep=False, 
-                                                        withweight=True)):
-            child, weight = cw
-            outlineprefix = row.outline+'.' if row.outline else ''
-            childrow = BOMRow(outline=("%s"+form)%(outlineprefix,index+1),
-                              path=row.path+(child,),
-                              component=child,
-                              weight=weight,
-                              totalweight=row.totalweight*weight)
-            myrows.extend(getbomrows(childrow, includeself=True, form=form))
-    return myrows
-                              
 
 class ModelViewer(object):
     """Blueprint for inspecting saved model definitions
@@ -58,7 +36,10 @@ class ModelViewer(object):
         if self.app:
             self.init_app(app, url_prefix)
 
-
+            
+        #### User Overrides ####
+        self.bomcols = bomfuncs.getdefaultcols()
+            
     def init_app(self, app, url_prefix=''):
         """Register ourselves with the app"""
         app.register_blueprint(self.bp, 
@@ -181,14 +162,7 @@ class ModelViewer(object):
         
         @self.bp.route('/billofmaterials')
         def billofmaterials():
-            #build up the list of rows from paths
-            root = g.model.assemblyroot
-            rows = getbomrows(BOMRow(outline='',
-                                     path=(root,),
-                                     component=root,
-                                     weight=1,
-                                     totalweight=1),
-                              includeself=False,
-                              form="%02d" if len(root.components)>10 else "%d")
-            
-            return render_template("billofmaterials.html", bomrows=rows)
+            bomrows = bomfuncs.getbomrows()
+            return render_template("billofmaterials.html", 
+                                   bomrows=bomrows,
+                                   bomcols=self.bomcols)
