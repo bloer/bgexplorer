@@ -31,9 +31,9 @@
 		<td>{{ spec.distribution }}</td>
 		<td>{{ spec.getfullspec() }}</td>
 		<td>{{ spec.getratestr(2) }}</td>
-		<td>{% for comp in spec.appliedto %}
+		<td>{% if loop.depth0==0 %}{% for comp in spec.appliedto %}
 		    <a class="comp" href="{{ url_for('.componentview', component=comp) }}">{{ comp.name }}</a>
-		{% endfor %}</td>
+		{% endfor %}{% endif %}</td>
 	    </tr>
 	    {% if spec.subspecs %}{{ loop(spec.subspecs) }}{% endif %}
 	{% endfor %}</tbody>

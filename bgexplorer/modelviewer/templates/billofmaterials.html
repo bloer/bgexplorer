@@ -76,7 +76,7 @@
                 <td><span style="font-family:monospace" >{{ row.outline }}</span></td>
                 <td><a href="{{ url_for('.componentview',component=row.component) }}">{{ row.component.name }}</a></td>
                 {% for val in bomcols.values() %}
-                <td>{{ val(row) }}</td>
+                <td>{{ (val(row) or "") | safe }}</td>
                 {% endfor %}
             </tr>
         {% endfor %}</tbody>

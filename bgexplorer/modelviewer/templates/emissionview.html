@@ -7,7 +7,7 @@
 
 {% block pagecontent %}
     <div class="row">
-	<div>
+	<div class="col-md-6" >
 	    <h3>General Info</h3>
 	    <dl class="dl-horizontal">
 		<dt>Name</dt> <dd> {{ spec.name }}</dd>
@@ -21,21 +21,48 @@
 		<h3>Additional Info</h3>
 		<dl class="dl-horizontal">
 		    {% for key,val in spec.moreinfo.items() %}
-			<dt>{{ key }}</dt><dd>{{ val }}</dd>
+			<dt>{{ key }}</dt><dd>{{ val | urlize }}</dd>
 		    {% endfor %}
 		</dl>
 	    {% endif %}
+    </div>
+    <div class="col-md-6" >
+        <h3>Specification</h3>
+	    <dl class="dl-horizontal" >
+		    <dt> Spec</dt>  <dd>{{ spec.getfullspec() }} </dd>
+		    <dt> Rate</dt>  <dd>{{ spec.getratestr() }}</dd>
+	    </dl>
 	    
+	    {% if spec.subspecs %}
+		    <h3>Subspecs</h3>
+		    <table class="table table-condensed">
+		        <thead>
+			        <tr><th>Name</th><th>Spec</th><th>Rate</th></tr>
+		        </thead>
+		        <tbody>{% for subspec in spec.subspecs %}
+			        <tr class="subspec">
+			            <td>{{ subspec.name }}</td>
+			            <td>{{ subspec.getfullspec() }}</td>
+			            <td>{{ subspec.getratestr() }}</td>
+			        </tr>
+		        {% endfor %}</tbody>
+		    </table>
+	    {% endif %}
+    </div>
+    </div><!-- end row -->
+    <div class="row" >
+	<div class="col-md-6">
 	    {% if spec.appliedto %}
-		<h3>Associated with components:</h3>
+		    <h3>Associated with components:</h3>
 		<ul class="list-group" >{% for comp in spec.appliedto %}
 		    <li class="component list-group-item">
 			<a href="{{ url_for('.componentview',component=comp) }}">{{ comp.name }}</a>
-			{{ comp.description }}
+			{{ comp.description or "" }} ( {{ "%.2g" | format(spec.emissionrate(comp).to('1/day').m) }} /day )
 		    </li>
 		{% endfor %}</ul>
 	    {% endif %}
-	    
+	</div>
+    <div class="col-md-6" >
 	    {% if datasets %}
 		<h3>Associated with simulation datasets:</h3>
 		<ul class="list-group" >{% for dataset in datasets %}
@@ -44,27 +71,7 @@
 		    </li>
 		{% endfor %}</ul>
 	    {% endif %}
-	    <h3>Specification</h3>
-	    <dl class="dl-horizontal" >
-		<dt> Spec</dt>  <dd>{{ spec.getfullspec() }} </dd>
-		<dt> Rate</dt>  <dd>{{ spec.getratestr() }}</dd>
-	    </dl>
 	    
-	    {% if spec.subspecs %}
-		<h3>Subspecs</h3>
-		<table class="table table-condensed">
-		    <thead>
-			<tr><th>Name</th><th>Spec</th><th>Rate</th></tr>
-		    </thead>
-		    <tbody>{% for subspec in spec.subspecs %}
-			<tr class="subspec">
-			    <td>{{ subspec.name }}</td>
-			    <td>{{ subspec.getfullspec() }}</td>
-			    <td>{{ subspec.getratestr() }}</td>
-			</tr>
-		    {% endfor %}</tbody>
-		</table>
-	    {% endif %}
 	</div><!-- end column -->
     </div><!-- end row -->
 {% endblock %}
