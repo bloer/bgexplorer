@@ -139,6 +139,18 @@ class ModelViewer(object):
         @self.bp.route('/simulations/')
         def simulationsoverview():
             return render_template("simulationsoverview.html")
+            
+        @self.bp.route('/queries/')
+        def queriesoverview():
+            #build a unique list of all queries
+            queries = {}
+            for request in g.model.assemblyroot.getsimdata():
+                for match in request.matches:
+                    try:
+                        queries[str(match.query)].append(match)
+                    except KeyError:
+                        queries[str(match.query)] = [match]
+            return render_template('queriesoverview.html',queries=queries)
          
         @self.bp.route('/dataset/<dataset>')
         def datasetview(dataset):
