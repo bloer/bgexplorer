@@ -16,6 +16,8 @@ from .widgets import is_hidden_field
 from ..modeldb import ModelDB
 from ..bgmodelbuilder.component import Component, Assembly
 from ..bgmodelbuilder import emissionspec
+from ..bgmodelbuilder import bgmodel
+from ..bgmodelbuilder import units
 from ..utils import get_simsdb
 
 
@@ -190,10 +192,27 @@ class ModelEditor(object):
     #todo: implement some caching here!
     def newmodel(self):
         """Create a new bare model or clone an existing one for editing"""
-        derivedFrom = request.values.get('derivedFrom', None)
-        newmodel = self.modeldb.new_model(derivedFrom)
+        name = request.form.get('name',"")
+        importfile = request.files.get('import',None)
+        
+        if importfile:
+            #try to convert file data
+            try:
+                rawmodel = json.load(importfile)
+                newmodel = bgmodel.BgModel.buildfromdict(rawmodel)
+                print(newmodel)
+            except BaseException as e:
+                flash("Error raised parsing input file: '%s'"%e,"danger")
+                return redirect(url_for('index'))
+            if name:
+                newmodel.name = name
+            newid = self.modeldb.write_model(newmodel,temp=True)
+        else:
+            derivedFrom = request.values.get('derivedFrom', None)
+            newmodel = self.modeldb.new_model(derivedFrom, name=name)
+            newid = newmodel.id
         #todo: handle error no model returned, probably DB down
-        return redirect(url_for('.editmodel', modelid=str(newmodel.id)))
+        return redirect(url_for('.editmodel', modelid=str(newid)))
 
     #todo: implement delete model
 
@@ -407,7 +426,10 @@ class ModelEditor(object):
             abort(501, "No registered SimulationsDB")
             
         model = self.getmodelordie(modelid, toedit=False)
-        simreqs = simsdb.attachsimdata(model.assemblyroot)
+        try:
+            simreqs = simsdb.attachsimdata(model.assemblyroot)
+        except units.errors.DimensionalityError as e:
+            abort(400,"Invalid unit settings: '%s'"%e)
         matches = sum((r.matches for r in simreqs),[])
         #sort the requests by spec and assembly
         bypath = {}

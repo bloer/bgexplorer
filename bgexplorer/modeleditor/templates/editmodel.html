@@ -110,6 +110,7 @@
 	       onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" >
 	<td data-column="name" style="padding-left:{{ 15*level }}px" >{{ comp.name }}</td>
 	<td data-column="description">{{ comp.description or "" }}</td>
+    <td data-column="status" >{{ comp.getstatus() }}</td>
 	<td>
 	    {%- if editcomponent is defined and editcomponent.getcomponents is defined and not comp.isparentof(editcomponent) -%}
 		<a class="placecomp" href="javascript:void(0)" 
@@ -126,7 +127,7 @@
 {% macro componenttable(components, recursive=true, id="") %}
     <table class="table table-condensed table-hover comptable" id="{{ id }}">
 	<thead>
-	    <tr><th>Name</th><th>Description</th><th></tr>
+	    <tr><th>Name</th><th>Description</th><th>Status</th><th></th></tr>
 	</thead>
 	<tbody>
 	    {% for comp in components recursive %}
@@ -163,6 +164,7 @@
 	<td data-column="category" >{{ spec.category }}</td>
 	<td data-column="distribution" >{{ spec.distribution }}</td>
 	<td data-column="rate" >{{ spec.getratestr(2) }}</td>
+    <td data-column="status" >{{ spec.getstatus() }}</td>
 	<td>
 	    {%- if editcomponent is defined -%}
 		<a class="placespec" href="javascript:void(0)" 
@@ -179,7 +181,7 @@
 {% macro spectable(specs, id="") %}
     <table class="table table-condensed table-hover spectable table-responsive" id="{{ id }}">
 	<thead>
-	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th><th></th></tr>
+	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th><th>Status</th><th></th></tr>
 	</thead>
 	<tbody>
 	    {% for spec in specs %}

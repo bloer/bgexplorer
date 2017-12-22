@@ -68,9 +68,9 @@
 
     {% block content -%}
 	<div id="content" class="container">
-	    <div id="pageheader" class="page-header" >{% block pageheader %}{% endblock %}</div>
-	    <div id="pagecontent" >{% block pagecontent %}{% endblock %}</div>
-	    <div id="messages">
+	    <div id="pageheader" class="page-header clearfix" >{% block pageheader %}{% endblock %}</div>
+	    <div id="pagecontent" class="clearfix" >{% block pagecontent %}{% endblock %}</div>
+	    <div id="messages" class="clearfix" >
 		{% for cat,msg in get_flashed_messages(with_categories=true) %}
 		    <div class="alert alert-{{ cat }} alert-dismissable" >
 			{{ msg }}
