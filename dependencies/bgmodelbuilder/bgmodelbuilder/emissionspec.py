@@ -15,7 +15,7 @@ from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
 from copy import copy
 from math import sqrt
-
+import numbers
 
 
 class EmissionSpec(Mappable):
@@ -26,8 +26,6 @@ class EmissionSpec(Mappable):
     (e.g., hours exposure for cosmogenic activation) from which a
     'susceptibility' is defined when combined with the conversion eff.
     
-    Usually rates will be specified per unit mass or area, but if the optional
-    parameter 'per_piece' is set to true, the 'raw' rate will be used
     
     Sub-classes should override the get_rate and get_susceptibility methods.    
     """
@@ -122,7 +120,8 @@ class EmissionSpec(Mappable):
         if self.normfunc:
             if callable(self.normfunc): #its a function
                 multiplier = self.normfunc(component)
-            elif self.normfunc in ("piece","perpiece","per piece","per-piece"):
+            elif self.normfunc.lower() in ("piece","perpiece","per piece",
+                                           "per-piece","per_piece"):
                 multiplier = 1
             elif type(self.normfunc) is str:
                 #evaluate it. the __builtins__ thing somewhat protects 
@@ -130,6 +129,8 @@ class EmissionSpec(Mappable):
                 multiplier = eval(self.normfunc, 
                                   {'__builtins__':{},'units':units},
                                   {'component':component, 'piece':1})
+            elif isinstance(self.normfunc, numbers.Number):
+                multiplier = self.normfunc
             else:
                 raise TypeError("Unknown type %s for normfunc"%self.normfunc)
         else:
@@ -153,7 +154,19 @@ class EmissionSpec(Mappable):
         """
         return sum(self.emissionrate(comp) * comp.gettotalweight() 
                    for comp in self.appliedto)
-    
+
+    def getstatus(self):
+        result = ""
+        #first make sure units are correct
+        for comp in self.appliedto:
+            try:
+                self.emissionrate(comp).to('1/s')
+            except:
+                result += " unit error "
+                break
+
+        return result
+        
     def todict(self):
         """Export this instance to a plain object"""
         result = copy(self.__dict__)
@@ -224,7 +237,10 @@ class CombinedSpec(EmissionSpec):
     def updatesubspecs(self, attr, val):
         for sub in self.subspecs:
             setattr(sub, attr, val)
-
+            
+    def getstatus(self):
+        return " ".join(s.getstatus() for s in self.subspecs)
+            
     #overload __getitem__ so we can unpack subspecs directly
     #should we allow deep unpacking???
     def __getitem__(self,key):

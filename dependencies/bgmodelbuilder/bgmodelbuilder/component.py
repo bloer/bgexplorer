@@ -235,9 +235,22 @@ class BaseComponent(Mappable):
                     boundspec.simdata.extend(new)
             
             result.extend(found)
+            #remove hits with invalid emissionrate
+            if rebuild:
+                result = [r for r in result if r.emissionrate]
         return result
         
-        
+    def getstatus(self):
+        result = ""
+        #first make sure all our specs give the right units
+        for spec in self.getspecs(deep=True):
+            try:
+                spec.emissionrate(self).to('1/s')
+            except units.errors.DimensionalityError:
+                result += " unit error "
+                break
+
+        return result
     
     def todict(self):
         """Export this object to a dictionary suitable for storage/transmission
@@ -603,9 +616,11 @@ class Assembly(BaseComponent):
         
 def buildcomponentfromdict(args):
     """Construct a Component or Assembly from a dict"""
+    classname = args.pop('__class__',None)
     cls = Component
-    if '__class__' in args:
-        classname = args.pop('__class__')
+    if 'components' in args:
+        cls = Assembly
+    elif classname:
         if classname == 'Assembly':
             cls = Assembly
         elif classname != 'Component':
