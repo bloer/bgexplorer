@@ -57,48 +57,9 @@ class SimulationsDB(object):
         requests = assembly.getsimdata(path=(assembly,), rebuild=True, 
                                        children=True)
         for request in requests:
-            newmatches = self.findsimentries(request)
-            if not newmatches: #allow return None
-                continue
-            for newmatch in newmatches:
-                if not isinstance(newmatch, SimDataMatch):
-                    raise TypeError("findsimentries must return a list of "
-                                    "SimDataMatch objects, got ",type(newmatch))
-                #shouldn't be necessary, but just to make sure:
-                newmatch.request = request
+            matches = self.findsimentries(request)
 
-                #update status
-                #see if there is an existing match with the same query
-                oldmatch = None
-                for match in request.matches:
-                    if match.query == newmatch.query:
-                        oldmatch = match
-                        break
-
-                if not oldmatch:
-                    newmatch.status += " new "
-                else:
-                    if newmatch.dataset != oldmatch.dataset:
-                        #todo if dataset is a single string this will break
-                        if len(newmatch.dataset) > len(oldmatch.dataset):
-                            newmatch.status += " newdata "
-                        elif len(newmatch.dataset) < len(oldmatch.dataset):
-                            newmatch.status += " dataremoved "
-                        else:
-                            newmatch.status += " datachanged "
-                    if newmatch.weight != oldmatch.weight:
-                        newmatch.status += " weightchanged "
-                    if newmatch.livetime > oldmatch.livetime:
-                        newmatch.status += " livetimeincreased "
-                    elif newmatch.livetime < oldmatch.livetime:
-                        newmatch.status += " livetimedecreased "
-                    #copy id of same matches to aid caching
-                    if oldmatch == newmatch:
-                        newmatch._id = oldmatch._id
-                if not newmatch.dataset:
-                    newmatch.status += " nodata "
-                        
-            request.matches = newmatches
+            
         return requests
 
         

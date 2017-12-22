@@ -40,13 +40,30 @@ class SimDataMatch(Mappable):
         self.query = query
         self.dataset = dataset
         self.weight = weight
-        self.livetime = ensure_quantity(livetime, "day")
+        self.livetime = ensure_quantity(livetime, "year")
         self.status = status or ""
 
     def todict(self):
         mydict = copy.copy(self.__dict__)
         mydict.pop('request',None) #will cause circular recursion otherwise!
         return to_primitive(mydict)
+
+    @property
+    def emissionrate(self):
+        return self.request.emissionrate if self.request else None
+        
+    def addstatus(self, tag):
+        """Treat status as a space-separated list of tags"""
+        status = set(self.status.split())
+        status.add(tag)
+        self.status = ' '.join(status)
+    
+    def popstatus(self, tag):
+        """Remove tag from space-separated list of status tags"""
+        status = set(self.status.split())
+        if tag in status:
+            status.remove(tag)
+        self.status = ' '.join(status)
         
     def __eq__(self, other):
         try:
@@ -122,7 +139,7 @@ class SimDataRequest(object):
 
     def _calcemissionrate(self):
         if (self.assemblyPath 
-            and isinstance(self.spec, emissionspec.EmissionSpec)
+            and hasattr(self.spec,'emissionrate')
             and self.weight is not None):
             return self.weight * self.spec.emissionrate(self.component)
         return None
@@ -172,6 +189,24 @@ class SimDataRequest(object):
     @property
     def component(self):
         return self.assemblyPath[-1] if self.assemblyPath else None
+        
+    def addquery(self, query, weight=1):
+        newmatch = SimDataMatch(request=self, query=copy.copy(query), 
+                                weight=weight, status="newmatch")
+        oldmatch = None
+        #see if we already have an existing match
+        for amatch in self.matches:
+            if amatch.query == query:
+                oldmatch = amatch
+                if weight != oldmatch.weight:
+                    oldmatch.addstatus("weightchanged")
+                    oldmatch.weight = weight
+                return oldmatch
+
+        #if we get here, there was no prior match
+        self.matches.append(newmatch)
+        return newmatch
+        
         
     def todict(self):
         #want to not transform the simdatamatch objects into IDs
