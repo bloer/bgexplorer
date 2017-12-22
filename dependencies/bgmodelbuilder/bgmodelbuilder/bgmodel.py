@@ -53,9 +53,22 @@ class BgModel(object):
             self.sanitize()
         
 
+    def get_unplaced_components(self, toponly=True):
+        """Get a list of all components not placed into any assembly
+        Args:
+            toponly(bool): If true, return only top-level components 
+                with no placements. Otherwise, return all components
+                that are not a descendent of assemblyroot"""
+        res = [comp for comp in self.components.values()
+               if not self.assemblyroot.isparentof(comp, deep=True)]
+        if toponly:
+            res= [comp for comp in res  if not comp.placements]
+
+        return res
+    
     @property
     def id(self):
-        return getattr(self,'_id')
+        return getattr(self,'_id',None)
         
     def registerobject(self, obj, registry):
         """ Make sure that obj has an _id attribute and add it to registry
@@ -71,27 +84,13 @@ class BgModel(object):
             #now what? 
             raise ValueError(obj._id)
         
-    def get_unplaced_components(self, toponly=True):
-        """Get a list of all components not placed into any assembly
-        Args:
-            toponly(bool): If true, return only top-level components 
-                with no placements. Otherwise, return all components
-                that are not a descendent of assemblyroot"""
-        res = [comp for comp in self.components.values()
-               if not self.assemblyroot.isparentof(comp, deep=True)]
-        if toponly:
-            res= [comp for comp in res  if not comp.placements]
-
-        return res
     
     def sanitize(self, comp=None, updatesimdata=False):
         """Make sure that all objects are fully built and registered"""
 
         if not comp:
             comp = self.assemblyroot
-
-        if comp is self.assemblyroot and updatesimdata:
-            comp.getsimdata(path=(comp,), rebuild=True, children=True)
+            #do we need to empty the registries at some point? 
 
         self.connectreferences(comp)
 
@@ -124,6 +123,16 @@ class BgModel(object):
             #make sure unplaced components are handled too
             for comp in self.get_unplaced_components():
                 self.sanitize(comp)
+
+            #register simdata
+            for simrequest in  comp.getsimdata(path=(comp,), 
+                                               rebuild=updatesimdata, 
+                                               children=True):
+                for match in simrequest.matches:
+                    self.registerobject(match, self.simdatamatches)
+            
+
+        
                     
 
     @staticmethod
@@ -132,14 +141,14 @@ class BgModel(object):
         res.pop('_id',None)
         return res
         
-    def todict(self, sanitize=True):
+    def todict(self, sanitize=True, updatesimdata=False):
         """Export all of our data to a bare dictionary that can in turn be 
         exported to JSON, stored in a database, etc
         """
         
         #first make sure all objects are registered and built sanely
         if sanitize:
-            self.sanitize(updatesimdata=True)
+            self.sanitize(updatesimdata=updatesimdata)
         
         #now convert all objects to dicts, and all references to IDs
         result = copy.copy(self.__dict__)
@@ -204,7 +213,8 @@ class BgModel(object):
             model.components[key] = buildcomponentfromdict(comp)
                 
         #update the assemblyroot to the actual object
-        model.assemblyroot = model.components[model.assemblyroot]
+        if not isinstance(model.assemblyroot, Assembly):
+            model.assemblyroot = model.components[model.assemblyroot]
         
         #just to make sure
         model.sanitize()
