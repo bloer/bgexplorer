@@ -27,12 +27,13 @@ units.ppb_U = 12*units['mBq/kg']
 units.ppb_Th = 4.1*units['mBq/kg']
 units.ppb_K = 0.031*units['mBq/kg']
 
-def ensure_quantity(value, defunit=None):
+def ensure_quantity(value, defunit=None, convert=False):
     """Make sure a variable is a pint.Quantity, and transform if unitless
     
     Args:
         value: The test value
         defunit (str,Unit, Quanty): default unit to interpret as
+        convert (bool): if True, convert the value to the specified unit 
     Returns:
         Quantity: Value if already Quantity, else Quantity(value, defunit)
     """
@@ -46,7 +47,7 @@ def ensure_quantity(value, defunit=None):
         else:
             raise units.errors.DimensionalityError(qval.u, defunit)
     
-    return qval
+    return qval.to(defunit) if convert and defunit else qval
     
 
 
