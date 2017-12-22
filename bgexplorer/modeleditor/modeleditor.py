@@ -198,7 +198,8 @@ class ModelEditor(object):
         if importfile:
             #try to convert file data
             try:
-                rawmodel = json.load(importfile)
+                filecontents = importfile.read()
+                rawmodel = json.loads(filecontents.decode())
                 newmodel = bgmodel.BgModel.buildfromdict(rawmodel)
                 print(newmodel)
             except BaseException as e:
