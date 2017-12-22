@@ -184,10 +184,11 @@ class ModelDB(object):
             raw = self.get_raw_model(query, {'__modeldb_meta':True})
             if not raw:
                 return None
-            if not raw.get('__modeldb_meta',{}).get('temporary',False):
-                model = self._cacher.get(raw['_id'])
-                if model: 
-                    return model
+            #prevents temp models from being loaded from cache:
+            #if not raw.get('__modeldb_meta',{}).get('temporary',False):
+            model = self._cacher.get(raw['_id'])
+            if model: 
+                return model
 
         #if we get here, it's not cached
         raw = self.get_raw_model(query, projection)
