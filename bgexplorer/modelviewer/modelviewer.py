@@ -1,7 +1,7 @@
 #python 2/3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-
+from itertools import chain
 from flask import Blueprint, render_template, request, abort, url_for, g
 from .. import utils
 
@@ -15,11 +15,13 @@ class ModelViewer(object):
         modeldb: a ModelDB object. If None, will get from the Flask object
         simsdb:  a SimulationsDB object. If None, will get from the Flask object
         url_prefix (str): Where to mount this blueprint relative to root
+        groups (dict): Grouping functions to evaluate for all simdatamatches
+        values (dict): Value functions to evaluate for all simdatamatches
     """
     defaultversion='HEAD'
     
     def __init__(self, app=None, modeldb=None, simsdb=None,
-                 url_prefix='/explore'):
+                 url_prefix='/explore', groups=None, values=None):
         self.app = app
         self._modeldb = modeldb
         self._simsdb = simsdb
@@ -37,6 +39,9 @@ class ModelViewer(object):
             self.init_app(app, url_prefix)
 
             
+        self.groups = groups or {}
+        self.values = values or {}
+
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
             
@@ -178,3 +183,28 @@ class ModelViewer(object):
             return render_template("billofmaterials.html", 
                                    bomrows=bomrows,
                                    bomcols=self.bomcols)
+            
+        def streamdatatable(matches):
+            """Stream exported data table so it doesn't all go into mem at once
+            """
+            #can't evaluate values if we don't have a simsdb
+            values = self.values if self.simsdb else {}
+            valitems = list(self.values.values())
+            #send the header
+            yield('\t'.join(chain(['ID'],
+                                  ('G_'+g for g in self.groups),
+                                  ('V_'+v for v in self.values)))
+                  +'\n')
+            #loop through matches
+            for match in matches:
+                evals = self.simsdb.evaluate(valitems, match)
+                yield('\t'.join(chain([match.id],
+                                      (g(match) for g in self.groups.values()),
+                                      (evals[v] for v in valitems)))
+                      +'\n')
+            
+        @self.bp.route('datatable')
+        def datatable():
+            """Return groups and values for all simdatamatches"""
+            matches = sum((r.matches for r in g.model.getsimdata()),[])
+            return Response(streamdatatable(matches), mimetype='text/plain')

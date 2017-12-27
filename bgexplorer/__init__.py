@@ -6,10 +6,21 @@ from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
 from .modeldb import ModelDB
 
-def create_app(config_filename=None, simsdb=None, instance_path=None):
+def create_app(config_filename=None, simsdb=None, instance_path=None,
+               groups=None, values=None):
     """Create the Flask application and bind blueprints. 
     
-    TODO: handle config better, and move non-fixed things to an example
+    Args:
+        config_filename (str): filename to use for configuration. If 
+                               instance_path is None, will be in bgexplorer's 
+                               local directory
+        simsdb: A SimulationsDB concrete instance. Can be bound to app 
+                later by `simsdb.init_app(app)`
+        instance_path (str): location to look for config files. 
+        groups: dictionary of grouping functions to cache on all simdatamtches
+        values: dictionary of value functions to cache on all simdatamatches
+    
+    TODO: have instance_path default to PWD? 
     """
     app = Flask('bgexplorer', instance_path=instance_path,
                 instance_relative_config=bool(instance_path))
