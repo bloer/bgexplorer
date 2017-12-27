@@ -268,7 +268,6 @@ class ModelDB(object):
         self.testconnection()
         if isinstance(model, BgModel):
             model = model.todict()
-        self._cacher.expire(model['_id'])
         model['__modeldb_meta'] = {'temporary':temp}
         editDetails = model.setdefault('editDetails',{})
         editDetails['date'] = datetime.utcnow().strftime("%F %R UTC")
@@ -287,6 +286,7 @@ class ModelDB(object):
             model.pop('version',None)
                         
         if '_id' in model:
+            self._cacher.expire(model['_id'])
             #can only overwrite existing models if temporary!
             try:
                 istemp = self.is_model_temp(model['_id'])

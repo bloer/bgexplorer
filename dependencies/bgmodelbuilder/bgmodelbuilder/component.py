@@ -12,7 +12,7 @@ from builtins import super
 
 from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
-from .simulationsdb import SimDataRequest
+from .simulationsdb import simdatamatch
 
 from collections import OrderedDict
 from copy import copy
@@ -36,7 +36,7 @@ class BoundSpec(object):
         self.simdata=simdata or []
         for i, simd in enumerate(self.simdata):
             if isinstance(simd, dict):
-                self.simdata[i] = SimDataRequest(**simd)
+                self.simdata[i] = simdatamatch.SimDataRequest(**simd)
         
     def __eq__(self, other): 
         if hasattr(other, 'spec'):
@@ -229,7 +229,7 @@ class BaseComponent(Mappable):
                                 foundspec = True
                                 break
                         if not foundspec:
-                            new.append(SimDataRequest(path, spec))
+                            new.append(simdatamatch.SimDataRequest(path, spec))
 
                     found = found+new
                     boundspec.simdata.extend(new)

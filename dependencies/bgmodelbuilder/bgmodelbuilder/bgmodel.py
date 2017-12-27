@@ -199,7 +199,8 @@ class BgModel(object):
         """
         #handle mongo inserting _ids (or should I just make this mappable?)
         _id = d.pop('_id', None)
-        model = cls(**d, sanitize=False)
+        d['sanitize'] = False
+        model = cls(**d)
         if _id:
             model._id = _id
 

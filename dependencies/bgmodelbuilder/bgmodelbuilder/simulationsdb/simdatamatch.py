@@ -14,7 +14,6 @@ import copy
 
 from ..mappable import Mappable
 from ..common import to_primitive, ensure_quantity
-from .. import component, emissionspec
 
  
 class SimDataMatch(Mappable):
@@ -136,7 +135,7 @@ class SimDataRequest(object):
     def _calcweight(self):
         if self.assemblyPath is not None:
             if (len(self.assemblyPath)>1 and 
-                isinstance(self.assemblyPath[0],component.Assembly)):
+                hasattr(self.assemblyPath[0],'getchildweight')):
                 #calculate product of weights
                 return reduce(operator.mul,
                               (p.getchildweight(c) for p,c in 
