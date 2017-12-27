@@ -50,7 +50,7 @@ class SimDataMatch(Mappable):
 
     @property
     def emissionrate(self):
-        return self.request.emissionrate if self.request else None
+        return self.request.emissionrate*self.weight if self.request else None
         
     def addstatus(self, tag):
         """Treat status as a space-separated list of tags"""
@@ -64,6 +64,18 @@ class SimDataMatch(Mappable):
         if tag in status:
             status.remove(tag)
         self.status = ' '.join(status)
+        
+
+    #forward some useful attributes from the request
+    @property
+    def assemblyPath(self):
+        return self.request.assemblyPath if self.request else None
+    @propery
+    def spec(self):
+        return self.request.spec if self.request else None
+    @property
+    def component(self):
+        return self.request.component if self.request else None
         
     def __eq__(self, other):
         try:
