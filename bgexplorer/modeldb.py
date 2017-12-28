@@ -76,6 +76,7 @@ class ModelDB(object):
         self._collectionName = app.config.setdefault('MODELDB_COLLECTION', 
                                                      'bgmodels')
         self.connect(dburi)
+        app.extensions['ModelDB'] = self
         
 
     def connect(self, dburi=None):
