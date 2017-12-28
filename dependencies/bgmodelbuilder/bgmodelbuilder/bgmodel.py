@@ -66,6 +66,10 @@ class BgModel(object):
 
         return res
     
+    #useful forwards
+    def getsimdata(self):
+        return self.assemblyroot.getsimdata()
+        
     @property
     def id(self):
         return getattr(self,'_id',None)
