@@ -7,7 +7,7 @@ from .modelviewer.modelviewer import ModelViewer
 from .modeldb import ModelDB
 
 def create_app(config_filename=None, simsdb=None, instance_path=None,
-               groups=None, values=None):
+               groups=None, values=None, values_units=None):
     """Create the Flask application and bind blueprints. 
     
     Args:
@@ -19,6 +19,8 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
         instance_path (str): location to look for config files. 
         groups: dictionary of grouping functions to cache on all simdatamtches
         values: dictionary of value functions to cache on all simdatamatches
+        values_units: optional dictionary of units to render values in in the 
+                      cached datatable
     
     TODO: have instance_path default to PWD? 
     """
@@ -30,7 +32,9 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
     Bootstrap(app)
     modeldb = ModelDB(app=app)
     modeleditor = ModelEditor(app=app, modeldb=modeldb)
-    modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb)
+    modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb,
+                              groups=groups, values=values, 
+                              values_units=values_units)
     if simsdb:
         simsdb.init_app(app)
 

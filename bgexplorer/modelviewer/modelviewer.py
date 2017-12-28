@@ -2,7 +2,8 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from itertools import chain
-from flask import Blueprint, render_template, request, abort, url_for, g
+from flask import (Blueprint, render_template, request, abort, url_for, g, 
+                   Response)
 from .. import utils
 
 from . import billofmaterials as bomfuncs
@@ -21,7 +22,8 @@ class ModelViewer(object):
     defaultversion='HEAD'
     
     def __init__(self, app=None, modeldb=None, simsdb=None,
-                 url_prefix='/explore', groups=None, values=None):
+                 url_prefix='/explore', groups=None, values=None, 
+                 values_units=None):
         self.app = app
         self._modeldb = modeldb
         self._simsdb = simsdb
@@ -41,6 +43,7 @@ class ModelViewer(object):
             
         self.groups = groups or {}
         self.values = values or {}
+        self.values_units = values_units or {}
 
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
@@ -184,27 +187,37 @@ class ModelViewer(object):
                                    bomrows=bomrows,
                                    bomcols=self.bomcols)
             
-        def streamdatatable(matches):
+        #need to pass simsdb here because somehow it gets lost on repeat calls
+        def streamdatatable(matches, groups, values, simsdb):
             """Stream exported data table so it doesn't all go into mem at once
             """
             #can't evaluate values if we don't have a simsdb
-            values = self.values if self.simsdb else {}
-            valitems = list(self.values.values())
+            values = values if simsdb else {}
+            valitems = list(values.values())
             #send the header
             yield('\t'.join(chain(['ID'],
-                                  ('G_'+g for g in self.groups),
-                                  ('V_'+v for v in self.values)))
+                                  ('G_'+g for g in groups),
+                                  ('V_'+v for v in values)))
                   +'\n')
             #loop through matches
             for match in matches:
-                evals = self.simsdb.evaluate(valitems, match)
+                if valitems:
+                    evals = simsdb.evaluate(valitems, match)
+                    for vlabel, val in values.items():
+                        unit = self.values_units.get(vlabel,None)
+                        if unit:
+                            try:
+                                evals[val] = evals[val].to(unit).m
+                            except AttributeError: #not a Quantity...
+                                pass
                 yield('\t'.join(chain([match.id],
-                                      (g(match) for g in self.groups.values()),
-                                      (evals[v] for v in valitems)))
+                                      (str(g(match)) for g in self.groups.values()),
+                                      (str(evals[v]) for v in valitems)))
                       +'\n')
             
-        @self.bp.route('datatable')
+        @self.bp.route('/datatable')
         def datatable():
             """Return groups and values for all simdatamatches"""
             matches = sum((r.matches for r in g.model.getsimdata()),[])
-            return Response(streamdatatable(matches), mimetype='text/plain')
+            return Response(streamdatatable(matches, self.groups, self.values,
+                                            self.simsdb), mimetype='text/plain')
