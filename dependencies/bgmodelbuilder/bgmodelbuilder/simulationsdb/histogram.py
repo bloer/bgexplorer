@@ -17,7 +17,9 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
             binedges (bool): if True (default), multiply each bin by the bin
                              width. If False, just add bin values
         """
-        bins = self.bin_edges or np.arange(len(self.spectrum)+1)
+        bins = self.bin_edges 
+        if len(bins) != len(self.hist)+1:
+            bins = np.arange(len(self.hist)+1)
         spec = self.hist
         if b<=a or a < bins[0] or b > bins[-1]:
             raise ValueError("Integration range %s outside of defined bins"
@@ -58,6 +60,8 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
         return self.bin_edges
 
     def _combine(self, other, op, inplace=False):
+        #treat None as zero 
+        
         #make sure bins are equal 
         bins = self._testbins(other)
 
@@ -77,12 +81,18 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
     #todo: should we provide for adding raw spectra rather than just Histograms?
     #binary copy operators    
     def __add__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.add)
      
     def __sub__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.sub)
     
     def __mul__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.mul)
     
     def __floordiv__(self, other):
@@ -101,12 +111,18 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
         
     #binary in-place operators
     def __iadd__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.add, inplace=True)
      
     def __isub__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.sub, inplace=True)
     
     def __imul__(self, other):
+        if other is None:
+            other = 0
         return self._combine(other, operator.mul, inplace=True)
     
     def __ifloordiv__(self, other):
@@ -124,12 +140,18 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
     #reverse binary operators
     #these should only ever be called if type(other) != type(self)
     def __radd__(self, other):
+        if other is None:
+            other = 0
         return self.__class__(other + self.hist, self.bin_edges)
      
     def __rsub__(self, other):
+        if other is None:
+            other = 0
         return self.__class__(other - self.hist, self.bin_edges)
     
     def __rmul__(self, other):
+        if other is None:
+            other = 0
         return self.__class__(other * self.hist, self.bin_edges)
     
     def __rfloordiv__(self, other):

@@ -20,7 +20,7 @@ class SimDocEval(abc.ABC):
     ----------------------------------------------------
     Concrete classes SHOULD override the following methods:
     ----------------------------------------------------
-    __key(self):  Generate a unique string key for the requested value that can 
+    _key(self):  Generate a unique string key for the requested value that can 
         be used for caching. Suggested form is `Classname(arg1, arg2, ...)`
 
     project(self, projection): Modify the projection operator for a mongodb
@@ -56,7 +56,7 @@ class SimDocEval(abc.ABC):
         return result1 + result2;
     
     #should we cache this??
-    def __key(self):
+    def _key(self):
         return "%s(%s)"%(type(self).__name__,
                          ",".join("%s=%s"%(key,val) 
                                   for key,val in self.__dict__.items()))
@@ -65,7 +65,7 @@ class SimDocEval(abc.ABC):
         
     @property
     def key(self):
-        return self.__key()
+        return self._key()
 
     def __eq__(self, other):
         try:
@@ -74,13 +74,13 @@ class SimDocEval(abc.ABC):
             return False
 
     def __hash__(self):
-        return hash(key)
+        return hash(self._key())
 
     def __str__(self):
-        return self.key
+        return self._key()
 
     def __repr__(self):
-        return self.key
+        return self._key()
 
     def __init__(self, label=None): #should label be required?
         super().__init__()
@@ -99,7 +99,7 @@ class SimDocEval(abc.ABC):
 
 #some concrete evaluations
 def splitsubkeys(document, key):
-    for subkey in unitkey.split('.'):
+    for subkey in key.split('.'):
         document = document[subkey] #throw key error if not there
     return document
 
@@ -143,7 +143,10 @@ class UnitsHelper(object):
                 pass
             unit = self.units(unit)
         if unit:
-            result *= unit
+            try:
+                result = result * unit
+            except ValueError: #result cannot be converted to unit
+                pass
         return result
    
 class DirectValue(SimDocEval, UnitsHelper):
@@ -164,7 +167,7 @@ class DirectValue(SimDocEval, UnitsHelper):
         result = converter(splitsubkeys(document, self.val))
         return self.applyunit(result, document)
     
-    def __key(self):
+    def _key(self):
         return("DirectValue(%s,%s,%s)"%(self.val, 
                                      self.unit,
                                      self.unitkey))
@@ -202,18 +205,23 @@ class DirectSpectrum(SimDocEval):
     def parse(self, document, match):
         #should we check that the key returns a list?
         hist = splitsubkeys(document, self.speckey)
-        if isinstance(val,(list, tuple)):
-            hist = np.array(val)
+        if isinstance(hist,(list, tuple)):
+            hist = np.array(hist)
         bin_edges = self.bin_edges
         try:
             bin_edges = np.array(splitsubkeys(document, self.binskey))
         except KeyError:
             pass
         
-        return Histogram(self.specunit.applyunit(hist, document),
-                         self.binsunit.applyunit(bin_edges, document))
+        try:
+            bin_edges = self.binsunit.applyunit(bin_edges, document)
+            hist = self.specunit.applyunit(hist, document)
+        except AttributeError: #thrown if hist is not unit-able
+            pass
+            
+        return Histogram(hist, bin_edges)
 
-    def __key(self):
+    def _key(self):
         #do we need all the unit keys too? 
         return "DirectSpectrum({},{})".format(self.speckey, self.binskey)
         

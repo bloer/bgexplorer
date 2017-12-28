@@ -121,6 +121,7 @@ class MongoSimsDB(SimulationsDB):
         for v in values:
             v.project(projection)
         
+        matches = matches if isinstance(matches,(list, tuple)) else [matches]
         for match in matches:
             dataset = match.dataset
             if not dataset:
@@ -145,7 +146,7 @@ class MongoSimsDB(SimulationsDB):
                     raise KeyError("No document with ID %s in database"%entry)
                 
                 for v in values:
-                    val = v.norm(v.parse(entry, match), match)
+                    val = v.norm(v.parse(doc, match), match)
                     result[v] = v.reduce(val, result[v])
 
         return result

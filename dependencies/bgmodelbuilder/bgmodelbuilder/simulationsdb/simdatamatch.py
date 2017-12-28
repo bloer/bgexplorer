@@ -69,7 +69,7 @@ class SimDataMatch(Mappable):
     @property
     def assemblyPath(self):
         return self.request.assemblyPath if self.request else None
-    @propery
+    @property
     def spec(self):
         return self.request.spec if self.request else None
     @property
