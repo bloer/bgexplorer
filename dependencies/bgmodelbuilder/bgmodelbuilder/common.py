@@ -9,7 +9,7 @@ import pint
 units = pint.UnitRegistry()
 units.auto_reduce_dimensions = False #this doesn't work right
 units.errors = pint.errors
-units.default_format = '~gP'
+units.default_format = '~P'
 #fix Bq, add ppb units
 units.load_definitions([
     "Bq = Hz = Bq = Becquerel",
