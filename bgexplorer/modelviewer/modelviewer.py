@@ -4,10 +4,13 @@ from __future__ import (absolute_import, division,
 from itertools import chain
 from flask import (Blueprint, render_template, request, abort, url_for, g, 
                    Response)
+import threading
+import zlib
+
 from .. import utils
 
 from . import billofmaterials as bomfuncs
-
+from ..modeldb import InMemoryCacher
 
 class ModelViewer(object):
     """Blueprint for inspecting saved model definitions
@@ -22,6 +25,7 @@ class ModelViewer(object):
     defaultversion='HEAD'
     
     def __init__(self, app=None, modeldb=None, simsdb=None,
+                 cacher=InMemoryCacher(),
                  url_prefix='/explore', groups=None, values=None, 
                  values_units=None):
         self.app = app
@@ -44,7 +48,8 @@ class ModelViewer(object):
         self.groups = groups or {}
         self.values = values or {}
         self.values_units = values_units or {}
-
+        self._threads = {}
+        self._cacher = cacher
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
             
@@ -104,6 +109,9 @@ class ModelViewer(object):
             g.model = utils.getmodelordie(query,self.modeldb)
             if version == self.defaultversion:
                 g.permalink = url_for(endpoint, permalink=True, **values) 
+            #construct the cached datatable in the background
+            if self._cacher:
+                self.build_datatable(g.model)
 
 
     def register_endpoints(self):
@@ -187,37 +195,105 @@ class ModelViewer(object):
                                    bomrows=bomrows,
                                    bomcols=self.bomcols)
             
-        #need to pass simsdb here because somehow it gets lost on repeat calls
-        def streamdatatable(matches, groups, values, simsdb):
-            """Stream exported data table so it doesn't all go into mem at once
-            """
-            #can't evaluate values if we don't have a simsdb
-            values = values if simsdb else {}
-            valitems = list(values.values())
-            #send the header
-            yield('\t'.join(chain(['ID'],
-                                  ('G_'+g for g in groups),
-                                  ('V_'+v for v in values)))
-                  +'\n')
-            #loop through matches
-            for match in matches:
-                if valitems:
-                    evals = simsdb.evaluate(valitems, match)
-                    for vlabel, val in values.items():
-                        unit = self.values_units.get(vlabel,None)
-                        if unit:
-                            try:
-                                evals[val] = evals[val].to(unit).m
-                            except AttributeError: #not a Quantity...
-                                pass
-                yield('\t'.join(chain([match.id],
-                                      (str(g(match)) for g in self.groups.values()),
-                                      (str(evals[v]) for v in valitems)))
-                      +'\n')
-            
         @self.bp.route('/datatable')
         def datatable():
             """Return groups and values for all simdatamatches"""
-            matches = sum((r.matches for r in g.model.getsimdata()),[])
-            return Response(streamdatatable(matches, self.groups, self.values,
-                                            self.simsdb), mimetype='text/plain')
+            return self.get_datatable(g.model)
+
+            
+    #need to pass simsdb because it goes out of context
+    def streamdatatable(self, model, simsdb):
+        """Stream exported data table so it doesn't all go into mem at once
+        """
+        #can't evaluate values if we don't have a simsdb
+        values = self.values if simsdb else {}
+        valitems = list(values.values())
+        matches = model.simdatamatches.values()
+        #send the header
+        yield('\t'.join(chain(['ID'],
+                              ('G_'+g for g in self.groups),
+                              ('V_'+v for v in values)))
+              +'\n')
+        #loop through matches
+        for match in matches:
+            if valitems:
+                evals = simsdb.evaluate(valitems, match)
+                for index, vlabel in enumerate(values):
+                    unit = self.values_units.get(vlabel,None)
+                    if unit:
+                        try:
+                            evals[index] = evals[index].to(unit).m
+                        except AttributeError: #not a Quantity...
+                            pass
+            groupvals = (g(match) for g in self.groups.values())
+            groupvals = ('//'.join(g) if isinstance(g,(list,tuple)) else g
+                         for g in groupvals)
+            yield('\t'.join(chain([match.id],
+                                  (str(g) for g in groupvals),
+                                  (str(eval) for eval in evals)))
+                  +'\n')
+            
+        
+
+    @staticmethod
+    def datatablekey(model):
+        return "datatable:"+str(model.id)
+
+    def build_datatable(self, model):
+        """Generate a gzipped datatable and cache it
+        Args:
+            model: a BgModel
+            
+        Returns:
+            None if no cacher is defined
+            0 if the result is already cached
+            Thread created to generate the cache otherwise
+        """
+        #don't bother to call if we don't have a cache
+        if not self._cacher:
+            return None
+
+        #TODO: self._threads and self._Cacher should probably be mutexed
+        #see if there's already a worker
+        key = self.datatablekey(model)
+        if key in self._threads:
+            return self._threads[key]
+        #see if it's already cached
+        if self._cacher.test(key):
+            return 0
+
+        #if we get here, we need to generate it
+        simsdb = self.simsdb
+        def cachedatatable():
+            compressor = zlib.compressobj()
+            res = b''.join(compressor.compress(s.encode('utf-8')) 
+                           for s in self.streamdatatable(model,simsdb))
+            res += compressor.flush()
+            self._cacher.store(key, res)
+            self._threads.pop(key) #is this a bad idea???
+        
+        thread = threading.Thread(target=cachedatatable,name=key)
+        self._threads[key] = thread
+        thread.start()
+        return thread
+        
+    def get_datatable(self, model):
+        """Return a Result object with the encoded or streamed datatable"""
+        key = self.datatablekey(model)
+        if not self._cacher:
+            #no cache, so stream it directly, don't bother to zip it
+            #should really be text/csv, but then browsersr won't let you see it
+            return Response(self.streamdatatable(model,self.simsdb),
+                            mimetype='text/plain')
+        
+        if not self._cacher.test(key):
+            thread = self.build_datatable(model)
+            if thread:
+                thread.join() #wait until it's done
+        res = self._cacher.get(key)
+        if not res:
+            abort(500,"Unable to generate datatable")
+        return Response(res, headers={'Content-Type':'text/plain;charset=utf-8',
+                                      'Content-Encoding':'deflate'})
+        
+        
