@@ -116,7 +116,7 @@ class MongoSimsDB(SimulationsDB):
                         each value over
         
         """
-        result = {v:0 for v in values}
+        result = [0]*len(values)
         projection = {}
         for v in values:
             v.project(projection)
@@ -145,9 +145,9 @@ class MongoSimsDB(SimulationsDB):
                     #something went really wrong here...
                     raise KeyError("No document with ID %s in database"%entry)
                 
-                for v in values:
+                for i,v in enumerate(values):
                     val = v.norm(v.parse(doc, match), match)
-                    result[v] = v.reduce(val, result[v])
+                    result[i] = v.reduce(val, result[i])
 
         return result
 

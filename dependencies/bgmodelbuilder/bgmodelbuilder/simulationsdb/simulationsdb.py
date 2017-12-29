@@ -91,7 +91,7 @@ class SimulationsDB(object):
                             to caluclate these values for
 
         Returns:
-            result (dict): dictionary of results for each key in values. 
+            result (list): list of computed results in same order as values. 
 
         TODO: How to distinguish incorrect vs empty value requests?
         """
