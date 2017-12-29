@@ -1,4 +1,5 @@
 import operator
+import numpy as np
 from collections import namedtuple
 
 class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
@@ -31,10 +32,10 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
         last = bins.searchsorted(b,"left")
         #take fractions of the first and last bins
         if first == last:
-            return (b-a)/(bins[first]-bins[first-1])
+            return spec[first-1] * (b-a)/(bins[first]-bins[first-1])
         return ( spec[first-1] * (bins[first]-a)/(bins[first]-bins[first-1])
                  +spec[last-1] * (b-bins[last-1])/(bins[last]-bins[last-1])
-                 +sum(spec[first:min(last-2,first)])
+                 +sum(spec[first:max(last-1,first)])
              )
 
     def average(self, a, b, binwidths=True):
@@ -53,7 +54,7 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
             return self.bin_edges
         elif self.bin_edges is None:
             return otherbins
-        elif self.bin_edges != otherbins:
+        elif not np.array_equal(self.bin_edges,otherbins):
             msg = ("Can't combins histograms with different binning: %s and %s"
                    %(self.bin_edges, otherbins))
             raise ValueError(msg)
@@ -113,29 +114,29 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
     def __iadd__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.add, inplace=True)
+        return self._combine(other, operator.iadd, inplace=True)
      
     def __isub__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.sub, inplace=True)
+        return self._combine(other, operator.isub, inplace=True)
     
     def __imul__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.mul, inplace=True)
+        return self._combine(other, operator.imul, inplace=True)
     
     def __ifloordiv__(self, other):
-        return self._combine(other, operator.floordiv, inplace=True)
+        return self._combine(other, operator.ifloordiv, inplace=True)
     
     def __itruediv__(self, other):
-        return self._combine(other, operator.truediv, inplace=True)
+        return self._combine(other, operator.itruediv, inplace=True)
     
     def __imod__(self, other):
-        return self._combine(other, operator.mod, inplace=True)
+        return self._combine(other, operator.imod, inplace=True)
     
     def __ipow__(self, other):
-        return self._combine(other, operator.pow, inplace=True)
+        return self._combine(other, operator.ipow, inplace=True)
 
     #reverse binary operators
     #these should only ever be called if type(other) != type(self)
