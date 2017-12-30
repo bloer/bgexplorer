@@ -23,7 +23,13 @@ class ModelViewer(object):
         values (dict): Value functions to evaluate for all simdatamatches
     """
     defaultversion='HEAD'
-    
+    defaultgroups = {
+        "Component": lambda match: [c.name for c in match.assemblyPath],
+        "Material": lambda match: match.component.material,
+        "Source": lambda match: match.spec.name,
+        "Source Category": lambda match: match.spec.category,
+    }
+
     def __init__(self, app=None, modeldb=None, simsdb=None,
                  cacher=InMemoryCacher(),
                  url_prefix='/explore', groups=None, values=None, 
@@ -45,7 +51,7 @@ class ModelViewer(object):
             self.init_app(app, url_prefix)
 
             
-        self.groups = groups or {}
+        self.groups = groups or self.defaultgroups
         self.values = values or {}
         self.values_units = values_units or {}
         self._threads = {}
@@ -200,6 +206,10 @@ class ModelViewer(object):
             """Return groups and values for all simdatamatches"""
             return self.get_datatable(g.model)
 
+        @self.bp.route('/tables/default')
+        def tablesdefault():
+            """Show some default tables with the calculated rows"""
+            return render_template("dashboardtables.html")
             
     #need to pass simsdb because it goes out of context
     def streamdatatable(self, model, simsdb):
@@ -230,7 +240,7 @@ class ModelViewer(object):
                          for g in groupvals)
             yield('\t'.join(chain([match.id],
                                   (str(g) for g in groupvals),
-                                  (str(eval) for eval in evals)))
+                                  ("%.3g"%eval for eval in evals)))
                   +'\n')
             
         

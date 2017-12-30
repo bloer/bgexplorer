@@ -1,0 +1,42 @@
+{% extends "modelbase.html" %}
+
+{% block title %}Evaluated Tables{% endblock %}
+
+{% block mystyles %}
+    <style>
+     tr.grouprow { display:none; }
+     tr.grouprow.depth0 {background-color:lightgreen; display:table-row;}
+     tr.grouprow.depth1 {background-color:lightcyan;  display:table-row;}
+     tr.grouprow.depth2 {background-color:lightyellow; display:table-row;}
+     tr.grouprow.leaf { background-color:white; }
+    </style>
+{% endblock %}
+
+
+{% block myscripts %}
+    <script src="{{ url_for('.static',filename='d3.v4.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='crossfilter.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='dashboard.js') }}"></script>
+    
+    <script language="javascript">
+     $(document).ready(function(){
+         var dashboard = bgexplorer.dashboard;
+         d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,
+                function(error, data){
+                    dashboard.processtable(error, data);
+                    dashboard.buildtable("#componenttable","Component");
+                    dashboard.buildtable("#materialtable","Material");
+                });
+     });
+    </script>
+{% endblock %}
+
+
+{% block pageheader %}
+    <h1> Evaluated Rate Tables</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <div id="componenttable"></div>
+    <div id="materialtable"></div>
+{% endblock %}
