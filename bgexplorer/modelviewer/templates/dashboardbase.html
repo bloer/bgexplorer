@@ -1,0 +1,46 @@
+{% extends "modelbase.html" %}
+
+{% block title %}Results Dashboard{% endblock %}
+
+{% block mystyles %}
+    <style>
+     #loading { display: block; margin:auto; }
+
+     table.bgexplorertable tr.grouprow { display:none; }
+     table.bgexplorertable tr.grouprow.depth0 {background-color:lightgreen; display:table-row;}
+     table.bgexplorertable tr.grouprow.depth1 {background-color:lightcyan;  display:table-row;}
+     table.bgexplorertable tr.grouprow.depth2 {background-color:lightyellow; display:table-row;}
+     table.bgexplorertable tr.grouprow.leaf { background-color:white; }
+    </style>
+{% endblock %}
+
+
+{% block myscripts %}
+    <script src="{{ url_for('.static',filename='d3.v4.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='crossfilter.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='dashboard.js') }}"></script>
+    
+    <script language="javascript">
+
+     //define all of the available groupsort stuff
+     {% for name,val in getmodelviewer().get_groupsort().items() %}
+     dashboard.groupsort['{{ name }}'] = {{ val | safe}};
+     {% endfor %}
+
+
+     $(document).ready(function(){
+         var dashboard = bgexplorer.dashboard;
+         dashboard.onLoad(function(){ d3.select("#loading").style("display","none"); });
+         d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,dashboard.processtable);
+     });
+    </script>
+{% endblock %}
+
+
+{% block pageheader %}
+    <h1> Evaluated Rates Explorer</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <img id="loading" src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
+{% endblock %}

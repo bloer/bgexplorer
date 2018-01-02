@@ -1,0 +1,26 @@
+{% extends "dashboardbase.html" %}
+
+{% block title %}Evaluated Tables{% endblock %}
+
+
+
+{% block myscripts %}
+    {{ super() }}
+
+    <script language="javascript">
+     dashboard.onLoad(function(){dashboard.buildtable("#componenttable","Component"); });
+     dashboard.onLoad(function(){dashboard.buildtable("#materialtable","Material"); });
+     
+    </script>
+{% endblock %}
+
+
+{% block pageheader %}
+    <h1> Evaluated Rate Tables</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    {{ super() }}
+    <div id="componenttable"></div>
+    <div id="materialtable"></div>
+{% endblock %}

@@ -22,6 +22,8 @@ dashboard.cfgroupAll = dashboard.cf.groupAll();
 dashboard.cffilters = {}
 //d3.js hierarchies. will be keyed by the column headings
 dashboard.hierarchies = {}
+//sorting functions for groups
+dashboard.groupsort = {}
 
 dashboard.valuetypes = []
 
@@ -29,6 +31,18 @@ dashboard.valuetypes = []
 dashboard.displays = {
     'tables': [],
 };
+
+//register a function to be called when data finishes loading
+var onload = []
+dashboard.onLoad = function(callback){
+    onload.push(callback);
+    if(dashboard.dataloaded){
+        callback();
+        onload.pop();
+    }
+};
+
+
 
 //parse the rows in the tsv datatable. Should be passed as the second argument
 //to d3.tsv
@@ -137,7 +151,15 @@ dashboard.processtable = function(error,rows){
             console.error("Error while building hierarchy for group "
                           +g+": "+error);
         }
+        var sortlist = dashboard.groupsort[g];
+        if(sortlist){
+            dashboard.hierarchies[g].sort(function(a,b){
+                return sortlist.indexOf(a.id) - sortlist.indexOf(b.id);
+            });
+        }
     });
+    dashboard.dataloaded = true;
+    onload.forEach(function(callback){ callback(); });
 }
 
 /* Create a table with group values for rows and reduced values for columns.
@@ -220,5 +242,6 @@ dashboard.updatetable = function(table){
     });
     
 };
+
 
 })( window.bgexplorer = window.bgexplorer || {});

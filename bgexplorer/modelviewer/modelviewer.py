@@ -20,6 +20,8 @@ class ModelViewer(object):
         simsdb:  a SimulationsDB object. If None, will get from the Flask object
         url_prefix (str): Where to mount this blueprint relative to root
         groups (dict): Grouping functions to evaluate for all simdatamatches
+        goupsort (dict): Sorting function in the form of a list of expected 
+                         values. Will be passed to javascript functions
         values (dict): Value functions to evaluate for all simdatamatches
     """
     defaultversion='HEAD'
@@ -30,10 +32,12 @@ class ModelViewer(object):
         "Source Category": lambda match: match.spec.category,
     }
 
+    joinkey = '//'
+
     def __init__(self, app=None, modeldb=None, simsdb=None,
                  cacher=InMemoryCacher(),
-                 url_prefix='/explore', groups=None, values=None, 
-                 values_units=None):
+                 url_prefix='/explore', groups=None, groupsort=None,
+                 values=None, values_units=None):
         self.app = app
         self._modeldb = modeldb
         self._simsdb = simsdb
@@ -43,7 +47,7 @@ class ModelViewer(object):
                             template_folder='templates',
                             url_prefix='/<modelname>/<version>')
         
-            
+        self.bp.add_app_template_global(lambda : self, 'getmodelviewer')    
         self.set_url_processing()
         self.register_endpoints()
         
@@ -52,6 +56,7 @@ class ModelViewer(object):
 
             
         self.groups = groups or self.defaultgroups
+        self.groupsort = groupsort or {}
         self.values = values or {}
         self.values_units = values_units or {}
         self._threads = {}
@@ -63,6 +68,8 @@ class ModelViewer(object):
         """Register ourselves with the app"""
         app.register_blueprint(self.bp, 
                                url_prefix=url_prefix+self.bp.url_prefix)
+        app.extensions['ModelViewer'] = self
+        
         
 
     @property
@@ -209,7 +216,7 @@ class ModelViewer(object):
         @self.bp.route('/tables/default')
         def tablesdefault():
             """Show some default tables with the calculated rows"""
-            return render_template("dashboardtables.html")
+            return render_template("tablesdefault.html")
             
     #need to pass simsdb because it goes out of context
     def streamdatatable(self, model, simsdb):
@@ -236,7 +243,8 @@ class ModelViewer(object):
                         except AttributeError: #not a Quantity...
                             pass
             groupvals = (g(match) for g in self.groups.values())
-            groupvals = ('//'.join(g) if isinstance(g,(list,tuple)) else g
+            groupvals = (self.joinkey.join(g) 
+                         if isinstance(g,(list,tuple)) else g
                          for g in groupvals)
             yield('\t'.join(chain([match.id],
                                   (str(g) for g in groupvals),
@@ -307,3 +315,20 @@ class ModelViewer(object):
                                       'Content-Encoding':'deflate'})
         
         
+    def get_componentsort(self, component):
+        """Return an array component names in assembly order to be passed
+        to the javascript analyzer for sorting component names
+        """
+        #TODO: cache this
+        result = [component.name]
+        for child in component.getcomponents(merge=False):
+            result.extend(self.joinkey.join((component.name, s) )
+                          for s in self.get_componentsort(child))
+        return result
+
+        
+    def get_groupsort(self):
+        res = dict(**self.groupsort)
+        if 'Component' not in res:
+            res['Component'] = self.get_componentsort(g.model.assemblyroot)
+        return res
