@@ -19,10 +19,10 @@ def getbomrows(row=None, form="%02d"):
     myrows = [row] 
 
     parent = row.component
-    if hasattr(parent,'getcomponents'):
-        form = "%02d" if len(parent.components)>10 else "%d"
-        for index, cw in enumerate(parent.getcomponents(deep=False, 
-                                                        withweight=True)):
+    subs = parent.getcomponents(deep=False, withweight=True)
+    if subs:
+        form = "%02d" if len(subs)>10 else "%d"
+        for index, cw in enumerate(subs):
             child, weight = cw
             outlineprefix = row.outline+'.' if row.outline else ''
             childrow = BOMRow(outline=("%s"+form)%(outlineprefix,index+1),
