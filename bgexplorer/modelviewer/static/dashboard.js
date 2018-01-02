@@ -157,6 +157,13 @@ dashboard.processtable = function(error,rows){
                 return sortlist.indexOf(a.id) - sortlist.indexOf(b.id);
             });
         }
+        else{
+            //sort by the value of the first group
+            dashboard.hierarchies[g].sum(function(node){ 
+                return node.value ? node.value[dashboard.valuetypes[0]] : 0;
+            }).sort(function(a,b){ return b.value - a.value; });
+            
+        }
     });
     dashboard.dataloaded = true;
     onload.forEach(function(callback){ callback(); });
@@ -197,11 +204,40 @@ dashboard.buildtable = function(parent, group, cols, id){
     
     //create all the cells only once
     var tbody = table.append("tbody").datum(dashboard.hierarchies[group]);
+
+    //toggle nested rows' visibility
+    function togglerowexpanded(row, newstate){
+        var row = d3.select(row);
+        var children = d3.select(row.node().parentNode)
+          .selectAll("tr.grouprow").filter(function(d){ 
+              return d.parent == row.datum(); 
+          });
+        
+        if(!newstate){
+            //we want to toggle our own state
+            if(row.classed("expanded")){
+                newstate = "closed";
+                row.classed("expanded",false);
+                children.classed("hide",true);
+            }
+            else{
+                newstate = "expanded";
+                row.classed("expanded",true);
+                children.classed("hide",false);
+            }
+        }
+        else{
+            children.classed("hide",!(newstate == "expanded" && row.classed("expanded")));
+        }
+        children.filter(".haschildren").each(function(d){ togglerowexpanded(this, newstate); });
+    }
+    
     //recursive function to add nested rows
     function addrow(node){
         var row = tbody.append("tr")
             .datum(node)
-            .classed("grouprow depth"+node.depth,true);
+            .classed("grouprow depth"+node.depth,true)
+            .classed("hide",node.depth>2);
         row
           .selectAll("td").data(allcols).enter().append("td")
             .attr("class",function(d,i){ return i ? "valcell" : "groupcell"; })
@@ -213,8 +249,14 @@ dashboard.buildtable = function(parent, group, cols, id){
             
         ;
         if(node.children){
-            row.classed("haschildren",true);
-            node.children.forEach(addrow);
+            row.classed("haschildren",true)
+                .classed("expanded",node.depth<2);
+            childrows = node.children.map(addrow);
+            row.select("td.groupcell")
+              .append("span").attr("class","caret expander")
+                .on("click", function(){
+                    togglerowexpanded(this.parentNode.parentNode);
+                });
         }
         else{
             row.classed("leaf",true);
