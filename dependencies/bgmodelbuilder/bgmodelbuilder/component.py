@@ -491,7 +491,7 @@ class Assembly(BaseComponent):
         allcomp = []
         for placement in self._components:
             comp, weight = placement.component, placement.weight
-            if hasattr(comp,'components')
+            if hasattr(comp,'components'):
                 subcomps = comp.getcomponents(deep,withweight)
                 if withweight:
                     subcomps=[(c,w*weight) for c,w in subcomps]
