@@ -13,19 +13,27 @@
 bgexplorer.dashboard = bgexplorer.dashboard || {}
 dashboard = bgexplorer.dashboard
 
+//various configuration settings can be changed here
+dashboard.config = {
+    'tableprecision': 2,
+    'tabledecimals':  3,
+    'titleprecision': 5,
+    'defaulttabledepth': 1,
+};
+
 //top-level crossfilter instance
 dashboard.cf = crossfilter();
 //crossfilter dimensions and groups. Will be keyed by the column headings
-dashboard.cfdimensions = {}
-dashboard.cfgroups = {}
+dashboard.cfdimensions = {};
+dashboard.cfgroups = {};
 dashboard.cfgroupAll = dashboard.cf.groupAll();
-dashboard.cffilters = {}
+dashboard.cffilters = {};
 //d3.js hierarchies. will be keyed by the column headings
-dashboard.hierarchies = {}
+dashboard.hierarchies = {};
 //sorting functions for groups
-dashboard.groupsort = {}
+dashboard.groupsort = {};
 
-dashboard.valuetypes = []
+dashboard.valuetypes = [];
 
 //list of interactive display objects that should be updated when filters change
 dashboard.displays = {
@@ -158,9 +166,9 @@ dashboard.processtable = function(error,rows){
             });
         }
         else{
-            //sort by the value of the first group
+            //sort by the sum over all values
             dashboard.hierarchies[g].sum(function(node){ 
-                return node.value ? node.value[dashboard.valuetypes[0]] : 0;
+                return node.value ? Object.values(node.value).reduce(function(a,b){ return a+b; }) : 0;
             }).sort(function(a,b){ return b.value - a.value; });
             
         }
@@ -234,10 +242,11 @@ dashboard.buildtable = function(parent, group, cols, id){
     
     //recursive function to add nested rows
     function addrow(node){
+        var opendepth = dashboard.config.defaulttabledepth;
         var row = tbody.append("tr")
             .datum(node)
             .classed("grouprow depth"+node.depth,true)
-            .classed("hide",node.depth>2);
+            .classed("hide",node.depth>opendepth);
         row
           .selectAll("td").data(allcols).enter().append("td")
             .attr("class",function(d,i){ return i ? "valcell" : "groupcell"; })
@@ -250,7 +259,7 @@ dashboard.buildtable = function(parent, group, cols, id){
         ;
         if(node.children){
             row.classed("haschildren",true)
-                .classed("expanded",node.depth<2);
+                .classed("expanded",node.depth<opendepth);
             childrows = node.children.map(addrow);
             row.select("td.groupcell")
               .append("span").attr("class","caret expander")
@@ -275,10 +284,41 @@ dashboard.updatetable = function(table){
         grouproot.sum(function(node){
             return node.value ? node.value[val] : 0;
         });
+        
+        //determine whether to use floating point or exp notation
+        var total = grouproot.value;
+        var totalpower = Math.floor(Math.log10(total));
+        //TODO: make these configurable
+        
+        var decimals = dashboard.config.tabledecimals;
+        var precision = dashboard.config.tableprecision;
+        var useexpo = totalpower > 3 || totalpower < -1;
+        
+        var exponent = 2-totalpower;
+        var multiplier = 10**(exponent);
+        
+        
         table.select("tbody").selectAll("tr td.valcell")
             .filter(function(d){ return d == val; })
-            .text(function(d){ 
-                return d3.select(this.parentNode).datum().value.toPrecision(2); 
+            .attr("title",function(){ 
+                return d3.select(this.parentNode).datum().value
+                    .toExponential(dashboard.config.titleprecision); 
+            })
+            .text(function(d){
+                var myval = d3.select(this.parentNode).datum().value;
+                if(myval == 0)
+                    return "";
+                if(useexpo)
+                    myval *= multiplier;
+                var mypower = Math.floor(Math.log10(myval));
+                var sigdigs = myval.toExponential(precision-1).substr(0,precision);
+                var fixed = parseFloat(myval.toExponential(precision-1)).toFixed(decimals);
+                //replace trailing zeros after the decimal point
+                var sigdecs = Math.min(Math.max(precision-mypower-1,0),decimals);
+                var cut = decimals-sigdecs;
+                var length = fixed.length;
+                var result =  fixed.substr(0,length-cut).padEnd(length);
+                return useexpo ? result+" E"+(-exponent).toString() : result;
             })
         ;
     });
