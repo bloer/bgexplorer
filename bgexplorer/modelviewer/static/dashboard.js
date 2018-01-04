@@ -38,6 +38,7 @@ dashboard.valuetypes = [];
 //list of interactive display objects that should be updated when filters change
 dashboard.displays = {
     'tables': [],
+    'charts': [],
 };
 
 //register a function to be called when data finishes loading
@@ -70,8 +71,7 @@ dashboard.parserow = function(row){
     return out;
 };
     
-var splitkey = '//';
-
+var splitkey = '___';
 
 //take the list of objects returned from parserows and construct the crossfiler
 // and d3 structures
@@ -156,22 +156,48 @@ dashboard.processtable = function(error,rows){
             dashboard.hierarchies[g] = d3.stratify()
                 .id(function(d){ return d.key; }).parentId(pid)(allnodes);
         }catch(error){
-            console.error("Error while building hierarchy for group "
-                          +g+": "+error);
+            var msg = "Error while building hierarchy for group "+g+": "+error;
+            console.error(msg);
+            alert(msg);
+            return;
         }
+        var root = dashboard.hierarchies[g];
+        //sort them based on user provided values or else by value
         var sortlist = dashboard.groupsort[g];
         if(sortlist){
-            dashboard.hierarchies[g].sort(function(a,b){
+            root.sort(function(a,b){
                 return sortlist.indexOf(a.id) - sortlist.indexOf(b.id);
             });
         }
         else{
             //sort by the sum over all values
-            dashboard.hierarchies[g].sum(function(node){ 
+            root.sum(function(node){ 
                 return node.value ? Object.values(node.value).reduce(function(a,b){ return a+b; }) : 0;
             }).sort(function(a,b){ return b.value - a.value; });
             
         }
+        //add some additional useful info
+        root.each(function(node){ 
+            node.name = node.data.key.split(splitkey).pop();
+            if(node.name == "" || node.name == splitkey) node.name = "Total";
+            node.id = (g+splitkey+node.id).replace(/[^A-z0-9_-]/g,'_');
+            if(node.parent){
+                node.siblings = node.parent.children.length;
+                node.index = node.parent.children.indexOf(node);
+                node.colorStart = (node.index+0.05) / node.siblings;
+                node.colorEnd = node.colorStart + 0.9/node.siblings;
+                if(node.parent.color){
+                    node.colorStart = node.parent.colorStart + node.colorStart * (node.parent.colorEnd - node.parent.colorStart);
+                    node.colorEnd = node.parent.colorStart + node.colorEnd * (node.parent.colorEnd - node.parent.colorStart);
+                }
+                node.color = d3.interpolateCool(node.colorStart*0.9+0.1);
+            }
+            else{
+                node.siblings = 1;
+                node.index = null;
+                node.color = null;
+            }
+        });
     });
     dashboard.dataloaded = true;
     onload.forEach(function(callback){ callback(); });
@@ -249,11 +275,11 @@ dashboard.buildtable = function(parent, group, cols, id){
             .classed("hide",node.depth>opendepth);
         row
           .selectAll("td").data(allcols).enter().append("td")
+            .datum(function(d){ return {'group': node, 'val': d }; })
             .attr("class",function(d,i){ return i ? "valcell" : "groupcell"; })
             .text(function(d,i){
                 if(i) return "";
-                var id = d3.select(this.parentNode).datum().id;
-                return id == splitkey ? "Total" : id.split(splitkey).pop();
+                return d.group.name;
             })
             
         ;
@@ -299,13 +325,12 @@ dashboard.updatetable = function(table){
         
         
         table.select("tbody").selectAll("tr td.valcell")
-            .filter(function(d){ return d == val; })
-            .attr("title",function(){ 
-                return d3.select(this.parentNode).datum().value
-                    .toExponential(dashboard.config.titleprecision); 
+            .filter(function(d){ return d.val == val; })
+            .attr("title",function(d){ 
+                return d.group.value.toExponential(dashboard.config.titleprecision); 
             })
             .text(function(d){
-                var myval = d3.select(this.parentNode).datum().value;
+                var myval = d.group.value;
                 if(myval == 0)
                     return "";
                 if(useexpo)
@@ -324,6 +349,99 @@ dashboard.updatetable = function(table){
     });
     
 };
+
+
+
+dashboard.buildchart = function(parent, group, valtype, width, id){
+    //TODO: move error checking to a dedicated function
+    //make sure the group exists
+    if(!dashboard.hierarchies[group]){
+        var error = "dashboard.buildchart: unknown group name "+group;
+        console.error(error);
+        throw error;
+    }
+    if(dashboard.valuetypes.indexOf(valtype) == -1){
+        var error = "dashboard.buildchart: unknown value type "+valtype;
+        console.error(error);
+        throw error;
+    }
+    var container = d3.select(parent)
+      .append("div").attr("class","bgexplorer-chart-container").style("width","100%")
+        .datum(group);
+    
+    container.append("span").attr("class","bgexplorer-chart-title")
+        .text(function(d){ return d; });
+    
+    width = width || $(container.node()).width() || 400;
+    //width *= 0.95;
+    
+    var chart = container
+      .append("svg")
+        .attr("class","bgexplorer-chart")
+        .attr("width",width)
+        .attr("height",width)
+      .append("g").datum({groupname:group, group: dashboard.hierarchies[group], val:valtype})
+        .attr("class","bgexplorer-chart-window")
+        .attr("width",width)
+        .attr("height",width)
+        //.attr("transform","translate("+width/2+","+width/2+")")
+    ;
+    dashboard.displays.charts.push(chart);
+    dashboard.updatechart(chart);
+    return chart;
+};
+
+dashboard.updatechart = function(chart, valtype){
+    var chartdata = chart.datum();
+    valtype = valtype || chartdata.val;
+    chartdata.val = valtype;
+    var groupname = chartdata.groupname;
+    var width = parseInt(chart.attr("width"));
+    var data = chartdata.group.sum(function(node){ return node.value ? node.value[valtype] : 0; });
+    //scale the data so that we're zoomed in and cut off the total
+    var maxdepth = data.height;
+    var height = width; 
+    width *= (1+maxdepth) / Math.min(maxdepth,3);
+    d3.partition().size([height, width]).round(true).padding(1)(data);
+    data.descendants().forEach(function(d){ 
+        var w = d.y1 - d.y0; 
+        d.y1 -= w; d.y0-=w;
+    });    
+    var nodes = chart.selectAll(".node")
+      .data(data.descendants().filter(function(d){ return d.depth>0 && d.x1-d.x0>1; }),
+           function(d){ return d.id; });
+    var enter = nodes.enter().append("g")
+        .attr("class",function(d){ return "node" + (d.children ? " branch": " leaf"); })
+        .attr("transform",function(d){ return "translate("+d.y0+","+d.x0+")"; })
+        .style("opacity",0);
+    enter.append("rect")
+        .attr("id",function(d){ return "rect-"+d.id; })
+        .attr("width", 0)
+        .attr("height", 0)
+        .style("fill",function(d){ return d.color; }).style("opacity",0.6);
+    enter.append("clipPath")
+        .attr("id", function(d) { return "clip-" + d.id; })
+      .append("use")
+        .attr("xlink:href", function(d) { return "#rect-" + d.id + ""; });
+    enter.append("text")
+        .attr("x",3).attr("y",13)
+        .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
+        .text(function(d){ return d.name });
+    enter.append("title").text(function(d){ return d.name; });
+
+    var merge = nodes.merge(enter);
+    merge.selectAll("title").text(function(d){ return d.name + ": "+d.value.toExponential(5); });
+    merge.transition().delay(5).duration(500)
+        .attr("transform",function(d){ return "translate("+d.y0+","+d.x0+")"; })
+      .selectAll("rect")
+        .attr("width", function(d) { return d.y1 - d.y0; })
+        .attr("height", function(d) { return d.x1 - d.x0; });
+    
+    nodes.exit().transition().delay(5).duration(400).style("opacity",0).remove();
+    enter.transition().delay(400).duration(400).style("opacity",1);
+    
+};
+
 
 
 })( window.bgexplorer = window.bgexplorer || {});

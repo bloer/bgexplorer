@@ -32,7 +32,7 @@ class ModelViewer(object):
         "Source Category": lambda match: match.spec.category,
     }
 
-    joinkey = '//'
+    joinkey = '___'
 
     def __init__(self, app=None, modeldb=None, simsdb=None,
                  cacher=InMemoryCacher(),
@@ -217,7 +217,12 @@ class ModelViewer(object):
         def tablesdefault():
             """Show some default tables with the calculated rows"""
             return render_template("tablesdefault.html")
-            
+         
+        @self.bp.route('/charts/default')
+        def chartsdefault():
+            """Show some default charts with the calculated rates"""
+            return render_template("chartsdefault.html")
+         
     #need to pass simsdb because it goes out of context
     def streamdatatable(self, model, simsdb):
         """Stream exported data table so it doesn't all go into mem at once

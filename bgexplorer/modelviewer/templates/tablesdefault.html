@@ -8,8 +8,10 @@
     {{ super() }}
 
     <script language="javascript">
-     dashboard.onLoad(function(){dashboard.buildtable("#componenttable","Component"); });
-     dashboard.onLoad(function(){dashboard.buildtable("#materialtable","Material"); });
+     dashboard.onLoad(function(){
+         dashboard.buildtable("#componenttable","Component"); 
+         dashboard.buildtable("#materialtable","Material");
+     });
      
     </script>
 {% endblock %}

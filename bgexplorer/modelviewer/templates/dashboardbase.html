@@ -4,7 +4,7 @@
 
 {% block mystyles %}
     <style>
-     #loading { display: block; margin:auto; }
+     #loading { display: block; margin:auto; width: 50%; }
 
      table.bgexplorertable thead th {text-align:center}
      table.bgexplorertable thead th:first-child {text-align:left}
@@ -19,6 +19,12 @@
      table.bgexplorertable tr.grouprow.leaf { background-color:white; }
      table.bgexplorertable tr.grouprow.haschildren span.expander { transform: rotate(-90deg); cursor:pointer;margin-left:5px;paddingright:5px; }
      table.bgexplorertable tr.grouprow.haschildren.expanded span.expander { transform: rotate(0deg); }
+     
+
+     div.bgexplorer-chart-container {  }
+     .bgexploerer-chart-title { font-weight: bold; text-decoration: underline; }
+     .bgexplorer-chart { font: 10px sans-serif; border: 1px solid gray; }
+     .bgexplorer-chart .node.branch { font-weight: bold; }
      
     </style>
 {% endblock %}
@@ -39,7 +45,7 @@
 
      $(document).ready(function(){
          var dashboard = bgexplorer.dashboard;
-         dashboard.onLoad(function(){ d3.select("#loading").style("display","none"); });
+         dashboard.onLoad(function(){ d3.select("#loading").classed("hide",true); }); 
          d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,dashboard.processtable);
      });
     </script>
@@ -51,5 +57,8 @@
 {% endblock %}
 
 {% block pagecontent %}
-    <img id="loading" src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
+    <div id="loading">
+        <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
+        <p>Performing map-reduce on simulated data. This may take up to a few minutes</p>
+    </div>
 {% endblock %}

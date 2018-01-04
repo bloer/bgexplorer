@@ -1,0 +1,50 @@
+{% extends "dashboardbase.html" %}
+
+{% block mystyle %}
+    {{ super() }}
+    
+{% endblock %}
+
+
+{% block myscripts %}
+    {{ super() }}
+
+    <script language="javascript">
+     dashboard.onLoad(function(){
+         //set up a drop-down selector for the values
+         d3.select("#control")
+           .append("form").attr("id","valform")
+           .append("select")
+           .attr("id","selectval")
+           .on("change",function(){
+               var newval = this.value;
+               dashboard.displays.charts.forEach(function(chart){
+                   dashboard.updatechart(chart, newval);
+               });
+           })
+           .selectAll("option").data(dashboard.valuetypes).enter()
+           .append("option")
+           .property("value",function(d){ return d; })
+           .text(function(d){ return d; })
+         ;
+         
+         //set up a div for each group type
+         d3.select("#charts").selectAll("div.chartholder").data(Object.keys(dashboard.hierarchies))
+           .enter().append("div").attr("class","chartholder col-sm-6 col-md-4 col-lg-4")
+           .each(function(d){ dashboard.buildchart(this, d, dashboard.valuetypes[0]); });
+     });
+     
+    </script>
+{% endblock %}
+
+{% block title %}Interactive Charts{% endblock %}
+
+{% block pageheader %}
+    <h1> Interactive Charts</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    {{ super() }}
+    <div id="control"></div>
+    <div id="charts" class="row" ></div>
+{% endblock %}
