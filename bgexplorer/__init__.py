@@ -29,6 +29,24 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
                 instance_relative_config=bool(instance_path))
     if config_filename:
         app.config.from_pyfile(config_filename)
+
+    #set up logging
+    if not app.debug:
+        logfile = app.config.get('LOGFILE')
+        if logfile:
+            import logging
+            from logging.handlers import RotatingFileHandler
+            format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            level = app.config.get('LOGLEVEL',logging.WARNING)
+            logging.basicConfig(filename=logfile, format=format, level=level)
+
+            file_handler = RotatingFileHandler(logfile, maxBytes=1024*1024*100,
+                                               backupCount=20)
+            file_handler.setLevel(app.config.get('LOGLEVEL',logging.DEBUG))
+            formatter = logging.Formatter(format)
+            file_handler.setFormatter(formatter)
+            app.logger.addHandler(file_handler)
+    
         
     Bootstrap(app)
     modeldb = ModelDB(app=app)
