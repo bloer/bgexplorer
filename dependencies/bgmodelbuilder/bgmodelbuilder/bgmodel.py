@@ -20,7 +20,7 @@ from .emissionspec import EmissionSpec, buildspecfromdict
 
 class BgModel(object):
     def __init__(self, name=None, assemblyroot=None, 
-                 version=0, description='',
+                 version="0", description='',
                  derivedFrom=None, editDetails=None,
                  components=None, specs=None,simdatamatches=None,
                  sanitize=True):
@@ -28,7 +28,7 @@ class BgModel(object):
         Params:
             assemblyroot (Assembly): top-level Assembly defining entire model
             name (str): a short name for the model to be used as an identifier
-            version (int): version number for name
+            version (str): version number for name
             description (str): brief description of the model contents
             derivedFrom: a reference to the parent or predecessor that was the 
                 base for this model, assuming it is an edit of a prior version
