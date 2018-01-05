@@ -19,6 +19,9 @@ dashboard.config = {
     'tabledecimals':  3,
     'titleprecision': 5,
     'defaulttabledepth': 1,
+    'maxchartdepth': 3,
+    'minnodesize': 0.005,
+    'defaultcharttype': 'pie',
 };
 
 //top-level crossfilter instance
@@ -238,7 +241,6 @@ dashboard.buildtable = function(parent, group, cols, id){
     
     //create all the cells only once
     var tbody = table.append("tbody").datum(dashboard.hierarchies[group]);
-
     //toggle nested rows' visibility
     function togglerowexpanded(row, newstate){
         var row = d3.select(row);
@@ -305,7 +307,7 @@ dashboard.buildtable = function(parent, group, cols, id){
 
 //update the values in the given table
 dashboard.updatetable = function(table){
-    var grouproot = table.select("tbody").datum();
+    var grouproot = table.selectAll("tbody").datum();
     table.selectAll("thead tr th.valhead").each(function(val){
         grouproot.sum(function(node){
             return node.value ? node.value[val] : 0;
@@ -352,7 +354,7 @@ dashboard.updatetable = function(table){
 
 
 
-dashboard.buildchart = function(parent, group, valtype, width, id){
+dashboard.buildchart = function(parent, group, valtype, charttype, width, id){
     //TODO: move error checking to a dedicated function
     //make sure the group exists
     if(!dashboard.hierarchies[group]){
@@ -365,12 +367,25 @@ dashboard.buildchart = function(parent, group, valtype, width, id){
         console.error(error);
         throw error;
     }
+
+    if(charttype != "icicle" && charttype != "pie"){
+        if(charttype)
+            console.warn("Unknown chart type "+charttype+": defaulting to "+dashboard.config.defaultcharttype);
+        charttype = dashboard.config.defaultcharttype;
+    }
     var container = d3.select(parent)
       .append("div").attr("class","bgexplorer-chart-container").style("width","100%")
         .datum(group);
     
-    container.append("span").attr("class","bgexplorer-chart-title")
-        .text(function(d){ return d; });
+    id = id || d3.select(parent).attr('id') + "_chart";
+        
+    var display = container.append("div").attr("class","bgexplorer-chart-title clearfix")
+        .attr("id",id)
+        .style("width","100%")
+        .text(function(d){ return d; })
+      .append("span")
+        .attr("class","bgexplorer-selection-display pull-right")
+        .attr("id",id+"-selection-display");
     
     width = width || $(container.node()).width() || 400;
     //width *= 0.95;
@@ -380,63 +395,131 @@ dashboard.buildchart = function(parent, group, valtype, width, id){
         .attr("class","bgexplorer-chart")
         .attr("width",width)
         .attr("height",width)
-      .append("g").datum({groupname:group, group: dashboard.hierarchies[group], val:valtype})
+      .append("g").datum({groupname:group, 
+                          group: dashboard.hierarchies[group], 
+                          val:valtype, 
+                          type:charttype,
+                          display:display,
+                         })
         .attr("class","bgexplorer-chart-window")
         .attr("width",width)
         .attr("height",width)
-        //.attr("transform","translate("+width/2+","+width/2+")")
+        .attr("transform",charttype == "pie" ? "translate("+width/2+","+width/2+")" : null)
     ;
     dashboard.displays.charts.push(chart);
     dashboard.updatechart(chart);
     return chart;
 };
 
+var arc = d3.arc()
+        .startAngle(function(d){ return d.x0; })
+        .endAngle(function(d){ return d.x1; })
+        .innerRadius(function(d){ return d.y0; })
+        .outerRadius(function(d){ return d.y1; })
+        .cornerRadius(0);
+    
+    
+function arcTween(d){
+	var end = {x0:d.x0, y0:d.y0, x1:d.x1, y1:d.y1};
+    var start = end;
+    if(d.previousVals){
+        start = {x0: d.previousVals.x0 || end.x0,
+                 x1: d.previousVals.x1 || end.x1,
+                 y0: d.previousVals.y0 || end.y0,
+                 y1: d.previousVals.y1 || end.y0,
+                };  
+    }               
+	return d3.interpolate(start,end);
+}
+function arcTweenD(d){
+	return function(t){ return arc(arcTween(d)(t)); };
+}
+	
+
 dashboard.updatechart = function(chart, valtype){
     var chartdata = chart.datum();
     valtype = valtype || chartdata.val;
     chartdata.val = valtype;
     var groupname = chartdata.groupname;
+    var pie = chartdata.type == "pie";
     var width = parseInt(chart.attr("width"));
     var data = chartdata.group.sum(function(node){ return node.value ? node.value[valtype] : 0; });
     //scale the data so that we're zoomed in and cut off the total
     var maxdepth = data.height;
     var height = width; 
-    width *= (1+maxdepth) / Math.min(maxdepth,3);
-    d3.partition().size([height, width]).round(true).padding(1)(data);
-    data.descendants().forEach(function(d){ 
+    width *= (1+maxdepth) / Math.min(maxdepth,dashboard.config.maxchartdepth);
+    data.each(function(d){ d.previousVals = {x0: d.x0, x1: d.x1, y0: d.y0, y1: d.y1}; });
+    d3.partition()
+        .size(pie ? [2*Math.PI, 0.99*width/2] : [height, width])
+        .round(false)
+        .padding(0)
+      (data);
+    data.each(function(d){ 
         var w = d.y1 - d.y0; 
         d.y1 -= w; d.y0-=w;
     });    
+
     var nodes = chart.selectAll(".node")
-      .data(data.descendants().filter(function(d){ return d.depth>0 && d.x1-d.x0>1; }),
-           function(d){ return d.id; });
+      .data(data.descendants().filter(function(d){ 
+          return d.depth>0 && d.depth<=dashboard.config.maxchartdepth && d.value/data.value>dashboard.config.minnodesize; 
+      }),function(d){ return d.id; });
     var enter = nodes.enter().append("g")
         .attr("class",function(d){ return "node" + (d.children ? " branch": " leaf"); })
-        .attr("transform",function(d){ return "translate("+d.y0+","+d.x0+")"; })
-        .style("opacity",0);
-    enter.append("rect")
-        .attr("id",function(d){ return "rect-"+d.id; })
-        .attr("width", 0)
-        .attr("height", 0)
-        .style("fill",function(d){ return d.color; }).style("opacity",0.6);
+        .style("opacity",0)
+        .on("mouseenter", function(d){ 
+            chartdata.display.text(d3.select(this).select("title").text());
+        })
+        .on("mouseleave",function(){ chartdata.display.text(null); })
+           
+    ;
+    if(pie){
+        enter.append("path")
+            .attr("class","bgexplorer-data-shape arc")
+            .attr("d",arc);
+    }
+    else{
+        enter.append("rect")
+            .attr("class","bgexplorer-data-shape rect")
+            .attr("x", function(d){ return d.y0; })
+            .attr("y", function(d){ return d.x0;})
+            .attr("width", 0)
+            .attr("height", 0);
+    }
+    enter.selectAll(".bgexplorer-data-shape")
+        .attr("id",function(d){ return "shape-"+d.id; }) //todo: this needs to be globally unique
+        .style("fill",function(d){ return d.color; })
+        .style("opacity",0.6);
+    
     enter.append("clipPath")
-        .attr("id", function(d) { return "clip-" + d.id; })
+        .attr("id", function(d) { return "clip-" + d.id; }) //todo: this needs to be globally unique
       .append("use")
-        .attr("xlink:href", function(d) { return "#rect-" + d.id + ""; });
+        .attr("xlink:href", function(d) { return "#shape-" + d.id + ""; });
     enter.append("text")
-        .attr("x",3).attr("y",13)
+        .attr("class","bgexplorer-chart-label")
+        .attr("text-anchor","middle")
+        .attr("dominant-baseline","central")
+        .attr("y",5).attr("x",0)
         .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
-        .text(function(d){ return d.name });
+        .attr("pointer-events", "none") //prevent stealing hover
+        .text(function(d){ return d.name })
+        
+    ;
     enter.append("title").text(function(d){ return d.name; });
 
     var merge = nodes.merge(enter);
     merge.selectAll("title").text(function(d){ return d.name + ": "+d.value.toExponential(5); });
-    merge.transition().delay(5).duration(500)
-        .attr("transform",function(d){ return "translate("+d.y0+","+d.x0+")"; })
-      .selectAll("rect")
+    var transition = merge.transition().delay(5).duration(500);
+    transition
+      .selectAll("rect.bgexplorer-data-shape")
+        .attr("x", function(d){ return d.y0; })
+        .attr("y", function(d){ return d.x0;})
         .attr("width", function(d) { return d.y1 - d.y0; })
         .attr("height", function(d) { return d.x1 - d.x0; });
-    
+    transition.selectAll(".bgexplorer-data-shape.arc")
+        .attrTween("d",arcTweenD);
+    transition.selectAll("text")
+        .attr("x",function(d){ return pie ? arc.centroid(d)[0] : 0.5*(d.y1+d.y0); })
+        .attr("y",function(d){ return pie ? arc.centroid(d)[1] : 0.5*(d.x1+d.x0); });
     nodes.exit().transition().delay(5).duration(400).style("opacity",0).remove();
     enter.transition().delay(400).duration(400).style("opacity",1);
     
