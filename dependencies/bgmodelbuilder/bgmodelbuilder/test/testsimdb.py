@@ -16,25 +16,22 @@ class TestingSimulationsDB(SimulationsDB):
     def findsimentries(self, request):
         #We only know a few things
         if request.spec.name not in self.baserates:
-            return [SimDataMatch(request, query="FIND "+request.spec.name)]
-
-        #Add 1e7 gammas for all 
-        dataset = (request.spec.name, len(request.assemblyPath), "gamma")
-        livetime = (self.getprimaries(None)/request.emissionrate)
-        match = SimDataMatch(request, 
-                             dataset=dataset,
-                             weight=1,
-                             livetime=livetime)
-        result = [match]
-        if dataset[0] in ('U238', 'Th232'):
-            match2 = match.clone(deep=False)
-            match2.dataset = (request.spec.name, len(request.assemblyPath), 
-                              "neutron")
-            match2.weight = 1.e-6
-            match2.livetime *= match.weight / match2.weight
-            result.append(match2)
+            request.addquery("FIND "+request.spec.name)
         
-        return result
+        else:
+            #Add 1e7 gammas for all 
+            dataset = (request.spec.name, len(request.assemblyPath), "gamma")
+            livetime = (self.getprimaries(None)/request.emissionrate)
+            request.addquery(dataset, dataset=dataset, livetime=livetime)
+            if dataset[0] in ('U238', 'Th232'):
+                dataset = (request.spec.name, len(request.assemblyPath), 
+                           "neutron")
+                weight = 1.e-6
+                livetime *= 1 / weight
+                request.addquery(dataset, weight=weight, livetime=livetime,
+                                 dataset=dataset)
+        
+        return request.matches
             
     def evaluate(self, values, matches):
         #we know how to evaluate "primaries" and "rate"

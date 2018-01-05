@@ -1,0 +1,67 @@
+{% extends "modelbase.html" %}
+
+{% block title %}Results Dashboard{% endblock %}
+
+{% block mystyles %}
+    <style>
+     #loading { display: block; margin:auto; width: 50%; }
+
+     table.bgexplorertable thead th {text-align:center}
+     table.bgexplorertable thead th:first-child {text-align:left}
+     
+     table.bgexplorertable td.valcell {font-family: "Lucida Console", Monaco, monospace; text-align:right; white-space:pre }
+     table.bgexplorertable tr.grouprow.depth0 {background-color:lightgreen; font-weight:bold}
+     table.bgexplorertable tr.grouprow.depth1 {background-color:lightcyan; }
+     table.bgexplorertable tr.grouprow.depth2 {background-color:lightyellow;}
+     {% for i in range(2,10) %}
+     table.bgexplorertable tr.grouprow.depth{{ i }} td.groupcell { padding-left: {{ loop.index }}em; }
+     {%- endfor %}
+     table.bgexplorertable tr.grouprow.leaf { background-color:white; }
+     table.bgexplorertable tr.grouprow.haschildren span.expander { transform: rotate(-90deg); cursor:pointer;margin-left:5px;paddingright:5px; }
+     table.bgexplorertable tr.grouprow.haschildren.expanded span.expander { transform: rotate(0deg); }
+     
+
+     div.bgexplorer-chart-container {  border: 1px solid gray;}
+     .bgexplorer-chart-title { font-weight: bold; text-decoration: underline; }
+     .bgexplorer-selection-display { font-weight: default; color: gray; display:inline-block }
+     .bgexplorer-chart { font: 10px sans-serif;  }
+     .bgexplorer-chart .node.branch { font-weight: bold; }
+     .bgexplorer-data-shape { stroke: white; stroke-width: 1px; }
+     .bgexplorer-data-shape:hover { stroke-width: 4px; }
+     
+    </style>
+{% endblock %}
+
+
+{% block myscripts %}
+    <script src="{{ url_for('.static',filename='d3.v4.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='crossfilter.min.js') }}"></script>
+    <script src="{{ url_for('.static',filename='dashboard.js') }}"></script>
+    
+    <script language="javascript">
+
+     //define all of the available groupsort stuff
+     {% for name,val in getmodelviewer().get_groupsort().items() %}
+     dashboard.groupsort['{{ name }}'] = {{ val | safe}};
+     {% endfor %}
+
+
+     $(document).ready(function(){
+         var dashboard = bgexplorer.dashboard;
+         dashboard.onLoad(function(){ d3.select("#loading").classed("hide",true); }); 
+         d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,dashboard.processtable);
+     });
+    </script>
+{% endblock %}
+
+
+{% block pageheader %}
+    <h1> Evaluated Rates Explorer</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <div id="loading">
+        <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
+        <p>Performing map-reduce on simulated data. This may take up to a few minutes</p>
+    </div>
+{% endblock %}

@@ -20,7 +20,7 @@ class SimDocEval(abc.ABC):
     ----------------------------------------------------
     Concrete classes SHOULD override the following methods:
     ----------------------------------------------------
-    __key(self):  Generate a unique string key for the requested value that can 
+    _key(self):  Generate a unique string key for the requested value that can 
         be used for caching. Suggested form is `Classname(arg1, arg2, ...)`
 
     project(self, projection): Modify the projection operator for a mongodb
@@ -40,7 +40,6 @@ class SimDocEval(abc.ABC):
         value. Default implementation is to add
 
     """
-
     ####### Overridable methods   ##############
     @abc.abstractmethod
     def parse(self, doc, match):
@@ -56,7 +55,7 @@ class SimDocEval(abc.ABC):
         return result1 + result2;
     
     #should we cache this??
-    def __key(self):
+    def _key(self):
         return "%s(%s)"%(type(self).__name__,
                          ",".join("%s=%s"%(key,val) 
                                   for key,val in self.__dict__.items()))
@@ -65,7 +64,7 @@ class SimDocEval(abc.ABC):
         
     @property
     def key(self):
-        return self.__key()
+        return self._key()
 
     def __eq__(self, other):
         try:
@@ -74,16 +73,16 @@ class SimDocEval(abc.ABC):
             return False
 
     def __hash__(self):
-        return hash(key)
+        return hash(self._key())
 
     def __str__(self):
-        return self.key
+        return self._key()
 
     def __repr__(self):
-        return self.key
+        return self._key()
 
-    def __init__(self, label=None): #should label be required?
-        super().__init__()
+    def __init__(self, label=None, *args, **kwargs): #should label be required?
+        super().__init__(*args, **kwargs)
         self.label = label
 
     @property
@@ -99,12 +98,15 @@ class SimDocEval(abc.ABC):
 
 #some concrete evaluations
 def splitsubkeys(document, key):
-    for subkey in unitkey.split('.'):
+    if not key:
+        return None
+    for subkey in key.split('.'):
         document = document[subkey] #throw key error if not there
     return document
 
 class UnitsHelper(object):
-    def __init__(self, unit=None, unitkey=None, evalunitkey=splitsubkeys):
+    def __init__(self, unit=None, unitkey=None, evalunitkey=splitsubkeys,
+                 *args, **kwargs):
         """Apply a unit to an evaluated value. 
         Args:
             units: fixed units to apply or None. Can be a string in which case
@@ -120,7 +122,7 @@ class UnitsHelper(object):
                 if any key actually contains a period. 
 
         """
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.unit = unit
         if unit is not None:
             self.unit = self.units(unit)
@@ -131,7 +133,7 @@ class UnitsHelper(object):
         
     def projectunit(self, projection):
         if self.unitkey and projection:
-            projection[unitkey] = True
+            projection[self.unitkey] = True
         return projection #shouldn't be necessary
     
     def applyunit(self, result, document):
@@ -143,7 +145,10 @@ class UnitsHelper(object):
                 pass
             unit = self.units(unit)
         if unit:
-            result *= unit
+            try:
+                result = result * unit
+            except ValueError: #result cannot be converted to unit
+                pass
         return result
    
 class DirectValue(SimDocEval, UnitsHelper):
@@ -161,10 +166,10 @@ class DirectValue(SimDocEval, UnitsHelper):
     
     def parse(self, document, match):
         #should we just throw an exception if the key is bad?
-        result = converter(splitsubkeys(document, self.val))
+        result = self.converter(splitsubkeys(document, self.val))
         return self.applyunit(result, document)
     
-    def __key(self):
+    def _key(self):
         return("DirectValue(%s,%s,%s)"%(self.val, 
                                      self.unit,
                                      self.unitkey))
@@ -184,7 +189,7 @@ class DirectSpectrum(SimDocEval):
         Returns a 2-tuple of (hist, bin_edges) as numpy.histogram. 
         """
         #TODO: add option to integrate/average over range
-
+        super().__init__(*args, **kwargs)
         self.speckey = speckey
         self.specunit = UnitsHelper(specunit, specunitkey)
         self.bin_edges = bin_edges
@@ -202,18 +207,24 @@ class DirectSpectrum(SimDocEval):
     def parse(self, document, match):
         #should we check that the key returns a list?
         hist = splitsubkeys(document, self.speckey)
-        if isinstance(val,(list, tuple)):
-            hist = np.array(val)
+        if isinstance(hist,(list, tuple)):
+            hist = np.array(hist)
         bin_edges = self.bin_edges
-        try:
-            bin_edges = np.array(splitsubkeys(document, self.binskey))
-        except KeyError:
-            pass
+        if self.binskey:
+            try:
+                bin_edges = np.array(splitsubkeys(document, self.binskey))
+            except KeyError:
+                pass
         
-        return Histogram(self.specunit.applyunit(hist, document),
-                         self.binsunit.applyunit(bin_edges, document))
+        try:
+            bin_edges = self.binsunit.applyunit(bin_edges, document)
+            hist = self.specunit.applyunit(hist, document)
+        except AttributeError: #thrown if hist is not unit-able
+            pass
+            
+        return Histogram(hist, bin_edges)
 
-    def __key(self):
+    def _key(self):
         #do we need all the unit keys too? 
         return "DirectSpectrum({},{})".format(self.speckey, self.binskey)
         

@@ -11,31 +11,33 @@ from collections import OrderedDict
 from .bgmodelbuilder.bgmodel import BgModel
 
 class InMemoryCacher(object):
-    def __init__(self, maxmodels=3):
+    def __init__(self, maxentries=3):
         """Simple cache of most recently assembled models from the database. 
         If new models are cached the oldest are removed first
         """
-        self.maxmodels = 3
+        self.maxentries = 3
         self.empty()
 
-    def store(self, model):
-        _id = model.id
-        self.registry[_id] = model
-        self.byage.append(_id)
-        if len(self.byage) > self.maxmodels:
+    def store(self, key, val):
+        self.registry[key] = val
+        self.byage.append(key)
+        if len(self.byage) > self.maxentries:
             del self.registry[self.byage.pop(0)]
-        return _id
+        return key
 
-    def get(self, _id):
-        return self.registry.get(_id, None)
-    
-    def expire(self, _id):
+    def get(self, key):
+        return self.registry.get(key, None)
+        
+    def test(self, key):
+        return key in self.registry
+        
+    def expire(self, key):
         try:
-            self.byage.remove(_id)
+            self.byage.remove(key)
         except ValueError: 
             pass
         try:
-            del self.registry[_id]
+            del self.registry[key]
         except KeyError:
             pass
         
@@ -76,6 +78,7 @@ class ModelDB(object):
         self._collectionName = app.config.setdefault('MODELDB_COLLECTION', 
                                                      'bgmodels')
         self.connect(dburi)
+        app.extensions['ModelDB'] = self
         
 
     def connect(self, dburi=None):
@@ -194,7 +197,7 @@ class ModelDB(object):
         raw = self.get_raw_model(query, projection)
         model = BgModel.buildfromdict(raw) if raw else None
         if model:
-            self._cacher.store(model)
+            self._cacher.store(model.id, model)
         return model
 
 

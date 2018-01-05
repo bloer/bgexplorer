@@ -50,7 +50,7 @@ class MongoSimsDB(SimulationsDB):
                               collection of datasets. Takes 2 arguments:
                               a SimDataMatch and a list of documents retrieved
                               from the database. Do not modify the match object!
-            livetimepro (list): projection document when querying for livetime
+            livetimepro (dict): projection document when querying for livetime
 
             
         """
@@ -116,11 +116,12 @@ class MongoSimsDB(SimulationsDB):
                         each value over
         
         """
-        result = {v:0 for v in values}
+        result = [0]*len(values)
         projection = {}
         for v in values:
             v.project(projection)
         
+        matches = matches if isinstance(matches,(list, tuple)) else [matches]
         for match in matches:
             dataset = match.dataset
             if not dataset:
@@ -144,9 +145,9 @@ class MongoSimsDB(SimulationsDB):
                     #something went really wrong here...
                     raise KeyError("No document with ID %s in database"%entry)
                 
-                for v in values:
-                    val = v.norm(v.parse(entry, match), match)
-                    result[v] = v.reduce(val, result[v])
+                for i,v in enumerate(values):
+                    val = v.norm(v.parse(doc, match), match)
+                    result[i] = v.reduce(val, result[i])
 
         return result
 

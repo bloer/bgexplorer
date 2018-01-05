@@ -1,12 +1,16 @@
 #python 2/3 compatibility
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
+from itertools import chain
+from flask import (Blueprint, render_template, request, abort, url_for, g, 
+                   Response)
+import threading
+import zlib
 
-from flask import Blueprint, render_template, request, abort, url_for, g
 from .. import utils
 
 from . import billofmaterials as bomfuncs
-
+from ..modeldb import InMemoryCacher
 
 class ModelViewer(object):
     """Blueprint for inspecting saved model definitions
@@ -15,11 +19,25 @@ class ModelViewer(object):
         modeldb: a ModelDB object. If None, will get from the Flask object
         simsdb:  a SimulationsDB object. If None, will get from the Flask object
         url_prefix (str): Where to mount this blueprint relative to root
+        groups (dict): Grouping functions to evaluate for all simdatamatches
+        goupsort (dict): Sorting function in the form of a list of expected 
+                         values. Will be passed to javascript functions
+        values (dict): Value functions to evaluate for all simdatamatches
     """
     defaultversion='HEAD'
-    
+    defaultgroups = {
+        "Component": lambda match: [c.name for c in match.assemblyPath],
+        "Material": lambda match: match.component.material,
+        "Source": lambda match: match.spec.name,
+        "Source Category": lambda match: match.spec.category,
+    }
+
+    joinkey = '___'
+
     def __init__(self, app=None, modeldb=None, simsdb=None,
-                 url_prefix='/explore'):
+                 cacher=InMemoryCacher(),
+                 url_prefix='/explore', groups=None, groupsort=None,
+                 values=None, values_units=None):
         self.app = app
         self._modeldb = modeldb
         self._simsdb = simsdb
@@ -29,7 +47,7 @@ class ModelViewer(object):
                             template_folder='templates',
                             url_prefix='/<modelname>/<version>')
         
-            
+        self.bp.add_app_template_global(lambda : self, 'getmodelviewer')    
         self.set_url_processing()
         self.register_endpoints()
         
@@ -37,13 +55,28 @@ class ModelViewer(object):
             self.init_app(app, url_prefix)
 
             
+        self.groups = groups or self.defaultgroups
+        self.groupsort = groupsort or {}
+        self.values = values or {}
+        self.values_units = values_units or {}
+        self._threads = {}
+        self._cacher = cacher
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
+        
+        #replace groupsort nested lists with joined strings
+        for key,val in list(self.groupsort.items()):
+            if isinstance(val,(list, tuple)):
+                val = [self.joinkey.join(i) if isinstance(i,(list,tuple)) else i
+                       for i in val]
+                self.groupsort[key] = val
             
     def init_app(self, app, url_prefix=''):
         """Register ourselves with the app"""
         app.register_blueprint(self.bp, 
                                url_prefix=url_prefix+self.bp.url_prefix)
+        app.extensions['ModelViewer'] = self
+        
         
 
     @property
@@ -96,6 +129,9 @@ class ModelViewer(object):
             g.model = utils.getmodelordie(query,self.modeldb)
             if version == self.defaultversion:
                 g.permalink = url_for(endpoint, permalink=True, **values) 
+            #construct the cached datatable in the background
+            if self._cacher:
+                self.build_datatable(g.model)
 
 
     def register_endpoints(self):
@@ -178,3 +214,134 @@ class ModelViewer(object):
             return render_template("billofmaterials.html", 
                                    bomrows=bomrows,
                                    bomcols=self.bomcols)
+            
+        @self.bp.route('/datatable')
+        def datatable():
+            """Return groups and values for all simdatamatches"""
+            return self.get_datatable(g.model)
+
+        @self.bp.route('/tables/default')
+        def tablesdefault():
+            """Show some default tables with the calculated rows"""
+            return render_template("tablesdefault.html")
+         
+        @self.bp.route('/charts/default')
+        def chartsdefault():
+            """Show some default charts with the calculated rates"""
+            return render_template("chartsdefault.html")
+         
+    #need to pass simsdb because it goes out of context
+    def streamdatatable(self, model, simsdb):
+        """Stream exported data table so it doesn't all go into mem at once
+        """
+        #can't evaluate values if we don't have a simsdb
+        values = self.values if simsdb else {}
+        valitems = list(values.values())
+        matches = model.simdatamatches.values()
+        #send the header
+        yield('\t'.join(chain(['ID'],
+                              ('G_'+g for g in self.groups),
+                              ('V_'+v for v in values)))
+              +'\n')
+        #loop through matches
+        for match in matches:
+            if valitems:
+                evals = simsdb.evaluate(valitems, match)
+                for index, vlabel in enumerate(values):
+                    unit = self.values_units.get(vlabel,None)
+                    if unit:
+                        try:
+                            evals[index] = evals[index].to(unit).m
+                        except AttributeError: #not a Quantity...
+                            pass
+            groupvals = (g(match) for g in self.groups.values())
+            groupvals = (self.joinkey.join(g) 
+                         if isinstance(g,(list,tuple)) else g
+                         for g in groupvals)
+            yield('\t'.join(chain([match.id],
+                                  (str(g) for g in groupvals),
+                                  ("%.3g"%eval for eval in evals)))
+                  +'\n')
+            
+        
+
+    @staticmethod
+    def datatablekey(model):
+        return "datatable:"+str(model.id)
+
+    def build_datatable(self, model):
+        """Generate a gzipped datatable and cache it
+        Args:
+            model: a BgModel
+            
+        Returns:
+            None if no cacher is defined
+            0 if the result is already cached
+            Thread created to generate the cache otherwise
+        """
+        #don't bother to call if we don't have a cache
+        if not self._cacher:
+            return None
+
+        #TODO: self._threads and self._Cacher should probably be mutexed
+        #see if there's already a worker
+        key = self.datatablekey(model)
+        if key in self._threads:
+            return self._threads[key]
+        #see if it's already cached
+        if self._cacher.test(key):
+            return 0
+
+        #if we get here, we need to generate it
+        simsdb = self.simsdb
+        def cachedatatable():
+            compressor = zlib.compressobj()
+            res = b''.join(compressor.compress(s.encode('utf-8')) 
+                           for s in self.streamdatatable(model,simsdb))
+            res += compressor.flush()
+            self._cacher.store(key, res)
+            self._threads.pop(key) #is this a bad idea???
+        
+        thread = threading.Thread(target=cachedatatable,name=key)
+        self._threads[key] = thread
+        thread.start()
+        return thread
+        
+    def get_datatable(self, model):
+        """Return a Result object with the encoded or streamed datatable"""
+        key = self.datatablekey(model)
+        if not self._cacher:
+            #no cache, so stream it directly, don't bother to zip it
+            #should really be text/csv, but then browsersr won't let you see it
+            return Response(self.streamdatatable(model,self.simsdb),
+                            mimetype='text/plain')
+        
+        if not self._cacher.test(key):
+            thread = self.build_datatable(model)
+            if thread:
+                thread.join() #wait until it's done
+        res = self._cacher.get(key)
+        if not res:
+            abort(500,"Unable to generate datatable")
+        return Response(res, headers={'Content-Type':'text/plain;charset=utf-8',
+                                      'Content-Encoding':'deflate'})
+        
+        
+    def get_componentsort(self, component):
+        """Return an array component names in assembly order to be passed
+        to the javascript analyzer for sorting component names
+        """
+        #TODO: cache this
+        result = [component.name]
+        for child in component.getcomponents(merge=False):
+            result.extend(self.joinkey.join((component.name, s) )
+                          for s in self.get_componentsort(child))
+        return result
+
+        
+    def get_groupsort(self):
+        res = dict(**self.groupsort)
+        #todo: set up provided lists
+        if 'Component' not in res:
+            res['Component'] = self.get_componentsort(g.model.assemblyroot)
+        return res

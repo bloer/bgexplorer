@@ -2,17 +2,17 @@ from flask import current_app, abort
 
 
 #todo: should we raise aborts on failure? 
-def get_simsdb():
+def get_simsdb(app=current_app):
     """Get the simulations database object"""
-    if not current_app:
+    if not app:
         return None
-    return current_app.extensions.get('SimulationsDB', None)
+    return app.extensions.get('SimulationsDB', None)
 
-def get_modeldb():
+def get_modeldb(app=current_app):
     """Get the model database object"""
-    if not current_app:
+    if not app:
         return None
-    return current_app.extensions.get('ModelDB', None)
+    return app.extensions.get('ModelDB', None)
 
 def getmodelordie(query, modeldb=None, toedit=False):
     modeldb = modeldb or get_modeldb()

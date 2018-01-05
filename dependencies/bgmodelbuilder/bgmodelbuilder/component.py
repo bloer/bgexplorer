@@ -193,6 +193,13 @@ class BaseComponent(Mappable):
         """ Are we the parent component? This is a leaf, so only if it is us """
         return component is self
     
+    def getcomponents(self, deep=False, withweight=False, merge=True):
+        """Get list of subcomponents. Makes it easier to do things recursively
+        on assembly trees if all components have this function
+        """
+        return []
+
+
     def getsimdata(self, path=None, rebuild=False, children=True):
         """ Get any simulation data associated to this component, and/or 
         generate empty SimDataRequest objects if missing.
@@ -484,7 +491,7 @@ class Assembly(BaseComponent):
         allcomp = []
         for placement in self._components:
             comp, weight = placement.component, placement.weight
-            if hasattr(comp,'getcomponents'):
+            if hasattr(comp,'components'):
                 subcomps = comp.getcomponents(deep,withweight)
                 if withweight:
                     subcomps=[(c,w*weight) for c,w in subcomps]

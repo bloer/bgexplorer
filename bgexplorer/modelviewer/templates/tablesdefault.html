@@ -1,0 +1,31 @@
+{% extends "dashboardbase.html" %}
+
+{% block title %}Evaluated Tables{% endblock %}
+
+
+
+{% block myscripts %}
+    {{ super() }}
+
+    <script language="javascript">
+     //create a holder div for each known group and build a table for it
+     var db = bgexplorer.dashboard;
+     db.onLoad(function(){
+         d3.select("#mytables").selectAll("div").data(Object.keys(db.hierarchies))
+           .enter().append("div")
+           .attr("id",function(d,i){ return "dbtable-"+i; })
+           .each(function(d){ db.buildtable(this, d); });
+     });
+     
+    </script>
+{% endblock %}
+
+
+{% block pageheader %}
+    <h1> Evaluated Rate Tables</h1>
+{% endblock %}
+
+{% block pagecontent %}
+    {{ super() }}
+    <div id="mytables" ></div>
+{% endblock %}

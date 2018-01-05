@@ -30,9 +30,10 @@
 
     <li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#">Results<span class="caret"></span></a>
 	    <ul class="dropdown-menu">
-	        <li> <a href="#">Tables</a></li>
-	        <li> <a href="#">Spectra</a></li>
-	        <li> <a href="#">Pie charts</a></li>
+	        <li> <a href="{{ url_for('.tablesdefault') }}">Tables</a></li>
+	        <li> <a href="{{ url_for('.chartsdefault') }}">Charts</a></li>
+            <li> <a href="{{ url_for('.datatable') }}">Export Raw Data</a></li>
+	        {# <li> <a href="#">Pie charts</a></li> #}
 	    </ul>
     </li>
 {% endblock %}
