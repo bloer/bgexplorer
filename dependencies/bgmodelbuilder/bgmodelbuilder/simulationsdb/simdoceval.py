@@ -40,7 +40,6 @@ class SimDocEval(abc.ABC):
         value. Default implementation is to add
 
     """
-
     ####### Overridable methods   ##############
     @abc.abstractmethod
     def parse(self, doc, match):
@@ -82,8 +81,8 @@ class SimDocEval(abc.ABC):
     def __repr__(self):
         return self._key()
 
-    def __init__(self, label=None): #should label be required?
-        super().__init__()
+    def __init__(self, label=None, *args, **kwargs): #should label be required?
+        super().__init__(*args, **kwargs)
         self.label = label
 
     @property
@@ -99,12 +98,15 @@ class SimDocEval(abc.ABC):
 
 #some concrete evaluations
 def splitsubkeys(document, key):
+    if not key:
+        return None
     for subkey in key.split('.'):
         document = document[subkey] #throw key error if not there
     return document
 
 class UnitsHelper(object):
-    def __init__(self, unit=None, unitkey=None, evalunitkey=splitsubkeys):
+    def __init__(self, unit=None, unitkey=None, evalunitkey=splitsubkeys,
+                 *args, **kwargs):
         """Apply a unit to an evaluated value. 
         Args:
             units: fixed units to apply or None. Can be a string in which case
@@ -120,7 +122,7 @@ class UnitsHelper(object):
                 if any key actually contains a period. 
 
         """
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.unit = unit
         if unit is not None:
             self.unit = self.units(unit)
@@ -131,7 +133,7 @@ class UnitsHelper(object):
         
     def projectunit(self, projection):
         if self.unitkey and projection:
-            projection[unitkey] = True
+            projection[self.unitkey] = True
         return projection #shouldn't be necessary
     
     def applyunit(self, result, document):
@@ -164,7 +166,7 @@ class DirectValue(SimDocEval, UnitsHelper):
     
     def parse(self, document, match):
         #should we just throw an exception if the key is bad?
-        result = converter(splitsubkeys(document, self.val))
+        result = self.converter(splitsubkeys(document, self.val))
         return self.applyunit(result, document)
     
     def _key(self):
@@ -187,7 +189,7 @@ class DirectSpectrum(SimDocEval):
         Returns a 2-tuple of (hist, bin_edges) as numpy.histogram. 
         """
         #TODO: add option to integrate/average over range
-
+        super().__init__(*args, **kwargs)
         self.speckey = speckey
         self.specunit = UnitsHelper(specunit, specunitkey)
         self.bin_edges = bin_edges
@@ -208,10 +210,11 @@ class DirectSpectrum(SimDocEval):
         if isinstance(hist,(list, tuple)):
             hist = np.array(hist)
         bin_edges = self.bin_edges
-        try:
-            bin_edges = np.array(splitsubkeys(document, self.binskey))
-        except KeyError:
-            pass
+        if self.binskey:
+            try:
+                bin_edges = np.array(splitsubkeys(document, self.binskey))
+            except KeyError:
+                pass
         
         try:
             bin_edges = self.binsunit.applyunit(bin_edges, document)

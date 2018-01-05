@@ -1,11 +1,14 @@
 import operator
 import numpy as np
-from collections import namedtuple
 
-class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
+class Histogram(object):
     """2-tuple mimicking np.histogram structure, with operator overloads
     so that bins are not added/scaled etc 
     """
+    def __init__(self, hist, bin_edges=None):
+        self.hist = hist
+        self.bin_edges = bin_edges
+    
     def integrate(self, a, b, binwidth=True):
         """Integrate the histogram from a to b. If a and b do not correspond to 
         exact bin edges, the value in the bin will be interpolated. 
@@ -73,7 +76,7 @@ class Histogram(namedtuple('Histogram',('hist', 'bin_edges'))):
             otherhist = other
         
         if inplace:
-            op(self.hist, otherhist)
+            self.hist = op(self.hist, otherhist)
             return self
         else:
             return self.__class__(op(self.hist,otherhist), bins)

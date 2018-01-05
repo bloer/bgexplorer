@@ -65,9 +65,9 @@ class SimulationsDB(object):
         
     def findsimentries(self, request):
         """Find all SimDataMatches that should be associated to the request. 
-        To allow comparison to previous versions and modification of status
-        values, request should NOT be modified, but SimDataMatches returned
-        as a list. 
+        New SimDataMatch objects should be added to the request via
+        `request.addquery`, and the resulting `request.matches` object should 
+        be returned
         Args:
             request (SimDataRequest): contains placement path and spec
         Returns:

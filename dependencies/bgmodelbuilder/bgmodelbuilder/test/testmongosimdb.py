@@ -10,12 +10,29 @@ try:
 except:
     numpy = None
 
-from ..simulationsdb.mongosimsdb import MongoSimsDB, MatchOverride
+from ..simulationsdb.mongosimsdb import MongoSimsDB
+from ..simulationsdb.simdoceval import (LivetimeNormedValue,
+                                        LivetimeNormedSpectrum)
+from ..simulationsdb.histogram import Histogram
 from ..component import Component
 from ..emissionspec import RadioactiveContam
 from .. import units
 
 #TODO: Don't hardcode the DB connection parameters
+
+
+#callbacks for new mongosimsdb implementation
+def buildquery(request):
+    request.addquery({
+        'volume': request.component.name,
+        'distribution': request.spec.distribution,
+        'primary': request.spec.name,
+    })
+
+def livetime(match, hits):
+    return sum(doc['nprimaries'] for doc in hits)/match.emissionrate
+
+livetimepro = {'nprimaries':True}
 
 @unittest.skipUnless(pymongo,"requires pymongo")
 class TestMongoSimsDB(unittest.TestCase):
@@ -95,7 +112,10 @@ class TestMongoSimsDB(unittest.TestCase):
         })
         
         
-        self.simdb = MongoSimsDB(self.collection)
+        self.simdb = MongoSimsDB(self.collection,
+                                 buildqueries=buildquery,
+                                 livetime=livetime,
+                                 livetimepro=livetimepro)
         self.component = Component(name="V1", mass=5*units.kg,
                                    surface=2*units.cm**2,
                                    specs=[
@@ -114,47 +134,31 @@ class TestMongoSimsDB(unittest.TestCase):
             self.assertEqual(len(matches), 1)
             self.assertAlmostEqual(matches[0].livetime.to('s').m, 1e5)
             self.assertEqual(len(matches[0].dataset), 1)
-                                   
-    def test_querymod(self):
-        self.component.querymod = {"volume": "V2", "primary": "P2"}
-        requests = self.simdb.attachsimdata(self.component)
-        self.assertEqual(len(requests[0].matches),1)
-        self.assertEqual(len(requests[0].matches[0].dataset),1)
-        self.assertEqual(requests[0].matches[0].dataset[0],'dataset2')
-        
-    def test_override(self):
-        def addspec(match):
-            match.weight = 10
-            match.query['primary'] = "P2"
-            match.query['spectrum'] = "S2"
-            match.query.pop('volume',None)
-            return match
-
-        override=MatchOverride(lambda m: m.spec.name=="P1", addspec)
-        self.simdb.overrides.append(override)
-        requests = self.simdb.attachsimdata(self.component)
-        self.assertEqual(len(requests[0].matches),1)
-        self.assertEqual(requests[0].matches[0].dataset[0],'dataset2')
-        self.assertAlmostEqual(requests[0].matches[0].livetime.to('s').m, 1e4)
-        self.assertEqual(len(requests[1].matches),1)
-        
+                
 
     def test_eval(self):
         requests = self.simdb.attachsimdata(self.component)
         matches =  sum((r.matches for r in requests), [])
-        result = self.simdb.evaluate(("C1", "C2"), matches)
+        vals = (LivetimeNormedValue("counts.C1"),
+                LivetimeNormedValue("counts.C2",unitkey="units.C2"))
+        result = self.simdb.evaluate(vals, matches)
+        
         self.assertEqual(len(result), 2)
-        self.assertAlmostEqual(result["C1"].to("1/s").m, 110./1e5)
-        self.assertAlmostEqual(result["C2"].to("1/(s*kg*keV)").m, 220./1e5)
-        self.assertAlmostEqual(result["C1"].to("1/s").m, 110./1e5)
+        self.assertAlmostEqual(result[0].to("1/s").m, 110./1e5)
+        self.assertAlmostEqual(result[1].to("1/(s*kg*keV)").m, 220./1e5)
         
 
     @unittest.skipUnless(numpy, "requires numpy")
     def test_numpy_eval(self):
         requests = self.simdb.attachsimdata(self.component)
         matches =  sum((r.matches for r in requests), [])
-        result = self.simdb.evaluate(("C3",), matches)
-        self.assertAlmostEqual(result["C3"][1].to('1/s').m, 11./1e5)
+        vals = (LivetimeNormedSpectrum("counts.C3"),)
+        result = self.simdb.evaluate(vals, matches)
+        hist = result[0]
+        self.assertIsInstance(hist, Histogram)
+        self.assertIsInstance(hist.hist, units.Quantity)
+        self.assertIsInstance(hist.hist.m, numpy.ndarray)
+        self.assertAlmostEqual(hist.hist[1].to('1/s').m, 11./1e5)
 
 
         

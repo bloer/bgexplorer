@@ -201,9 +201,20 @@ class SimDataRequest(object):
     def component(self):
         return self.assemblyPath[-1] if self.assemblyPath else None
         
-    def addquery(self, query, weight=1):
-        newmatch = SimDataMatch(request=self, query=copy.copy(query), 
-                                weight=weight, status="newmatch")
+    def addquery(self, query, **kwargs):
+        """Add a new SimDataMatch object to this request. If the object 
+        already has associated matches and an equal match already exists, 
+        the old match is returned instead.
+        Args:
+            query: query string or document appropriate for the concrete
+                   SimulationsDB instance. 
+            **kwargs: Other arguments are passed to the SimDataMatch
+                      constructor
+        Returns:
+            match: The newly created SimDataMatch object
+        """
+        kwargs.setdefault('status','newmatch')
+        newmatch = SimDataMatch(request=self, query=copy.copy(query), **kwargs)
         oldmatch = None
         #see if we already have an existing match
         for amatch in self.matches:

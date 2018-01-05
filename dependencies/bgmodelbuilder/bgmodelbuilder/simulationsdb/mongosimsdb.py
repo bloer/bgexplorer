@@ -50,7 +50,7 @@ class MongoSimsDB(SimulationsDB):
                               collection of datasets. Takes 2 arguments:
                               a SimDataMatch and a list of documents retrieved
                               from the database. Do not modify the match object!
-            livetimepro (list): projection document when querying for livetime
+            livetimepro (dict): projection document when querying for livetime
 
             
         """
