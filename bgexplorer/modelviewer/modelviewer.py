@@ -63,6 +63,13 @@ class ModelViewer(object):
         self._cacher = cacher
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
+        
+        #replace groupsort nested lists with joined strings
+        for key,val in list(self.groupsort.items()):
+            if isinstance(val,(list, tuple)):
+                val = [self.joinkey.join(i) if isinstance(i,(list,tuple)) else i
+                       for i in val]
+                self.groupsort[key] = val
             
     def init_app(self, app, url_prefix=''):
         """Register ourselves with the app"""
@@ -334,6 +341,7 @@ class ModelViewer(object):
         
     def get_groupsort(self):
         res = dict(**self.groupsort)
+        #todo: set up provided lists
         if 'Component' not in res:
             res['Component'] = self.get_componentsort(g.model.assemblyroot)
         return res

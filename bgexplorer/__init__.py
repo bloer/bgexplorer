@@ -7,7 +7,7 @@ from .modelviewer.modelviewer import ModelViewer
 from .modeldb import ModelDB
 
 def create_app(config_filename=None, simsdb=None, instance_path=None,
-               groups=None, values=None, values_units=None):
+               groups=None, groupsort=None, values=None, values_units=None):
     """Create the Flask application and bind blueprints. 
     
     Args:
@@ -18,6 +18,7 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
                 later by `simsdb.init_app(app)`
         instance_path (str): location to look for config files. 
         groups: dictionary of grouping functions to cache on all simdatamtches
+        groupsort: dictionary of lists to sort group values
         values: dictionary of value functions to cache on all simdatamatches
         values_units: optional dictionary of units to render values in in the 
                       cached datatable
@@ -33,7 +34,7 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
     modeldb = ModelDB(app=app)
     modeleditor = ModelEditor(app=app, modeldb=modeldb)
     modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb,
-                              groups=groups, values=values, 
+                              groups=groups, groupsort=groupsort,values=values, 
                               values_units=values_units)
     if simsdb:
         simsdb.init_app(app)
