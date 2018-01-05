@@ -132,7 +132,6 @@ class ModelViewer(object):
             if not query:
                 abort(400, "Incomplete model specification")
             g.model = utils.getmodelordie(query,self.modeldb)
-            print(g.model.id, g.model.name, g.model.version)
             if version == self.defaultversion:
                 g.permalink = url_for(endpoint, permalink=True, 
                                       **values) 
