@@ -4,7 +4,7 @@
 
 {% block mystyles %}
     <style>
-     #loading { display: block; margin:auto; width: 50%; }
+     #loading { display: block; margin:auto; width: 50%; position:relative}
 
      table.bgexplorertable thead th {text-align:center}
      table.bgexplorertable thead th:first-child {text-align:left}
@@ -47,6 +47,9 @@
 
 
      $(document).ready(function(){
+         //only show the loading graphic after 2s
+         d3.select("#loading").transition().delay(2000).duration(500).style("opacity",1);
+         
          var dashboard = bgexplorer.dashboard;
          dashboard.onLoad(function(){ d3.select("#loading").classed("hide",true); }); 
          d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,dashboard.processtable);
@@ -60,8 +63,8 @@
 {% endblock %}
 
 {% block pagecontent %}
-    <div id="loading">
+    <div id="loading" style="opacity:0" >
         <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
-        <p>Performing map-reduce on simulated data. This may take up to a few minutes</p>
+        <p style="color:red" >Performing map-reduce on simulated data. This may take up to a few minutes</p>
     </div>
 {% endblock %}
