@@ -120,13 +120,17 @@ class ModelDB(object):
         """
         self.testconnection()
         #convert id query to ObjectId if it is a plain string
-        try:
-            if isinstance(query,str):
-                query = bson.ObjectId(query)
-            elif isinstance(query, dict) and '_id' in query:
+        if not isinstance(query,dict):
+            query = dict(_id=query)
+        if '_id' in query:
+            try:
                 query['_id'] = bson.ObjectId(query['_id'])
-        except bson.errors.InvalidId: #id is not an ObjectId string
-            pass
+            except bson.errors.InvalidId: #id is not an ObjectId string
+                pass
+        else:
+            #can only get temporary models by direct ID query
+            query.setdefault('__modeldb_meta.temporary',False)
+            
         #remove our internal metadata
         projection = projection or {}
         if '__modeldb_meta' in projection:
