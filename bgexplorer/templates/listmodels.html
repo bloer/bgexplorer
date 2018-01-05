@@ -24,9 +24,9 @@
 {%- endmacro %}
 
 
-{% macro printmodel(model, expandtarget, class="") %}
+{% macro printmodel(model, expandtarget, class="", permalink=true) %}
     <tr class="model {{ class }}">
-	<td><a href="{{ url_for('modelviewer.overview', model=model, permalink=(not expandtarget)) }}">{{ model['name'] }}</a></td>
+	<td><a href="{{ url_for('modelviewer.overview', model=model, permalink=permalink) }}">{{ model['name'] }}</a></td>
 	<td>{{ model['version'] }}
 	    {%- if expandtarget %} 
 		<button class="btn btn-default btn-xs collapsed" data-toggle="collapse" data-target="#{{ expandtarget }}" ></button>
@@ -93,7 +93,7 @@
 	    {% endif %}
 	    {% for model in models %}
 		{% if loop.index0 == 0 %}
-		    <tbody> {{ printmodel(model, target) }} </tbody>
+		    <tbody> {{ printmodel(model, target, permalink=false) }} </tbody>
 		{% else %}
 		    {% if loop.index0 == 1 %}<tbody id="{{ target }}" class="collapse oldversions" >{% endif %}
 			{{ printmodel(model) }}

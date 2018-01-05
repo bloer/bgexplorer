@@ -98,14 +98,19 @@ class ModelViewer(object):
             if model:
                 #model could be object or dict
                 name = getattr(model,'name', None) or model.get('name',None)
-                version = (getattr(model,'version', None) 
-                           or model.get('version',None))
+                version = getattr(model,'version', None)
+                if version is None and hasattr(model,'get'):
+                    version = model.get('version',None)
                 values.setdefault('modelname', name)
-                if (values.pop('permalink',None) 
-                    or not g.get('permalink')):
-                    values.setdefault('version', version)
+                permalink = values.pop('permalink',None)
+                if permalink is not None:
+                    values['version'] = (version if permalink 
+                                         else self.defaultversion)
                 else:
-                    values.setdefault('version',self.defaultversion)
+                    values.setdefault('version',
+                                      version if not g.get('permalink')
+                                      else self.defaultversion)
+                
             #transform components, specs into IDs
             if 'component' in values:
                 values['componentid'] = values.pop('component').id
@@ -127,8 +132,10 @@ class ModelViewer(object):
             if not query:
                 abort(400, "Incomplete model specification")
             g.model = utils.getmodelordie(query,self.modeldb)
+            print(g.model.id, g.model.name, g.model.version)
             if version == self.defaultversion:
-                g.permalink = url_for(endpoint, permalink=True, **values) 
+                g.permalink = url_for(endpoint, permalink=True, 
+                                      **values) 
             #construct the cached datatable in the background
             if self._cacher:
                 self.build_datatable(g.model)
