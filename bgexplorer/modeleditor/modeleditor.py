@@ -232,6 +232,15 @@ class ModelEditor(object):
         form = forms.SaveModelForm(request.form, obj=model, prefix='savemodel')
         if request.method == 'POST' and form.validate():
             form.populate_obj(model)
+            #make sure all sim data is up-to-date
+            simsdb = self.get_simsdb()
+            if simsdb:
+                try:
+                    simsdb.attachsimdata(model.assemblyroot)
+                except units.errors.DimensionalityError as e:
+                    message("A component/spec has incorrect units")
+                    return url_for('.editmodel', modelid=modelid, 
+                                   showstatus=True)
             self.modeldb.write_model(model, temp=False, bumpversion="major")
             flash("Model '%s' successfully saved"%(model.name),
                   'success')
@@ -432,16 +441,6 @@ class ModelEditor(object):
         except units.errors.DimensionalityError as e:
             abort(400,"Invalid unit settings: '%s'"%e)
         matches = sum((r.matches for r in simreqs),[])
-        #sort the requests by spec and assembly
-        bypath = {}
-        byspec = {}
-        for req in simreqs:
-            pathstr = ' / '.join(c.name for c in req.assemblyPath)
-            bypath.setdefault(pathstr, [])
-            bypath[pathstr].append(req)
-            byspec.setdefault(req.spec, [])
-            byspec[req.spec].append(req)
-        
         #form = forms.BindSimDataForm(request.form)
         if request.method == 'POST': # and form.validate():
             istemp = self.modeldb.is_model_temp(modelid)
@@ -452,6 +451,17 @@ class ModelEditor(object):
             else:
                 #TODO: add a url for viewmodel here
                 return redirect(url_for('index'))
+                #sort the requests by spec and assembly
+        bypath = {}
+        byspec = {}
+        for req in simreqs:
+            pathstr = ' / '.join(c.name for c in req.assemblyPath)
+            bypath.setdefault(pathstr, [])
+            bypath[pathstr].append(req)
+            byspec.setdefault(req.spec, [])
+            byspec[req.spec].append(req)
+        
+
         return render_template('bindsimdata.html', model=model,
                                #form=form,
                                matches=matches, requests=simreqs,
