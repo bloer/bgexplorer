@@ -72,7 +72,7 @@
         </thead>
         {% set  outline = 'foobar' %}
         <tbody>{% for row in bomrows %}
-            <tr class="component {%- if row.component.getcomponents is defined %} assembly{% endif %}" >
+            <tr class="component {%- if row.component._components is defined %} assembly{% endif %}" >
                 <td><span style="font-family:monospace" >{{ row.outline }}</span></td>
                 <td><a href="{{ url_for('.componentview',component=row.component) }}">{{ row.component.name }}</a></td>
                 {% for val in bomcols.values() %}

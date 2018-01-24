@@ -102,17 +102,21 @@
 	       {% elif comp.isparentof(editcomponent, deep=False) %} parentofactive {% endif %}
 	       
 	       {% endif %}
-	       {%- if comp.getcomponents is defined %} Assembly {% endif -%} 
+	       {%- if comp._components is defined %} Assembly {% endif -%} 
 	       {%- if editspec is defined and editspec in comp.getspecs(deep=False) -%} parentofactive {% endif -%}"
 	       data-component="{{ comp.id }}" 
 	       data-name="{{ comp.name }}" 
-	       data-cls="{{ 'Assembly' if comp.getcomponents is defined else 'Component' }}"
+	       data-cls="{{ 'Assembly' if comp._components is defined else 'Component' }}"
 	       onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" >
 	<td data-column="name" style="padding-left:{{ 15*level }}px" >{{ comp.name }}</td>
 	<td data-column="description">{{ comp.description or "" }}</td>
-    <td data-column="status" >{{ comp.getstatus() }}</td>
+    {% set status = "" %}
+    {% if request.args.get('showstatus') %}
+        {% set status = comp.getstatus() %}
+    {% endif %}
+    <td data-column="status" class="{%- if status.tolower().find('error')!=-1 -%}error{%- endif -%}">{{ status }}</td>
 	<td>
-	    {%- if editcomponent is defined and editcomponent.getcomponents is defined and not comp.isparentof(editcomponent) -%}
+	    {%- if editcomponent is defined and editcomponent._components is defined and not comp.isparentof(editcomponent) -%}
 		<a class="placecomp" href="javascript:void(0)" 
 		   onclick="event.stopPropagation(); addrow('#components',$(this).parents('tr'))">
 		    <span class="small glyphicon glyphicon-circle-arrow-right"></span>
