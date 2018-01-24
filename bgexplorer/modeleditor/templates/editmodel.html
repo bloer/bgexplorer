@@ -114,7 +114,7 @@
     {% if request.args.get('showstatus') %}
         {% set status = comp.getstatus() %}
     {% endif %}
-    <td data-column="status" class="{%- if status.tolower().find('error')!=-1 -%}error{%- endif -%}">{{ status }}</td>
+    <td data-column="status" class="{%- if status.lower().find('error')!=-1 -%}error{%- endif -%}">{{ status }}</td>
 	<td>
 	    {%- if editcomponent is defined and editcomponent._components is defined and not comp.isparentof(editcomponent) -%}
 		<a class="placecomp" href="javascript:void(0)" 
