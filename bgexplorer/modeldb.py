@@ -182,12 +182,15 @@ class ModelDB(object):
         result = self.get_raw_model(query,{'version':True})
         return result['version'] if result else "0.0"
         
-    def get_model(self, query, projection=None):
+    def get_model(self, query, projection=None, bypasscache=False):
         """Load the model from query built into a BgModel object
-        See `get_raw_model` for a description of the parameters
+        See `get_raw_model` for a description of other
+        Args:
+            bypasscache (bool): if True, load the model from the DB even if it
+                might be cached
         """
         #first see if it's in the cache
-        if not projection:
+        if not projection and not bypasscache:
             raw = self.get_raw_model(query, {'__modeldb_meta':True})
             if not raw:
                 return None
