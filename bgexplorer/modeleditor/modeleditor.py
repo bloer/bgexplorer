@@ -146,7 +146,7 @@ class ModelEditor(object):
         return a 403 forbidden
         """
         #todo: enforce that the model is temporary
-        model = self.modeldb.get_model(modelid)
+        model = self.modeldb.get_model(modelid, bypasscache=toedit)
         if not model:
             abort(404, "Model with ID %s not found"%modelid)
         if toedit and not self.modeldb.is_model_temp(modelid):
@@ -233,7 +233,7 @@ class ModelEditor(object):
         if request.method == 'POST' and form.validate():
             form.populate_obj(model)
             #make sure all sim data is up-to-date
-            simsdb = self.get_simsdb()
+            simsdb = get_simsdb()
             if simsdb:
                 try:
                     simsdb.attachsimdata(model.assemblyroot)
@@ -394,12 +394,21 @@ class ModelEditor(object):
         self.addlinks(form, modelid)
         if request.method == 'POST' and form.validate():
             form.populate_obj(comp)
-            self.modeldb.write_model(model)
-            flash("Changes to component '%s' successfully saved"%comp.name,
-                  'success')
-            return redirect(url_for('.editcomponent',
-                                    modelid=modelid, componentid=componentid))
-            #todo: probably should have separate edit, save endpoints...
+            #make sure the fully assembled object works
+            comp.specs = [model.specs.get(bs.spec,bs.spec) 
+                          for bs in comp.specs]
+            status = comp.getstatus()
+            if not status:
+                #no errors, so save
+                self.modeldb.write_model(model)
+                flash("Changes to component '%s' successfully saved"%comp.name,
+                      'success')
+                return redirect(url_for('.editcomponent',
+                                        modelid=modelid, 
+                                        componentid=componentid))
+            else:
+                form.specs.errors.append(status)
+                
         return render_template('editmodel.html', model=model, 
                                editcomponent=comp, form=form)
 
@@ -416,12 +425,18 @@ class ModelEditor(object):
         self.addlinks(form, modelid)
         if request.method == 'POST' and form.validate():
             form.populate_obj(spec)
-            self.modeldb.write_model(model)
-            flash("Changes to spec '%s' successfully saved"%spec.name,
-                  'success')
-            return redirect(url_for('.editspec', 
-                                    modelid=modelid, specid=specid))
-            #todo: probably should have separate edit, save spec endpoints
+            #make sure the fully assembled spec works
+            status = spec.getstatus()
+            if not status:
+                #no errors, so save
+                self.modeldb.write_model(model)
+                flash("Changes to spec '%s' successfully saved"%spec.name,
+                      'success')
+                return redirect(url_for('.editspec', 
+                                        modelid=modelid, specid=specid))
+            else:
+                print("getstatus returned '%s'"%status)
+                form.normfunc.errors.append(status)
         return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 
