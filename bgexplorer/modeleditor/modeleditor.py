@@ -392,22 +392,29 @@ class ModelEditor(object):
         comp = self.getcomponentordie(model, componentid)
         form = forms.get_form(request.form, comp)
         self.addlinks(form, modelid)
-        if request.method == 'POST' and form.validate():
-            form.populate_obj(comp)
-            #make sure the fully assembled object works
-            comp.specs = [model.specs.get(bs.spec,bs.spec) 
-                          for bs in comp.specs]
-            status = comp.getstatus()
-            if not status:
-                #no errors, so save
-                self.modeldb.write_model(model)
-                flash("Changes to component '%s' successfully saved"%comp.name,
-                      'success')
-                return redirect(url_for('.editcomponent',
-                                        modelid=modelid, 
-                                        componentid=componentid))
+        if request.method == 'POST':
+            if form.validate():
+                form.populate_obj(comp)
+                #make sure the fully assembled object works
+                comp.specs = [model.specs.get(bs.spec,bs.spec) 
+                              for bs in comp.specs]
+                status = comp.getstatus()
+                if not status:
+                    #no errors, so save
+                    self.modeldb.write_model(model)
+                    flash("Changes to component '%s' successfully saved"%
+                          comp.name, 'success')
+                    return redirect(url_for('.editcomponent',
+                                            modelid=modelid, 
+                                            componentid=componentid))
+                else:
+                    flash("Form validation failed. Correct errors and resubmit",
+                          "danger")
+                    form.specs.errors.append(status)
             else:
-                form.specs.errors.append(status)
+                flash("Form validation failed. Correct errors and resubmit",
+                      "danger")
+        
                 
         return render_template('editmodel.html', model=model, 
                                editcomponent=comp, form=form)
@@ -423,20 +430,25 @@ class ModelEditor(object):
             abort(404,"No form defined for class %s",type(spec).__name__)
         form = possibleforms[0](request.form, obj=spec)
         self.addlinks(form, modelid)
-        if request.method == 'POST' and form.validate():
-            form.populate_obj(spec)
-            #make sure the fully assembled spec works
-            status = spec.getstatus()
-            if not status:
-                #no errors, so save
-                self.modeldb.write_model(model)
-                flash("Changes to spec '%s' successfully saved"%spec.name,
-                      'success')
-                return redirect(url_for('.editspec', 
-                                        modelid=modelid, specid=specid))
+        if request.method == 'POST':
+            if form.validate():
+                form.populate_obj(spec)
+                #make sure the fully assembled spec works
+                status = spec.getstatus()
+                if not status:
+                    #no errors, so save
+                    self.modeldb.write_model(model)
+                    flash("Changes to spec '%s' successfully saved"%spec.name,
+                          'success')
+                    return redirect(url_for('.editspec', 
+                                            modelid=modelid, specid=specid))
+                else:
+                    flash("Form validation failed. Correct errors and resubmit",
+                          "danger")
+                    form.normfunc.errors.append(status)
             else:
-                print("getstatus returned '%s'"%status)
-                form.normfunc.errors.append(status)
+                flash("Form validation failed. Correct errors and resubmit",
+                      "danger")
         return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 
