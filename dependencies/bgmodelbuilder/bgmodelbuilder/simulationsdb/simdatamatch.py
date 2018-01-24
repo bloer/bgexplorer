@@ -214,6 +214,7 @@ class SimDataRequest(object):
             match: The newly created SimDataMatch object
         """
         kwargs.setdefault('status','newmatch')
+        weight = kwargs.get('weight',1)
         newmatch = SimDataMatch(request=self, query=copy.copy(query), **kwargs)
         oldmatch = None
         #see if we already have an existing match
@@ -222,7 +223,7 @@ class SimDataRequest(object):
                 oldmatch = amatch
                 if weight != oldmatch.weight:
                     oldmatch.addstatus("weightchanged")
-                    oldmatch.weight = weight
+                    oldmatch.weight = weight #todo recalculate livetime too
                 return oldmatch
 
         #if we get here, there was no prior match
