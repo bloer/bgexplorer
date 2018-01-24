@@ -8,14 +8,15 @@
     {% block mystyles %}
 	<style>
 	 /* all this crap is needed to get scrolling to work */
-	 div.scroll {overflow:auto}
-	 .childofactive, .parentofactive {background-color: #FCF8E3}
-	 div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
+	 .scroll {overflow:auto}
+     div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
 	 h1 {margin-top:0px}
+     div.page-header {margin: 10px 0 10px ; padding-bottom: 4px }
 	 /*body, .btn, .form-control, .glyphicon {font-size:small;}*/
 	 .linklike {cursor:pointer; }
 	 .Assembly td:first-child:after {content:"↴"; padding-left:0.15em; color:green;}
 	 #componentsdiv td[data-column=weight] {display:none}
+     #editor h2 {margin-top: 5px; margin-bottom:2px ; padding-bottom: 10px; border-bottom: 1px solid #ddd }
 	 #editor td[data-column=description] {display:none}
 	 .form-inline, .form-inline div.input-group {display:inline-block}
 	     
@@ -42,12 +43,14 @@
 	     
 	     //make scroll divs expand to 100% remaining height
 	     setscrollheights();
-	     $(window).resize(setscrollheights)
+	     $(window).resize(setscrollheights);
+         $('a[data-toggle="tab"]').on('shown.bs.tab', setscrollheights);
 	 });
 
 	 function setscrollheights(){
-	     var height = $(window).height() - $("#pagecontent").offset().top;
-	     $("div.scroll").height(height);
+         $(".scroll").height(function(){
+             return $(window).height() - $(this).offset().top;
+         });
 	 }
 
 	 function filtercomponents(){
@@ -129,6 +132,7 @@
 {% endmacro %}
 
 {% macro componenttable(components, recursive=true, id="") %}
+    <div class="scroll" >
     <table class="table table-condensed table-hover comptable" id="{{ id }}">
 	<thead>
 	    <tr><th>Name</th><th>Description</th><th>Status</th><th></th></tr>
@@ -151,6 +155,7 @@
 	    
 	</tbody>
     </table>
+    </div>
 {% endmacro %}
 
 
@@ -183,7 +188,8 @@
 {% endmacro %}
 
 {% macro spectable(specs, id="") %}
-    <table class="table table-condensed table-hover spectable table-responsive" id="{{ id }}">
+    <div class="scroll">
+    <table class="table table-condensed table-hover spectable table-responsive " id="{{ id }}">
 	<thead>
 	    <tr><th>Name</th><th>Category</th><th>Dist.</th><th>Rate</th><th>Status</th><th></th></tr>
 	</thead>
@@ -193,6 +199,7 @@
 	    {% endfor %}
 	</tbody>
     </table>
+    </div>
 {% endmacro %}
 
 
@@ -236,7 +243,7 @@
 	
 
     <div class="row" >
-	<div class="col-sm-6 scroll">
+	<div class="col-sm-6">
 	    
 	    <ul class="nav nav-tabs" >
 		<li {%- if editspec is not defined %} class="active" {% endif -%}>
@@ -306,7 +313,7 @@
 	    </div> {# close tab-content  #}
 	</div> {# close col-sm-6 #}
 	
-	<div class="col-sm-6 scroll" >
+	<div class="col-sm-6" >
 	    <div id="editor"  >
 		{% if form is defined %}
 		    {% if editcomponent is defined %}
