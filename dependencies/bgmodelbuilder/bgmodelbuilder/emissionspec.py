@@ -161,10 +161,9 @@ class EmissionSpec(Mappable):
         for comp in self.appliedto:
             try:
                 self.emissionrate(comp).to('1/s')
-            except:
-                result += " unit error "
-                break
-
+            except units.errors.DimensionalityError:
+                result += (" DimensionalityError: emissionrate for comp '{}' ({}) "
+                           .format(comp.name, comp.id))
         return result
         
     def todict(self):
@@ -239,7 +238,7 @@ class CombinedSpec(EmissionSpec):
             setattr(sub, attr, val)
             
     def getstatus(self):
-        return " ".join(s.getstatus() for s in self.subspecs)
+        return "".join(s.getstatus() for s in self.subspecs)
             
     #overload __getitem__ so we can unpack subspecs directly
     #should we allow deep unpacking???
@@ -314,7 +313,7 @@ class RadioactiveContam(EmissionSpec):
                     self._err = (err.to(self.rate.u)/self.rate).m
                 else:
                     msg = "err must be fractional or in same units as rate"
-                    raise untis.DimensionalityError(self.rate.u, err.u,
+                    raise units.DimensionalityError(self.rate.u, err.u,
                                                     extra_msg=msg)
             else:
                 self._err = err.m

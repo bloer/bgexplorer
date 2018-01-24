@@ -254,7 +254,7 @@ class BaseComponent(Mappable):
             try:
                 spec.emissionrate(self).to('1/s')
             except units.errors.DimensionalityError:
-                result += (" DimensionalityError: emissionrate spec %s (%s) "
+                result += (" DimensionalityError: emissionrate spec for '{}' ({}) "
                            .format(spec.name, spec.id))
 
         return result
