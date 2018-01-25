@@ -20,8 +20,10 @@ dashboard.config = {
     'titleprecision': 5,
     'defaulttabledepth': 1,
     'maxchartdepth': 3,
-    'minnodesize': 0.005,
+    'minnodesize': 0.01,
+    'mintextsize':0.03,
     'defaultcharttype': 'pie',
+    'transitionduration':800,
 };
 
 //top-level crossfilter instance
@@ -422,17 +424,22 @@ var arc = d3.arc()
 function arcTween(d){
 	var end = {x0:d.x0, y0:d.y0, x1:d.x1, y1:d.y1};
     var start = end;
-    if(d.previousVals){
-        start = {x0: d.previousVals.x0 || end.x0,
-                 x1: d.previousVals.x1 || end.x1,
-                 y0: d.previousVals.y0 || end.y0,
-                 y1: d.previousVals.y1 || end.y0,
-                };  
-    }               
+    if(d.previousVals)
+        start = d.previousVals;
 	return d3.interpolate(start,end);
 }
 function arcTweenD(d){
 	return function(t){ return arc(arcTween(d)(t)); };
+}
+function rotateTween(d){
+    return function(t){ 
+        var dd = arcTween(d)(t);
+        var centroid = arc.centroid(dd);
+        var angle = Math.atan(centroid[1]/centroid[0])*180/Math.PI - 90;
+        if(dd.y1-dd.y0 > 0.5*(dd.y0+dd.y1)*(dd.x1-dd.x0)) angle -= 90;
+        if(angle < -90 || angle > 90) angle += 180;
+        return "rotate("+angle+" "+centroid[0]+" "+centroid[1]+")";
+    };
 }
 	
 
@@ -448,7 +455,6 @@ dashboard.updatechart = function(chart, valtype){
     var maxdepth = data.height;
     var height = width; 
     width *= (1+maxdepth) / Math.min(maxdepth,dashboard.config.maxchartdepth);
-    data.each(function(d){ d.previousVals = {x0: d.x0, x1: d.x1, y0: d.y0, y1: d.y1}; });
     d3.partition()
         .size(pie ? [2*Math.PI, 0.99*width/2] : [height, width])
         .round(false)
@@ -461,7 +467,8 @@ dashboard.updatechart = function(chart, valtype){
 
     var nodes = chart.selectAll(".node")
       .data(data.descendants().filter(function(d){ 
-          return d.depth>0 && d.depth<=dashboard.config.maxchartdepth && d.value/data.value>dashboard.config.minnodesize; 
+          return d.depth>0 && d.depth<=dashboard.config.maxchartdepth && 
+              d.value/data.value>dashboard.config.minnodesize; 
       }),function(d){ return d.id; });
     var enter = nodes.enter().append("g")
         .attr("class",function(d){ return "node" + (d.children ? " branch": " leaf"); })
@@ -489,17 +496,21 @@ dashboard.updatechart = function(chart, valtype){
         .attr("id",function(d){ return "shape-"+d.id; }) //todo: this needs to be globally unique
         .style("fill",function(d){ return d.color; })
         .style("opacity",0.6);
-    
-    enter.append("clipPath")
+    labeled = enter.filter(function(d){
+        return d.value / data.value > dashboard.config.mintextsize;
+    });
+    labeled.append("clipPath")
         .attr("id", function(d) { return "clip-" + d.id; }) //todo: this needs to be globally unique
       .append("use")
         .attr("xlink:href", function(d) { return "#shape-" + d.id + ""; });
-    enter.append("text")
+    labeled.append("g")
+        .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
+      .append("text")
         .attr("class","bgexplorer-chart-label")
         .attr("text-anchor","middle")
         .attr("dominant-baseline","central")
         .attr("y",5).attr("x",0)
-        .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
+        //.attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
         .attr("pointer-events", "none") //prevent stealing hover
         .text(function(d){ return d.name })
         
@@ -508,7 +519,8 @@ dashboard.updatechart = function(chart, valtype){
 
     var merge = nodes.merge(enter);
     merge.selectAll("title").text(function(d){ return d.name + ": "+d.value.toExponential(5); });
-    var transition = merge.transition().delay(5).duration(500);
+    var transition = merge.transition().delay(5)
+        .duration(dashboard.config.transitionduration);
     transition
       .selectAll("rect.bgexplorer-data-shape")
         .attr("x", function(d){ return d.y0; })
@@ -517,11 +529,27 @@ dashboard.updatechart = function(chart, valtype){
         .attr("height", function(d) { return d.x1 - d.x0; });
     transition.selectAll(".bgexplorer-data-shape.arc")
         .attrTween("d",arcTweenD);
-    transition.selectAll("text")
-        .attr("x",function(d){ return pie ? arc.centroid(d)[0] : 0.5*(d.y1+d.y0); })
-        .attr("y",function(d){ return pie ? arc.centroid(d)[1] : 0.5*(d.x1+d.x0); });
-    nodes.exit().transition().delay(5).duration(400).style("opacity",0).remove();
-    enter.transition().delay(400).duration(400).style("opacity",1);
+    if(pie){
+        transition.selectAll("text")
+            .attrTween("x",function(d){
+                return function(t){ return arc.centroid(arcTween(d)(t))[0]; };
+            })
+            .attrTween("y",function(d){
+                return function(t){ return arc.centroid(arcTween(d)(t))[1]; };
+            })
+            .attrTween("transform",rotateTween)
+        ;
+    }
+    transition.on('end',function(d){ d.previousVals = {x0: d.x0, x1: d.x1, 
+                                              y0: d.y0, y1: d.y1}; 
+                                    });
+
+    
+    nodes.exit()
+        .transition().delay(5).duration(dashboard.config.transitionduration/2)
+        .style("opacity",0).remove();
+    enter.transition().delay(dashboard.config.transitionduration)
+        .duration(dashboard.config.transitionduration).style("opacity",1);
     
 };
 
