@@ -20,10 +20,10 @@ dashboard.config = {
     'titleprecision': 5,
     'defaulttabledepth': 1,
     'maxchartdepth': 3,
-    'minnodesize': 0.01,
-    'mintextsize':0.03,
+    'minnodesize': 0.003,
+    'mintextsize':0.05,
     'defaultcharttype': 'pie',
-    'transitionduration':800,
+    'transitionduration':1000,
 };
 
 //top-level crossfilter instance
@@ -60,6 +60,7 @@ dashboard.onLoad = function(callback){
 
 //parse the rows in the tsv datatable. Should be passed as the second argument
 //to d3.tsv
+var splitkey = '___';
 var groups = []; 
 dashboard.parserow = function(row){
     if(groups.length == 0){//construct the list of groups
@@ -71,12 +72,11 @@ dashboard.parserow = function(row){
         }
     }
     var out = { 'ID': row.ID, 'groups': {}, 'values': {} };
-    groups.forEach(function(g){ out.groups[g] = row['G_'+g] });
+    groups.forEach(function(g){ out.groups[g] = row['G_'+g].split(splitkey); });
     dashboard.valuetypes.forEach(function(v){ out.values[v] = +row['V_'+v] });
     return out;
 };
     
-var splitkey = '___';
 
 //take the list of objects returned from parserows and construct the crossfiler
 // and d3 structures
@@ -111,25 +111,31 @@ dashboard.processtable = function(error,rows){
 
     //create a crossfilter dimension and group for each group
     groups.forEach(function(g){
-        dashboard.cfdimensions[g] = dashboard.cf.dimension(function(d){
-            return d.groups[g];
+        ['','filter_'].forEach(function(prefix){
+            dashboard.cfdimensions[prefix+g] = dashboard.cf.dimension(function(d){
+                return d.groups[g];
+            });
         });
         dashboard.cfgroups[g] = dashboard.cfdimensions[g].group()
             .reduce(reduceAdd, reduceRemove, reduceInitial);
+        dashboard.cffilters[g] = [];
     });
     dashboard.cfgroupAll.reduce(reduceAdd, reduceRemove, reduceInitial);
     
     //process the data
     dashboard.cf.add(rows);
     
+    //save the totals
+    dashboard.totalrates = jQuery.extend(true,{},dashboard.cfgroupAll.value());
+    
     //now create d3 hierarchies for each group
-    function flatparentId(d){ return d.key == splitkey ? null : splitkey; }
+    function flatparentId(d){ return d.key == [splitkey] ? null : splitkey; }
     function topparentId(d){ 
-        return d.key.split(splitkey).slice(0,-1).join(splitkey); 
+        return d.key.slice(0,-1).join(splitkey); 
     }
     function parentId(d){
-        if(d.key == splitkey) return null; 
-        split = d.key.split(splitkey).slice(0,-1);
+        if(d.key == [splitkey]) return null; 
+        split = d.key.slice(0,-1);
         if(split.length == 0) return splitkey;
         return split.join(splitkey);
     }
@@ -141,25 +147,24 @@ dashboard.processtable = function(error,rows){
         var addnodes = d3.set();
         var topnodes = d3.set();
         leaves.forEach(function(leaf){
-            var split = leaf.key.split(splitkey);
-            for(var depth=0; depth < split.length-1; ++depth){
-                var newkey = split.slice(0,depth+1).join(splitkey);
+            for(var depth=0; depth < leaf.key.length-1; ++depth){
+                var newkey = leaf.key.slice(0,depth+1).join(splitkey);
                 if(depth == 0)
                     topnodes.add(newkey);
                 addnodes.add(newkey);
             }
         });
         if(topnodes.size() != 1)
-            addnodes.add(splitkey);
+            addnodes.add([splitkey]);
         var allnodes = leaves.concat(addnodes.values().map(
-            function(d){ return {key:d }; } ));;
+            function(d){ return {key:d.split(splitkey)}; }) );
         
         var pid = parentId;
         if(addnodes.size() == 0) pid = flatparentId;
         if(topnodes.size() == 1) pid = topparentId;
         try{
             dashboard.hierarchies[g] = d3.stratify()
-                .id(function(d){ return d.key; }).parentId(pid)(allnodes);
+                .id(function(d){ return d.key.join(splitkey); }).parentId(pid)(allnodes);
         }catch(error){
             var msg = "Error while building hierarchy for group "+g+": "+error;
             console.error(msg);
@@ -183,19 +188,25 @@ dashboard.processtable = function(error,rows){
         }
         //add some additional useful info
         root.each(function(node){ 
-            node.name = node.data.key.split(splitkey).pop();
+            node.name = node.data.key[node.data.key.length-1];
             if(node.name == "" || node.name == splitkey) node.name = "Total";
             node.id = (g+splitkey+node.id).replace(/[^A-z0-9_-]/g,'_');
+            node.group = g;
+            node.dimension = dashboard.cfdimensions[g];
+            node.filter = dashboard.cffilters[g];
+            node.filterdimension = dashboard.cfdimensions['filter_'+g]
             if(node.parent){
                 node.siblings = node.parent.children.length;
                 node.index = node.parent.children.indexOf(node);
                 node.colorStart = (node.index+0.05) / node.siblings;
                 node.colorEnd = node.colorStart + 0.9/node.siblings;
                 if(node.parent.color){
-                    node.colorStart = node.parent.colorStart + node.colorStart * (node.parent.colorEnd - node.parent.colorStart);
-                    node.colorEnd = node.parent.colorStart + node.colorEnd * (node.parent.colorEnd - node.parent.colorStart);
+                    node.colorStart = node.parent.colorStart + node.colorStart * 
+                        (node.parent.colorEnd - node.parent.colorStart);
+                    node.colorEnd = node.parent.colorStart + node.colorEnd * 
+                        (node.parent.colorEnd - node.parent.colorStart);
                 }
-                node.color = d3.interpolateCool(node.colorStart*0.9+0.1);
+                node.color = d3.hcl(d3.interpolateCool(node.colorStart*0.9+0.1)).brighter(0.7);
             }
             else{
                 node.siblings = 1;
@@ -206,7 +217,108 @@ dashboard.processtable = function(error,rows){
     });
     dashboard.dataloaded = true;
     onload.forEach(function(callback){ callback(); });
+    //update stuff for filter info if defined
+    var filterinfo = d3.select("#dashboard-filterinfo")
+        .html(function(){
+            return "<h4>Filter Info</h4>" 
+                + "<span class='filterstat' id='dashboard-records'>0</span> "
+                + "records pass all filters. <br>"
+                + "<span class='filterstat' id='dashboard-rate'>0</span> "
+                + "rate pass all filters. <br>"
+            ;
+        });
+    filterinfo.append("h5").text("Active Filters")
+      //.append("small")
+      .append("a").text(" reset all").attr("href","#").on("click",function(){
+          d3.event.preventDefault();
+          //clear all the filter arrays
+          Object.values(dashboard.cffilters).forEach(function(a){ a.length = 0; });
+          dashboard.updateFilters();
+      });
+        
+    filterinfo.append("ul").attr("id","dashboard-activefilters")
+        .attr("class","list-unstyled")
+      .selectAll("li")
+        .data(Object.entries(dashboard.cffilters))
+        .enter().append("li").text(function(d){ return d[0]+": "; }).append("ul");
+    /*
+      //this isn't working yet
+    var form = filterinfo.append("form")
+        .attr("id","dashboard-newfilterform")
+        .attr("class","form form-horizontal")
+        .on("submit",function(){
+            d3.event.preventDefault();
+        });
+    form.append("h5").text("Add filter");
+    form.append("select").selectAll("option").data(Object.keys(dashboard.cffilters))
+      .enter().append("option")
+        .text(function(d){ return d; })
+        .attr("value",function(d){ return d; });
+    form.append("input").attr("type","text");
+    */
 }
+
+/* Update the filters for a node from a click.  Holding the shift key will combine 
+   the selections. Holding ctrl will invert the filter (i.e. remove the group rather 
+   than select it.) Shift and Ctrl can be used together to remove multiple groups
+*/
+var shiftRegistered = false;
+function modifyFilters(node){
+    d3.event.preventDefault();
+    d3.select(this).classed("selected",true);
+    
+    //push the new selection on the stack
+    node.filter.push([d3.event.ctrlKey, node.data.key]);
+    if(d3.event.shiftKey){
+        //combine the filter with others and wait for shift key to be released
+        if(!shiftRegistered){
+            shiftRegistered = true;
+            d3.select("body").on("keyup",function(){
+                if(d3.event.key == "Shift"){
+                    shiftRegistered = false;
+                    dashboard.updateFilters();
+                }
+            });
+        }
+    }
+    else{ //things take place immediately
+        while(node.filter.length > 1)
+            node.filter.shift();
+        dashboard.updateFilters(node.group);
+    }
+}
+
+//todo: go back to storing strings since we have ot do this slow
+/* each test entry is a 2-tuple, with the first entry declaring whether it is an 
+   acceptance check (0) or exclusion (1). This logic can probably be improved on for clarity
+*/
+
+function filterKeys(groupname){
+    var tests = dashboard.cffilters[groupname];
+    return function(record){
+        var npasschecks=0, npass=0;
+        for(var i in tests){
+            var exclude = tests[i][0];
+            var match = record.slice(0,tests[i][1].length).toString() == 
+                tests[i][1].toString();
+            if(exclude && match) return false;
+            if(!exclude){
+                npasschecks += 1;
+                npass += match;
+            }
+        }
+        return npasschecks == 0 || npass > 0;
+    };
+}
+
+dashboard.updateFilters = function(group){
+    for(var groupname in dashboard.cffilters){
+        if(!group || group == groupname)
+            dashboard.cfdimensions['filter_'+groupname].filter(filterKeys(groupname));
+    }
+    dashboard.updateall();
+};
+
 
 /* Create a table with group values for rows and reduced values for columns.
    Args:
@@ -409,7 +521,7 @@ dashboard.buildchart = function(parent, group, valtype, charttype, width, id){
         .attr("transform",charttype == "pie" ? "translate("+width/2+","+width/2+")" : null)
     ;
     dashboard.displays.charts.push(chart);
-    dashboard.updatechart(chart);
+    //dashboard.updatechart(chart);
     return chart;
 };
 
@@ -443,6 +555,39 @@ function rotateTween(d){
 }
 	
 
+function doanimation(transition, data, pie){
+    transition.duration(dashboard.config.transitionduration);
+    transition
+      .selectAll("rect.bgexplorer-data-shape")
+        .attr("x", function(d){ return d.y0; })
+        .attr("y", function(d){ return d.x0;})
+        .attr("width", function(d) { return d.y1 - d.y0; })
+        .attr("height", function(d) { return d.x1 - d.x0; });
+    transition.selectAll(".bgexplorer-data-shape.arc")
+        .attrTween("d",arcTweenD);
+    if(pie){
+        var mintext = dashboard.config.mintextsize;
+        transition.selectAll("text")
+          .filter(function(d){ return d.value / data.value >= mintext; })
+            .attr("display",null)
+            .attrTween("x",function(d){
+                return function(t){ return arc.centroid(arcTween(d)(t))[0]; };
+            })
+            .attrTween("y",function(d){
+                return function(t){ return arc.centroid(arcTween(d)(t))[1]; };
+            })
+            .attrTween("transform",rotateTween)
+        ;
+        transition.selectAll("text").filter(function(d){ 
+            return d.value/data.value < mintext; 
+        }).attr("display","none");
+    }
+    transition.on('end',function(d){ d.previousVals = {x0: d.x0, x1: d.x1, 
+                                              y0: d.y0, y1: d.y1}; 
+                                    });
+}
+
+//TODO: Make this more efficient!
 dashboard.updatechart = function(chart, valtype){
     var chartdata = chart.datum();
     valtype = valtype || chartdata.val;
@@ -450,33 +595,65 @@ dashboard.updatechart = function(chart, valtype){
     var groupname = chartdata.groupname;
     var pie = chartdata.type == "pie";
     var width = parseInt(chart.attr("width"));
-    var data = chartdata.group.sum(function(node){ return node.value ? node.value[valtype] : 0; });
+    var data = chartdata.group.sum(function(node){ return node.value ? node.value.count : 0; });
     //scale the data so that we're zoomed in and cut off the total
-    var maxdepth = data.height;
+    var maxdepth = data.height+1;
     var height = width; 
-    width *= (1+maxdepth) / Math.min(maxdepth,dashboard.config.maxchartdepth);
+    //determine the innermost ring to show
+    var rootnode = data;
+    var h = rootnode.height;
+    while(true){ //maxdepth - mindepth > dashboard.config.maxchartdepth){
+        if(!rootnode.children) break;
+        var fullchild = rootnode.children.some(function(child){ //use some to short-circuit the loop
+            if(child.value == rootnode.value){
+                rootnode = child;
+                return true;
+            }
+            return false;
+        });
+        if(!fullchild) break;
+        h = rootnode.height; 
+        if(rootnode.height < dashboard.config.maxchartdepth){
+            h = rootnode.height+1;
+            rootnode = rootnode.parent;
+            break;
+        }
+        if(rootnode.height <= dashboard.config.maxchartdepth)
+            break;
+    }
+    var mindepth = rootnode.depth+1;
+    var rad = width/2 * (maxdepth) / Math.min(h,dashboard.config.maxchartdepth);
+    //recalculate for the value we care about
+    data.sum(function(node){ return node.value ? node.value[valtype] : 0.; });
     d3.partition()
-        .size(pie ? [2*Math.PI, 0.99*width/2] : [height, width])
+        .size(pie ? [2*Math.PI, 0.99*rad] : [height, width])
         .round(false)
         .padding(0)
       (data);
     data.each(function(d){ 
         var w = d.y1 - d.y0; 
-        d.y1 -= w; d.y0-=w;
+        d.y1 -= mindepth*w; d.y0-=mindepth*w;
+        if(!d.previousVals)
+            d.previousVals = {x0: 0, x1: 0, 
+                              y0: d.y0, y1: d.y1}; 
     });    
-
+    
     var nodes = chart.selectAll(".node")
       .data(data.descendants().filter(function(d){ 
-          return d.depth>0 && d.depth<=dashboard.config.maxchartdepth && 
-              d.value/data.value>dashboard.config.minnodesize; 
+          return d.depth>=mindepth && d.depth<=dashboard.config.maxchartdepth+mindepth-1 
+              && d.value > 0
+              && d.value/data.value>dashboard.config.minnodesize
+              ; 
       }),function(d){ return d.id; });
     var enter = nodes.enter().append("g")
         .attr("class",function(d){ return "node" + (d.children ? " branch": " leaf"); })
-        .style("opacity",0)
+        .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
+        //.style("opacity",0)
         .on("mouseenter", function(d){ 
             chartdata.display.text(d3.select(this).select("title").text());
         })
         .on("mouseleave",function(){ chartdata.display.text(null); })
+        .on("click",modifyFilters);
            
     ;
     if(pie){
@@ -495,16 +672,12 @@ dashboard.updatechart = function(chart, valtype){
     enter.selectAll(".bgexplorer-data-shape")
         .attr("id",function(d){ return "shape-"+d.id; }) //todo: this needs to be globally unique
         .style("fill",function(d){ return d.color; })
-        .style("opacity",0.6);
-    labeled = enter.filter(function(d){
-        return d.value / data.value > dashboard.config.mintextsize;
-    });
-    labeled.append("clipPath")
+        //.style("opacity",0.6);
+    enter.append("clipPath")
         .attr("id", function(d) { return "clip-" + d.id; }) //todo: this needs to be globally unique
       .append("use")
         .attr("xlink:href", function(d) { return "#shape-" + d.id + ""; });
-    labeled.append("g")
-        .attr("clip-path",function(d){ return "url(#clip-"+d.id+")";})
+    enter
       .append("text")
         .attr("class","bgexplorer-chart-label")
         .attr("text-anchor","middle")
@@ -516,43 +689,69 @@ dashboard.updatechart = function(chart, valtype){
         
     ;
     enter.append("title").text(function(d){ return d.name; });
-
     var merge = nodes.merge(enter);
-    merge.selectAll("title").text(function(d){ return d.name + ": "+d.value.toExponential(5); });
-    var transition = merge.transition().delay(5)
-        .duration(dashboard.config.transitionduration);
-    transition
-      .selectAll("rect.bgexplorer-data-shape")
-        .attr("x", function(d){ return d.y0; })
-        .attr("y", function(d){ return d.x0;})
-        .attr("width", function(d) { return d.y1 - d.y0; })
-        .attr("height", function(d) { return d.x1 - d.x0; });
-    transition.selectAll(".bgexplorer-data-shape.arc")
-        .attrTween("d",arcTweenD);
-    if(pie){
-        transition.selectAll("text")
-            .attrTween("x",function(d){
-                return function(t){ return arc.centroid(arcTween(d)(t))[0]; };
-            })
-            .attrTween("y",function(d){
-                return function(t){ return arc.centroid(arcTween(d)(t))[1]; };
-            })
-            .attrTween("transform",rotateTween)
-        ;
-    }
-    transition.on('end',function(d){ d.previousVals = {x0: d.x0, x1: d.x1, 
-                                              y0: d.y0, y1: d.y1}; 
-                                    });
-
+    merge.classed("selected",false)
+      .selectAll("title")
+        .text(function(d){ return d.name + ": "+d.value.toExponential(5); });
+    merge.transition().call(doanimation, data, pie);
+    nodes.exit().transition().call(doanimation, data, pie)
+      .remove();
     
-    nodes.exit()
-        .transition().delay(5).duration(dashboard.config.transitionduration/2)
-        .style("opacity",0).remove();
-    enter.transition().delay(dashboard.config.transitionduration)
-        .duration(dashboard.config.transitionduration).style("opacity",1);
+    
+    //exit
+        //.transition().delay(dashboard.config.transitionduration)
+        //.duration(dashboard.config.transitionduration/2)
+        //.style("opacity",0)
+        //.remove();
+    //enter.transition().delay(dashboard.config.transitionduration)
+      //  .duration(dashboard.config.transitionduration).style("opacity",1);
+    
     
 };
 
-
+var currentvaltype = null;
+dashboard.updateall = function(valtype){
+    if(valtype) currentvaltype = valtype;
+    //update the displays
+    dashboard.displays.tables.forEach(dashboard.updatetable);
+    dashboard.displays.charts.forEach(function(chart){
+        dashboard.updatechart(chart, valtype);
+    })
+    d3.select("#dashboard-records").text(function(){
+        var totalrecords = dashboard.data.length;
+        var filterrecords = dashboard.cfgroupAll.value().count;
+        return filterrecords+" / "+totalrecords
+            +" ("+(100*filterrecords/totalrecords).toFixed(1)+"%)";
+    });
+    
+    d3.select("#dashboard-rate").text(function(){
+        var totalrate = dashboard.totalrates[currentvaltype] || 0;
+        var filterrate = dashboard.cfgroupAll.value()[currentvaltype] || 0;
+        var unit = "";
+        var unitoffset = currentvaltype.search(/\[.*\]$/);
+        if(unitoffset != -1)
+            unit = " "+currentvaltype.substring(unitoffset+1,currentvaltype.length-1);
+        return filterrate.toPrecision(3)+" / "+totalrate.toPrecision(3) + unit
+            +" ("+(100*filterrate/totalrate).toFixed(1)+"%)";
+    });
+    var li = d3.selectAll("#dashboard-activefilters li ul").selectAll("li")
+        .data(function(d){ return d[1].map(function(dd,i){ 
+            return {group:d[0], filterlist: d[1], test: dd, index: i}; 
+        }); });
+    li.exit().remove();
+    li.enter().append("li").merge(li).text(function(d){ 
+        return (d.test[0] ? "! ":"") + d.test[1][d.test[1].length-1]; })
+      .append("a").attr("href","#")
+      .append("span")
+        .attr("class","glyphicon glyphicon-remove")
+        .style("color","red")
+        .on("click",function(d){
+            d3.event.preventDefault();
+            d.filterlist.splice(d.index,1);
+            dashboard.updateFilters(d.group);
+        }); 
+    ;
+    
+};
 
 })( window.bgexplorer = window.bgexplorer || {});

@@ -17,10 +17,7 @@
            .append("select")
            .attr("id","selectval")
            .on("change",function(){
-               var newval = this.value;
-               dashboard.displays.charts.forEach(function(chart){
-                   dashboard.updatechart(chart, newval);
-               });
+               dashboard.updateall(this.value);
            })
            .selectAll("option").data(dashboard.valuetypes).enter()
            .append("option")
@@ -32,6 +29,7 @@
          d3.select("#charts").selectAll("div.chartholder").data(Object.keys(dashboard.hierarchies))
            .enter().append("div").attr("class","chartholder col-sm-6 col-md-4 col-lg-4")
            .each(function(d){ dashboard.buildchart(this, d, dashboard.valuetypes[0]); });
+         dashboard.updateall(dashboard.valuetypes[0]);
      });
      
     </script>
@@ -46,5 +44,7 @@
 {% block pagecontent %}
     {{ super() }}
     <div id="control"></div>
-    <div id="charts" class="row" ></div>
+    <div id="charts" class="row" >
+        <div id="dashboard-filterinfo" class="col-sm-6 col-md-4 col-lg-4" ></div>
+    </div>
 {% endblock %}
