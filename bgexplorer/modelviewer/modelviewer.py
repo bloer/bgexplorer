@@ -245,9 +245,12 @@ class ModelViewer(object):
         valitems = list(values.values())
         matches = model.simdatamatches.values()
         #send the header
+        valheads = ['V_'+v+(' [%s]'%self.values_units[v] 
+                            if v in self.values_units else '') 
+                    for v in values]
         yield('\t'.join(chain(['ID'],
                               ('G_'+g for g in self.groups),
-                              ('V_'+v for v in values)))
+                              valheads))
               +'\n')
         #loop through matches
         for match in matches:
