@@ -634,7 +634,7 @@ dashboard.updatechart = function(chart, valtype){
         var w = d.y1 - d.y0; 
         d.y1 -= mindepth*w; d.y0-=mindepth*w;
         if(!d.previousVals)
-            d.previousVals = {x0: 0, x1: 0, 
+            d.previousVals = {x0: d.x0, x1: d.x1, 
                               y0: d.y0, y1: d.y1}; 
     });    
     
