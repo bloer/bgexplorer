@@ -391,7 +391,6 @@ class ModelEditor(object):
         model = self.getmodelordie(modelid, toedit=True)
         comp = self.getcomponentordie(model, componentid)
         form = forms.get_form(request.form, comp)
-        self.addlinks(form, modelid)
         if request.method == 'POST':
             if form.validate():
                 form.populate_obj(comp)
@@ -415,7 +414,7 @@ class ModelEditor(object):
                 flash("Form validation failed. Correct errors and resubmit",
                       "danger")
         
-                
+        self.addlinks(form, modelid)
         return render_template('editmodel.html', model=model, 
                                editcomponent=comp, form=form)
 
@@ -429,7 +428,6 @@ class ModelEditor(object):
         if len(possibleforms) < 1:
             abort(404,"No form defined for class %s",type(spec).__name__)
         form = possibleforms[0](request.form, obj=spec)
-        self.addlinks(form, modelid)
         if request.method == 'POST':
             if form.validate():
                 form.populate_obj(spec)
@@ -449,6 +447,7 @@ class ModelEditor(object):
             else:
                 flash("Form validation failed. Correct errors and resubmit",
                       "danger")
+        self.addlinks(form, modelid)
         return render_template('editmodel.html', model=model, editspec=spec, 
                                form=form)
 
