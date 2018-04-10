@@ -57,6 +57,21 @@ dashboard.onLoad = function(callback){
 };
 
 
+//parse a value column that has uncertainties in it
+dashboard.parsevalstring = function(val){
+    //strings are of the form "X+/-E" or "(X+/-E)eY"
+    var expo="e0";
+    if(val.startsWith("(")){
+        var split = val.split("e");
+        expo = "e"+split[1];
+        val = split[0].slice(1,-1);
+    }
+    var split = val.split("+/-");
+    if(split.length == 1)
+        split[1] = "0";
+    return [+(split[0]+expo), +(split[1]+expo)];          
+};
+
 
 //parse the rows in the tsv datatable. Should be passed as the second argument
 //to d3.tsv
@@ -71,9 +86,13 @@ dashboard.parserow = function(row){
                 dashboard.valuetypes.push(col.substr(2));
         }
     }
-    var out = { 'ID': row.ID, 'groups': {}, 'values': {} };
+    var out = { 'ID': row.ID, 'groups': {}, 'values': {}, 'variance': {} };
     groups.forEach(function(g){ out.groups[g] = row['G_'+g].split(splitkey); });
-    dashboard.valuetypes.forEach(function(v){ out.values[v] = +row['V_'+v] });
+    dashboard.valuetypes.forEach(function(v){ 
+        parsed = dashboard.parsevalstring(row['V_'+v])
+        out.values[v] = parsed[0];
+        out.values[v+"_sig2"] = parsed[1]*parsed[1]; 
+    });
     return out;
 };
     
@@ -214,6 +233,22 @@ dashboard.processtable = function(error,rows){
                 node.color = null;
             }
         });
+
+        //add a function to sum all of the data 
+        root.sumAll = function(){
+            return this.eachAfter(function(node){
+                var valueAll = node.data.value || {};
+                if(node.children){
+                    node.children.forEach(function(child){
+                        for(var val in child.valueAll){
+                            valueAll[val] = child.valueAll[val] + (valueAll[val] || 0);
+                        }
+                    });
+                }
+                node.valueAll = valueAll;
+            });
+        };
+        root.sumAll();
     });
     dashboard.dataloaded = true;
     onload.forEach(function(callback){ callback(); });
@@ -391,11 +426,11 @@ dashboard.buildtable = function(parent, group, cols, id){
             .classed("hide",node.depth>opendepth);
         row
           .selectAll("td").data(allcols).enter().append("td")
-            .datum(function(d){ return {'group': node, 'val': d }; })
+            .datum(function(d){ return {'node': node, 'val': d }; })
             .attr("class",function(d,i){ return i ? "valcell" : "groupcell"; })
             .text(function(d,i){
                 if(i) return "";
-                return d.group.name;
+                return d.node.name;
             })
             
         ;
@@ -423,10 +458,7 @@ dashboard.buildtable = function(parent, group, cols, id){
 dashboard.updatetable = function(table){
     var grouproot = table.selectAll("tbody").datum();
     table.selectAll("thead tr th.valhead").each(function(val){
-        grouproot.sum(function(node){
-            return node.value ? node.value[val] : 0;
-        });
-        
+                
         //determine whether to use floating point or exp notation
         var total = grouproot.value;
         var totalpower = Math.floor(Math.log10(total));
@@ -443,10 +475,13 @@ dashboard.updatetable = function(table){
         table.select("tbody").selectAll("tr td.valcell")
             .filter(function(d){ return d.val == val; })
             .attr("title",function(d){ 
-                return d.group.value.toExponential(dashboard.config.titleprecision); 
+                var precision = dashboard.config.titleprecision;
+                return d.node.valueAll[val].toExponential(precision)
+                    + " +/- "
+                    + Math.sqrt(d.node.valueAll[val+"_sig2"]).toExponential(precision); 
             })
             .text(function(d){
-                var myval = d.group.value;
+                var myval = d.node.valueAll[val];
                 if(myval == 0)
                     return "";
                 if(useexpo)
@@ -595,7 +630,7 @@ dashboard.updatechart = function(chart, valtype){
     var groupname = chartdata.groupname;
     var pie = chartdata.type == "pie";
     var width = parseInt(chart.attr("width"));
-    var data = chartdata.group.sum(function(node){ return node.value ? node.value.count : 0; });
+    var data = chartdata.group;//.sum(function(node){ return node.value ? node.value.count : 0; });
     //scale the data so that we're zoomed in and cut off the total
     var maxdepth = data.height+1;
     var height = width; 
@@ -605,7 +640,7 @@ dashboard.updatechart = function(chart, valtype){
     while(true){ //maxdepth - mindepth > dashboard.config.maxchartdepth){
         if(!rootnode.children) break;
         var fullchild = rootnode.children.some(function(child){ //use some to short-circuit the loop
-            if(child.value == rootnode.value){
+            if(child.valueAll.count == rootnode.valueAll.count){
                 rootnode = child;
                 return true;
             }
@@ -624,7 +659,8 @@ dashboard.updatechart = function(chart, valtype){
     var mindepth = rootnode.depth+1;
     var rad = width/2 * (maxdepth) / Math.min(h,dashboard.config.maxchartdepth);
     //recalculate for the value we care about
-    data.sum(function(node){ return node.value ? node.value[valtype] : 0.; });
+    //data.sum(function(node){ return node.value ? node.value[valtype] : 0.; });
+    data.each(function(node){ node.value = node.valueAll[valtype] || 0; });
     d3.partition()
         .size(pie ? [2*Math.PI, 0.99*rad] : [height, width])
         .round(false)
@@ -712,6 +748,11 @@ dashboard.updatechart = function(chart, valtype){
 var currentvaltype = null;
 dashboard.updateall = function(valtype){
     if(valtype) currentvaltype = valtype;
+    //update the hierarchy sums
+    groups.forEach(function(g){
+        dashboard.hierarchies[g].sumAll();
+    });
+    
     //update the displays
     dashboard.displays.tables.forEach(dashboard.updatetable);
     dashboard.displays.charts.forEach(function(chart){
