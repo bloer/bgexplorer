@@ -1,6 +1,8 @@
 import abc
 import operator
 import numpy as np
+from uncertainties import ufloat
+from uncertainties.unumpy import uarray
 
 from .. import units
 from .histogram import Histogram
@@ -16,6 +18,8 @@ class SimDocEval(abc.ABC):
     parse(self, doc, match): Extract the requested value from the raw dictionary
         object returned fro mthe DB, and apply any necessary unit conversions
         This could also be a hook to get the value from a file on disk
+        The value should have correct units and ideally have uncertainties
+        (i.e. be a python `uncertainties.Variable` object) 
     
     ----------------------------------------------------
     Concrete classes SHOULD override the following methods:
@@ -49,10 +53,17 @@ class SimDocEval(abc.ABC):
         return projection
     
     def norm(self, result, match):
+        if self.livetimenormed:
+            try:
+                return result / match.livetime
+            except ZeroDivisionError:
+                print("SimDataMatch found with 0 livetime",
+                      match.id, match.query)
+                return result / (1e-6*units.second)
         return result
 
     def reduce(self, result1, result2):
-        return result1 + result2;
+        return result1 + result2
     
     #should we cache this??
     def _key(self):
@@ -81,9 +92,11 @@ class SimDocEval(abc.ABC):
     def __repr__(self):
         return self._key()
 
-    def __init__(self, label=None, *args, **kwargs): #should label be required?
+    def __init__(self, label=None, livetimenormed=True,
+                 *args, **kwargs): #should label be required?
         super().__init__(*args, **kwargs)
         self.label = label
+        self.livetimenormed = livetimenormed
 
     @property
     def label(self):
@@ -153,9 +166,13 @@ class UnitsHelper(object):
    
 class DirectValue(SimDocEval, UnitsHelper):
     """Get a unit directly from a key. Converter is a function
-    to convert the (usually string) result into a number
+    to convert the (usually string) result into a number. 
+    errcalc is a function to calculate the error from the value
+    _before_ units are applied. Defaults to sqrt(val) which only works if
+    val is unitless
     """
-    def __init__(self, val, converter=lambda x:x, *args, **kwargs):
+    def __init__(self, val, converter=lambda x:x, errcalc=(np.sqrt),
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.val = val
         self.converter = converter
@@ -167,18 +184,19 @@ class DirectValue(SimDocEval, UnitsHelper):
     def parse(self, document, match):
         #should we just throw an exception if the key is bad?
         result = self.converter(splitsubkeys(document, self.val))
-        return self.applyunit(result, document)
+        err = self.errcalc(result)
+        return self.applyunit(ufloat(result, err), document)
     
     def _key(self):
         return("DirectValue(%s,%s,%s)"%(self.val, 
                                      self.unit,
                                      self.unitkey))
     
-
 class DirectSpectrum(SimDocEval):
     def __init__(self, speckey, specunit=None, specunitkey=None,
                  bin_edges=None,
                  binskey=None, binsunit=None, binsunitkey=None,
+                 errcalc=None,
                  *args, **kwargs):
         """Extract a list from `speckey` in the document and convert it to a 
         numpy array.  If `binskey` is provided, bin edges are read from
@@ -186,7 +204,11 @@ class DirectSpectrum(SimDocEval):
         a default if binskey is not found. A ValueError is raised if 
         len(hist)+1 != len(bin_edges)
 
-        Returns a 2-tuple of (hist, bin_edges) as numpy.histogram. 
+        Returns a Histogram object. If the histogram is unitless or has units
+        of 1/binsunit, errors are calculated assuming poisson quantitities. For
+        other error definitions, the user can supply the `errcalc` function
+        which takes the fully-formed Histogram with units applied as argument
+        and returns the array of errors
         """
         #TODO: add option to integrate/average over range
         super().__init__(*args, **kwargs)
@@ -195,6 +217,7 @@ class DirectSpectrum(SimDocEval):
         self.bin_edges = bin_edges
         self.binskey = binskey
         self.binsunit = UnitsHelper(binsunit, binsunitkey)
+        self.errcalc = errcalc
 
     def project(self, projection):
         projection[self.speckey] = True
@@ -222,7 +245,29 @@ class DirectSpectrum(SimDocEval):
         except AttributeError: #thrown if hist is not unit-able
             pass
             
-        return Histogram(hist, bin_edges)
+        result = Histogram(hist, bin_edges)
+
+        try:
+            err = None
+            if self.errcalc:
+                err = self.errcalc(result)
+            elif not hasattr(hist, 'units'):
+                err = np.sqrt(hist)
+            elif hist.dimensionless:
+                err = np.sqrt(hist)
+            elif (bin_edges and hasattr(bin_edges,'units') 
+                  and hist.u == 1/bin_edges.u):
+                err = np.sqrt(hist) / np.sqrt(bin_edges[1:]-bin_edges[:-1]) 
+        except (AttributeError, TypeError): #numpy.sqrt is failing
+            pass
+            
+        
+        if err is not None:
+            if hasattr(hist, 'units'):
+                result = Histogram(uarray(hist.m,err.m)*hist.u, bin_edges)
+            else:
+                result = Histogram(uarray(hist, err), bin_edges)
+        return result
 
     def _key(self):
         #do we need all the unit keys too? 
@@ -230,27 +275,3 @@ class DirectSpectrum(SimDocEval):
         
 
 
-class LivetimeNormed(SimDocEval):
-    """Normalize the evaluated result by livetime"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-    
-    def norm(self, result, match):
-        result /= match.livetime
-        return result
-
-
-
-class LivetimeNormedValue(DirectValue, LivetimeNormed):
-    """Get a value by key and normalize by livetime"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-class LivetimeNormedSpectrum(DirectSpectrum, LivetimeNormed):
-    """Get a spectrum and normalize by livetime"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-    
-        
- 

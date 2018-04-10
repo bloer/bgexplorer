@@ -4,6 +4,7 @@ Common functions and utility classes shared by other units
 import inspect
 from copy import copy
 import pint
+from uncertainties import ufloat_fromstr
 
 ###### physical units #######
 units = pint.UnitRegistry()
@@ -39,7 +40,17 @@ def ensure_quantity(value, defunit=None, convert=False):
     """
     if value is None:
         return None
-    qval = units.Quantity(value)
+    try:
+        qval = units.Quantity(value)
+    except Exception: 
+        #Quantity can't handle '+/-' that comes with uncertainties...
+        valunit = value.rsplit(' ',1)
+        q = valunit[0]
+        u = valunit[1] if len(valunit)>1 else ''
+        if q.endswith(')'):
+            q = q[1:-1]
+        qval = ufloat_fromstr(q)*units[u]
+        
     if (defunit is not None and 
         qval.dimensionality != units.Quantity(1*defunit).dimensionality):
         if qval.dimensionality == units.dimensionless.dimensionality:
