@@ -30,7 +30,7 @@
 		    {%- endfor -%}
 		</ol></td>
 		<td class="spec">{{ request.spec.name }} FIXME</td>
-		<td>{{ "%.3e" | format(request.emissionrate.to('1/day').m) }}</td>
+		<td>{{ "{:.3e}".format(request.emissionrate.to('1/day').m) }}</td>
 		{% else %}
 		<td colspan="3"></td>
 		{% endif %}

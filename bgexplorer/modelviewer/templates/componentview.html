@@ -36,7 +36,7 @@
 {% for simd in simdata %}{% if simd.spec == spec and simd.matches %}
     <tr class="simdata" >
 	<td colspan="5" >
-	    Simdata: Emission rate = {{ "%.3e" | format(simd.emissionrate.to('1/day').m) }}/day. 
+	    Simdata: Emission rate = {{ "{:.3e}".format(simd.emissionrate.to('1/day').m) }}/day. 
 	    {% for match in simd.matches %} 
 		<a href="{{ url_for('.simdatamatchview', match=match) }}">
 		    Query {{ loop.index }}
