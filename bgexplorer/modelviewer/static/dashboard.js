@@ -460,9 +460,8 @@ dashboard.updatetable = function(table){
     table.selectAll("thead tr th.valhead").each(function(val){
                 
         //determine whether to use floating point or exp notation
-        var total = grouproot.value;
+        var total = grouproot.valueAll[val];
         var totalpower = Math.floor(Math.log10(total));
-        //TODO: make these configurable
         
         var decimals = dashboard.config.tabledecimals;
         var precision = dashboard.config.tableprecision;
@@ -484,16 +483,41 @@ dashboard.updatetable = function(table){
                 var myval = d.node.valueAll[val];
                 if(myval == 0)
                     return "";
-                if(useexpo)
+
+                var myprecision = precision;
+                var myerr = Math.sqrt(d.node.valueAll[val+"_sig2"]);
+                if(myerr){
+                    myerr = +(myerr.toPrecision(1));
+                    myprecision = Math.floor(Math.log10(myval))
+                        - Math.floor(Math.log10(myerr)) + 1;
+                }
+                if(useexpo){
                     myval *= multiplier;
+                    myerr *= multiplier;
+                }
                 var mypower = Math.floor(Math.log10(myval));
-                var sigdigs = myval.toExponential(precision-1).substr(0,precision);
-                var fixed = parseFloat(myval.toExponential(precision-1)).toFixed(decimals);
+                var sigdigs = myval.toExponential(myprecision-1).substr(0,myprecision);
+                var fixed = parseFloat(myval.toExponential(myprecision-1)).toFixed(decimals+3);
                 //replace trailing zeros after the decimal point
-                var sigdecs = Math.min(Math.max(precision-mypower-1,0),decimals);
-                var cut = decimals-sigdecs;
+                var sigdecs = Math.min(Math.max(myprecision-mypower-1,0),decimals);
+                var cut = decimals+3-sigdecs;
                 var length = fixed.length;
-                var result =  fixed.substr(0,length-cut).padEnd(length);
+                var result = fixed.substr(0,length-cut);
+                if(result[result.length-1] == '.')
+                    result = result.slice(0,-1);
+                if(myerr){
+                    //if showing "0" in first decimal, we need to show a larger value
+                    var figs = Math.floor(Math.log10(myerr))+1;
+                    if(figs > 1){
+                        result += "("+myerr.toFixed().substr(0,figs)+")";
+                        //length += 2+figs;
+                    }
+                    else{
+                        result += "("+myerr.toExponential(1)[0]+")";
+                        //length += 3;
+                    }
+                }
+                result = result.padEnd(length);
                 return useexpo ? result+" E"+(-exponent).toString() : result;
             })
         ;
