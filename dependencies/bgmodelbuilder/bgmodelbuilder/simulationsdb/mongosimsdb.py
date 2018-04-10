@@ -90,10 +90,13 @@ class MongoSimsDB(SimulationsDB):
             if not all(d in dataset for d in olddataset):
                 match.addstatus('dataremoved')
         
-            if livetime and (not oldlivetime or oldlivetime < livetime):
-                match.addstatus('livetimeincreased')
-            elif oldlivetime and (not livetime or livetime < oldlivetime):
-                match.addstatus('livetimedecreased')
+            try:
+                if livetime and (not oldlivetime or oldlivetime < livetime):
+                    match.addstatus('livetimeincreased')
+                elif oldlivetime and (not livetime or livetime < oldlivetime):
+                    match.addstatus('livetimedecreased')
+            except ValueError: #can't compare livetime objects?
+                pass
 
             if not dataset:
                 match.addstatus('nodata')
@@ -129,9 +132,6 @@ class MongoSimsDB(SimulationsDB):
             if not isinstance(dataset, (list, tuple)):
                 dataset = (dataset,)
             
-            if not match.livetime:
-                raise ValueError("Cannot evaluate match with 0 livetime")
-
             for entry in dataset:
                 #ID should be an object ID, but don't raise a fuss if not
                 try:

@@ -126,7 +126,7 @@ class SimDataRequest(object):
         self._weight = self._calcweight()
         oldemissionrate = self._emissionrate
         self._emissionrate = self._calcemissionrate()
-        if self._emissionrate:
+        if self._emissionrate and self._emissionrate.n:
             for match in self.matches:
                 if match.livetime:
                     match.livetime *= oldemissionrate / self._emissionrate

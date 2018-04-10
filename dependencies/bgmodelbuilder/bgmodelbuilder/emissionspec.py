@@ -16,7 +16,7 @@ from .mappable import Mappable
 from copy import copy
 from math import sqrt
 import numbers
-
+from uncertainties import ufloat
 
 class EmissionSpec(Mappable):
     """ Define a specification to determine emissions from some component.
@@ -93,7 +93,7 @@ class EmissionSpec(Mappable):
     def err(self):
         """Get the uncertainty in rate from this source as a fraction"""
         return 0
-        
+
     def getratestr(self, sigfigs=None):
         if self.rate is None:
             return "undefined"
@@ -146,7 +146,7 @@ class EmissionSpec(Mappable):
         if multiplier is None:
             multiplier = 0
 
-        return (self.rate * multiplier).to('1/s')
+        return (self.rate * multiplier).to('1/s').plus_minus(self.err,relative=True)
     
     def totalemissionrate(self):
         """Get the total emission rate from all associated components 

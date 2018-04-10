@@ -244,7 +244,7 @@ class BaseComponent(Mappable):
             result.extend(found)
             #remove hits with invalid emissionrate
             if rebuild:
-                result = [r for r in result if r.emissionrate]
+                result = [r for r in result if r.emissionrate.n]
         return result
         
     def getstatus(self):
