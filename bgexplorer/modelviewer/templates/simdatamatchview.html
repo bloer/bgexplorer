@@ -27,7 +27,7 @@
 		<dt>Rate</dt> <dd>{{ spec.getratestr() }}</dd>
 		<dt>Total Weight</dt> <dd>{{ match.request.weight }}</dd>
 		<dt>Total Emission Rate</dt> <dd>
-		    {{ "%e" | format(match.request.emissionrate.to('1/day').m) }} / day
+		    {{ "{:e}".format(match.request.emissionrate.to('1/day').m) }} / day
 		</dd>
 	    </dl>
 	</div><!-- end col-md-6 for data request -->

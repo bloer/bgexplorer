@@ -56,13 +56,13 @@
 			{% for req in reqs %}
 			    <li class="list-group-item-text spec matches{{ req.matches | length }}">
 				{{ req.spec.name }} {{ req.spec.distribution }} 
-				<small>({{ "%.2e" | format(req.emissionrate.to('1/day').m) }} / day)</small>
+				<small>({{ "{:.2e}".format(req.emissionrate.to('1/day').m) }} / day)</small>
 				<ul class="matchlist" >{% for match in req.matches %}
 				    <li class="match {{ match.status }}">
 					{{ match.query }} 
 					{% set livetime=match.livetime.to('day').m %}<small>
 					<span class="livetime" data-livetime="{{ livetime }}">
-					({{ "%.2e" | format(livetime) }} days) </span></small>
+					({{ "{:.2e}".format(livetime) }} days) </span></small>
 				{% endfor %}</ul>
 			    </li>
 			{% endfor %}
