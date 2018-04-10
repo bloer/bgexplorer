@@ -269,7 +269,7 @@ class ModelViewer(object):
                          for g in groupvals)
             yield('\t'.join(chain([match.id],
                                   (str(g) for g in groupvals),
-                                  ("%.3g"%eval for eval in evals)))
+                                  ("{:.3g}".format(eval) for eval in evals)))
                   +'\n')
             
         
