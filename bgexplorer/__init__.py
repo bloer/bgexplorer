@@ -1,5 +1,6 @@
 from flask import Flask, render_template
 from flask_bootstrap import Bootstrap
+from flask_basicauth import BasicAuth
 import itertools
 
 from .modeleditor.modeleditor import ModelEditor
@@ -29,6 +30,7 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
                 instance_relative_config=bool(instance_path))
     if config_filename:
         app.config.from_pyfile(config_filename)
+    BasicAuth(app)
 
     #set up logging
     if not app.debug:
