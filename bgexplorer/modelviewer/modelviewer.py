@@ -248,7 +248,7 @@ class ModelViewer(object):
                 d['_id'] = str(d['_id'])
             if isinstance(d.get('editDetails',{}).get('derivedFrom'), ObjectId):
                d['editDetails']['derivedFrom'] = str(d['editDetails']['derivedFrom'])
-            return json.dumps(d)
+            return Response(json.dumps(d), mimetype="application/json")
          
     #need to pass simsdb because it goes out of context
     def streamdatatable(self, model, simsdb):

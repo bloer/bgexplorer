@@ -172,6 +172,8 @@ class ModelDB(object):
             if model:
                 result.append(model)
                 modelid = model.get('editDetails', {}).get('derivedFrom',None)
+            else:
+                modelid = None
         return result
 
     def get_current_version(self, modelname, includetemp=False):
