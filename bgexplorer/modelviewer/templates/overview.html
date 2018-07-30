@@ -7,11 +7,13 @@
     Last modified on {{ g.model.editDetails.get('date') }} by {{ g.model.editDetails.get('user') }}
 
     <div class="btn-group pull-right">
+        <a class="btn btn-default" href="{{ url_for('.export') }}">Export as JSON</a>
+        <a class="btn btn-primary" href="{{ url_for('modeleditor.bindsimdata',modelid=g.model.id) }}" >Update simulation data</a>
         <form class="form-inline" action="{{ url_for('modeleditor.newmodel') }}" method="POST" style="display:inline" >
             <input type="hidden" name="derivedFrom" value="{{ g.model.id }}">
             <button class="btn btn-warning" type="submit" >Edit (New Version)</button>
         </form>
-        <a class="btn btn-primary" href="{{ url_for('modeleditor.bindsimdata',modelid=g.model.id) }}" >Update simulation data</a>
+        
 
     </div>
 {% endblock %}

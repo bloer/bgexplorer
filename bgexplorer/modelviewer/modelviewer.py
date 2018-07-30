@@ -6,6 +6,9 @@ from flask import (Blueprint, render_template, request, abort, url_for, g,
                    Response)
 import threading
 import zlib
+import json
+
+from bson import ObjectId
 
 from .. import utils
 
@@ -235,6 +238,17 @@ class ModelViewer(object):
         def chartsdefault():
             """Show some default charts with the calculated rates"""
             return render_template("chartsdefault.html")
+
+        @self.bp.route('/export')
+        def export():
+            """Present the model as a JSON document"""
+            d = g.model.todict()
+            #replace ObjectIds with strings
+            if isinstance(d.get('_id'), ObjectId):
+                d['_id'] = str(d['_id'])
+            if isinstance(d.get('editDetails',{}).get('derivedFrom'), ObjectId):
+               d['editDetails']['derivedFrom'] = str(d['editDetails']['derivedFrom'])
+            return json.dumps(d)
          
     #need to pass simsdb because it goes out of context
     def streamdatatable(self, model, simsdb):
