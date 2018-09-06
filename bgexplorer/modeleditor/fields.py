@@ -7,8 +7,10 @@ import json
 
 from wtforms.fields import (Field, TextAreaField, StringField, HiddenField, 
                             SelectField)
+from wtforms.compat import text_type
+from wtforms import widgets
 from wtforms.validators import ValidationError
-
+from collections import OrderedDict
 from ..bgmodelbuilder import units
 from ..bgmodelbuilder.common import to_primitive
 
@@ -25,9 +27,8 @@ class DictField(TextAreaField):
 
         super().__init__(label, *args, **kwargs)
 
-        self.required_keys = dict(required_keys)
-        self.suggested_keys = dict(suggested_keys)
-
+        self.required_keys = OrderedDict(required_keys)
+        self.suggested_keys = OrderedDict(suggested_keys)
         for key, val in self.required_keys.items():
             self.required_keys[key] = self.paramize(val+" (REQUIRED)")
         for key, val in self.suggested_keys.items():
@@ -51,8 +52,8 @@ class DictField(TextAreaField):
                 del self.data[key]
 
     def process_formdata(self, valuelist):
-        self.data = {}
         if valuelist:
+            self.data = OrderedDict()
             for line in valuelist[0].split('\n'):
                 if not line.strip():
                     continue
@@ -67,7 +68,7 @@ class DictField(TextAreaField):
        
     def _value(self):
         if not self.data:
-            self.data = {}
+            self.data = OrderedDict()
         if self.required_keys:
             for key, val in self.required_keys.items():
                 self.data.setdefault(key, val)
@@ -116,6 +117,8 @@ class JSONField(StringField):
         #    self.data = self.default()
         if type(self.data) is str:
             return self.data
+        if self.data is None:
+            self.data = self.default()
         #this is probably redundant, but that should be OK
         self.data = to_primitive(self.data)
         return json.dumps(self.data)
@@ -131,8 +134,8 @@ class JSONField(StringField):
             except json.JSONDecodeError:
                 raise ValidationError(("Field is not valid JSON "
                                        "(keys require double quotes)"))
-        else:
-            self.data = self.default()
+        #else:
+        #    self.data = self.default()
     
     def process_data(self, value):
         """try to convert everything to json-serializable values"""
@@ -166,3 +169,31 @@ def validate_units(unittype=None):
         field.data = val
     return _validate
 
+
+class NumericField(Field):
+    """try to reconstruct data as an integer field first, then float"""
+    widget = widgets.TextInput()
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _value(self):
+        if self.raw_data:
+            return self.raw_data[0]
+        elif self.data is not None:
+            return text_type(self.data)
+        else:
+            return ""
+
+    def process_formdata(self, valuelist):
+        if valuelist:
+            try:
+                self.data = int(valuelist[0])
+            except ValueError:
+                try:
+                    self.data = float(valuelist[0])
+                except ValueError:
+                    self.data = None
+                    raise ValueError(self.gettext("Not a valid numeric value"))
+
+    

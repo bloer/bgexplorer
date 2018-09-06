@@ -131,17 +131,18 @@ class ModelDB(object):
             #can only get temporary models by direct ID query
             query.setdefault('__modeldb_meta.temporary',False)
             
-        #remove our internal metadata
+        #we need to get metadata every time
         projection = projection or {}
-        if '__modeldb_meta' in projection:
-            withmeta = projection['__modeldb_meta']
-        elif projection and withmeta:
+        if projection:
+            if '__modeldb_meta' in projection:
+                withmeta = projection['__modeldb_meta']
             projection['__modeldb_meta'] = True
 
         result = self._collection.find_one(query, projection or None)
         
         if not result:
             return None
+
         #see if we need to decode special key names
         encodedkeys = result.get('__modeldb_meta',{}).get('encodedkeys',[])
         if encodedkeys:
@@ -210,6 +211,9 @@ class ModelDB(object):
         return model
 
 
+    _replacekeys = {'$':'\uff04', '.': '\u2024'}
+    _findall = tuple(_replacekeys.keys())+tuple(_replacekeys.values())
+    
     @staticmethod
     def encodebson(obj, registry=[], path=tuple()):
         """Some objects in the model may have keys that start with '$' or 
@@ -224,11 +228,16 @@ class ModelDB(object):
         """
         if isinstance(obj,dict):
             for key in list(obj.keys()):
-                newkey =  key.replace('$','\uff04').replace('.','\u2024')
+                newkey = key
+                
+                replacekey = any(k in key for k in ModelDB._findall)
+                if replacekey:
+                    for k, v in ModelDB._replacekeys.items():
+                        newkey = newkey.replace(k, v)
                 mypath = path + (newkey,)
                 #register altered keys depth-first
-                val = ModelDB.encodebson(obj.pop(key), registry, path+(newkey,))
-                if newkey != key:
+                val = ModelDB.encodebson(obj.pop(key), registry, mypath)
+                if replacekey:
                     registry.append(mypath)
                 obj[newkey] = val                
         elif isinstance(obj, (list, tuple)):
@@ -255,7 +264,9 @@ class ModelDB(object):
                     break
             oldkey = path[-1]
             if oldkey in obj:
-                newkey = path[-1].replace('\u2024','.').replace('\uff04','$')
+                newkey = path[-1]
+                for k, v in ModelDB._replacekeys.items():
+                    newkey = newkey.replace(v, k)
                 obj[newkey] = obj.pop(oldkey)
             
         return root

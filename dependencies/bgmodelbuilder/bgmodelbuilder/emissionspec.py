@@ -38,6 +38,7 @@ class EmissionSpec(Mappable):
                  islimit=False, 
                  category="", comment="", moreinfo=None,
                  appliedto=None,
+                 querymod = None,
                  **kwargs):
         """Make a new EmissionSpec
 
@@ -57,6 +58,7 @@ class EmissionSpec(Mappable):
             comment (str) A descriptive comment
             moreinfo (dict): key-value pairs for any other information
             appliedto (set): set of components this spec is bound to
+            querymod (dict): overrides for database queries
         """
         super().__init__(**kwargs)
 
@@ -68,6 +70,7 @@ class EmissionSpec(Mappable):
         self.comment = comment
         self.moreinfo = moreinfo or {}
         self.appliedto = appliedto or set()
+        self.querymod = querymod or {}
         
     def __str__(self):
         return "%s('%s')"%(type(self).__name__, self.name)
@@ -93,6 +96,16 @@ class EmissionSpec(Mappable):
     def err(self):
         """Get the uncertainty in rate from this source as a fraction"""
         return 0
+
+    @property
+    def ratewitherr(self):
+        """Get the rate with error"""
+        rate = self.rate
+        if rate is None:
+            return None
+        if self.err:
+            rate = rate.plus_minus(self.err, relative=True)
+        return rate
 
     def getratestr(self, sigfigs=None):
         if self.rate is None:
@@ -199,7 +212,7 @@ class CombinedSpec(EmissionSpec):
     @property
     def islimit(self):
         #todo: this is probably not a useful definition
-        return any(spec.islimit for spec in self._subspecs)
+        return all(spec.islimit for spec in self._subspecs)
     
     @islimit.setter
     def islimit(self,val):

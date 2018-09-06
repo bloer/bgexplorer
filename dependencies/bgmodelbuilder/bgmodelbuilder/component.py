@@ -153,7 +153,7 @@ class BaseComponent(Mappable):
         result = [bs.spec for bs in self._specs]
         if deep:
             #concatenate all subspecs
-            result = sum((s.getsubspecs() if hasattr(s,'getsubspecs') else [s]
+            result = sum((s.subspecs if hasattr(s,'subspecs') else [s]
                           for s in result), [])
         return set(result)
             

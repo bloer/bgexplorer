@@ -5,4 +5,4 @@ Flask-Bootstrap>=3.3.7
 Flask-BasicAuth>=0.2.0
 pint>=0.8.1
 numpy>=1.13.3
-uncertainties=3.0.2
+uncertainties==3.0.2

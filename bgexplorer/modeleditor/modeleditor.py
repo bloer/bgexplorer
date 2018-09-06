@@ -36,6 +36,12 @@ class ModelEditor(object):
         self.bp.record(self.onregister)
         self.bp.context_processor(self.context_processor)
 
+        @self.bp.before_request
+        def before_request():
+            if not request.form:
+                request.form = None
+        
+
         @self.bp.app_template_global()
         def savemodelform(model):
             return forms.SaveModelForm(obj=model, prefix='savemodel')
@@ -201,7 +207,6 @@ class ModelEditor(object):
                 filecontents = importfile.read()
                 rawmodel = json.loads(filecontents.decode())
                 newmodel = bgmodel.BgModel.buildfromdict(rawmodel)
-                print(newmodel)
             except BaseException as e:
                 flash("Error raised parsing input file: '%s'"%e,"danger")
                 return redirect(url_for('index'))
@@ -395,8 +400,8 @@ class ModelEditor(object):
             if form.validate():
                 form.populate_obj(comp)
                 #make sure the fully assembled object works
-                comp.specs = [model.specs.get(bs.spec,bs.spec) 
-                              for bs in comp.specs]
+                for bs in comp.specs:
+                    bs.spec = model.specs.get(bs.spec, bs.spec)
                 status = comp.getstatus()
                 if not status:
                     #no errors, so save

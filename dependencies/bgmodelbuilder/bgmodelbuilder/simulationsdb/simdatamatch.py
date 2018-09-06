@@ -157,7 +157,8 @@ class SimDataRequest(object):
 
     def getquerymods(self):
         """Get a list of all querymods for this assemblyPath and spec"""
-        #querymods can be attached to Components, Placements, and BoundSpecs
+        #querymods can be attached to Components, Placements, MaterialSpecs, 
+        # and oundSpecs
         if not self.assemblyPath or not self.spec:
             return []
                 

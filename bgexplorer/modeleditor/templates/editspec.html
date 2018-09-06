@@ -1,5 +1,4 @@
 {% import "bootstrap/wtf.html" as wtf %}
-
 {# This should only ever be loaded via ajax, so no headers, etc #}
 <form action="{{ url_for('.editspec', modelid=model.id,specid=editspec.id) }}" method="POST" >
     <h2>Edit Specification

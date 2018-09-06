@@ -80,23 +80,7 @@ class MongoSimsDB(SimulationsDB):
         for match in request.matches:
             hits = tuple(self.collection.find(match.query, self.livetimepro))
             dataset = list(str(d['_id']) for d in hits)
-            olddataset = match.dataset or []
             livetime = self.livetime(match, hits)
-            oldlivetime = match.livetime
-
-            #figure out some statuses
-            if not all(d in olddataset for d in dataset):
-                match.addstatus('newdata')
-            if not all(d in dataset for d in olddataset):
-                match.addstatus('dataremoved')
-        
-            try:
-                if livetime and (not oldlivetime or oldlivetime < livetime):
-                    match.addstatus('livetimeincreased')
-                elif oldlivetime and (not livetime or livetime < oldlivetime):
-                    match.addstatus('livetimedecreased')
-            except ValueError: #can't compare livetime objects?
-                pass
 
             if not dataset:
                 match.addstatus('nodata')

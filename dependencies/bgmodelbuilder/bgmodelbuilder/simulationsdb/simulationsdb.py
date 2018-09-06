@@ -57,9 +57,18 @@ class SimulationsDB(object):
         requests = assembly.getsimdata(path=(assembly,), rebuild=True, 
                                        children=True)
         for request in requests:
-            matches = self.findsimentries(request)
-
-            
+            oldmatches = request.matches
+            request.matches = []
+            newmatches = self.findsimentries(request)
+            #now look for matches that were present before
+            for oldmatch in oldmatches:
+                for newmatch in newmatches:
+                    if oldmatch.query == newmatch.query:
+                        newmatch.popstatus('newmatch')
+                        #figure out some statuses
+                        if oldmatch.weight != newmatch.weight:
+                            newmatch.addstatus('weightchanged')
+            #todo: do something with obsolete matches?                        
         return requests
 
         

@@ -6,28 +6,67 @@ class Histogram(object):
     so that bins are not added/scaled etc 
     """
     def __init__(self, hist, bin_edges=None):
-        self.hist = hist
+        self.hist = np.array(hist)
         self.bin_edges = bin_edges
-    
-    def integrate(self, a, b, binwidth=True):
+        if bin_edges is None:
+            self.bin_edges = np.arange(len(self.hist))
+            
+
+    def find_bin(self, x):
+        """Find the index of the bin where x is.
+        Args: 
+            x (float): value to search for. must have same units as bins
+        Returns:
+            bin (int): will be -1 if before first bin, Nbins if outside last bin
+        """
+        return self.bin_edges.searchsorted(x, 'right')-1
+        
+    def val(self, x, interp=None):
+        """Get the value of the histogram at x. x must be in the same 
+        units as the bins. 
+        Args:
+            x (float): Value to test
+            interp (str): Currently: if truthy, linearly interpolate the value
+                          between bins. For future use: accept string
+                          specifying interpolation method
+        Returns:
+            val (float): value of bin where x is, None if x is outside bins
+        """
+        bin = self.find_bin(x)
+        if x<0 or x >= len(self.hist):
+            return None
+        val = self.hist[bin]
+        if interp and bin < len(self.hist)-1:
+            slope = ( (self.hist[bin+1]-self.hist[bin]) /
+                      (self.bin_edges[bin+1]-self.bin_edges[bin]) )
+            val += slope * (x-self.bin_edges[bin])
+        return val
+
+    def _bound(self, a, b, bins=None):
+        """coerce a and b to the edges of bins"""
+        if bins is None:
+            bins = self.bin_edges
+        if a is None or a < bins[0]:
+            a = bins[0]
+        if b is None or b >= bins[-1]:
+            b = bins[-1]
+        return (a, b)
+        
+    def integrate(self, a, b=None, binwidth=True):
         """Integrate the histogram from a to b. If a and b do not correspond to 
         exact bin edges, the value in the bin will be interpolated. 
 
         Args:
             a (float): low range. If bin_edges has units, this must have the 
                        same dimensionality. IF bin_edges is None, this will
-                       be treated as a bin index. 
-            b (float): upper edge
-            binedges (bool): if True (default), multiply each bin by the bin
+                       be treated as a bin index. if None, use low bound
+            b (float): upper edge. if None, use upper bound
+            binwidth (bool): if True (default), multiply each bin by the bin
                              width. If False, just add bin values
         """
         bins = self.bin_edges 
-        if len(bins) != len(self.hist)+1:
-            bins = np.arange(len(self.hist)+1)
         spec = self.hist
-        if b<=a or a < bins[0] or b > bins[-1]:
-            raise ValueError("Integration range %s outside of defined bins"
-                             %((a,b)))
+        a, b = self._bound(a,b)
         if binwidth:
             spec = spec * (bins[1:]-bins[:-1]) 
         
@@ -45,6 +84,7 @@ class Histogram(object):
         """Calculate the average from a to b. See `integrate` for description
         of the arguments
         """
+        a, b = self._bound(a,b)
         return self.integrate(a, b, binwidths) / (b-a)
 
     

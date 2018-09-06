@@ -16,7 +16,7 @@ class SimDocEval(abc.ABC):
     ----------------------------------------------------
     
     parse(self, doc, match): Extract the requested value from the raw dictionary
-        object returned fro mthe DB, and apply any necessary unit conversions
+        object returned from the DB, and apply any necessary unit conversions
         This could also be a hook to get the value from a file on disk
         The value should have correct units and ideally have uncertainties
         (i.e. be a python `uncertainties.Variable` object) 

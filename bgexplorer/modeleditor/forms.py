@@ -2,9 +2,12 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from copy import copy
 from textwrap import dedent
-from wtforms import (validators, StringField, SubmitField, BooleanField, 
+from wtforms import (validators, StringField, SubmitField, 
                      IntegerField, SelectField, FieldList, FormField, 
                      HiddenField, FloatField)
+
+from wtforms import BooleanField 
+from wtforms.utils import unset_value
 from wtforms.widgets import HiddenInput, Select
 from wtforms import Form
 #FlaskForm needed for wtf.simple_form in flask 
@@ -14,10 +17,13 @@ from  ..bgmodelbuilder import component
 from ..bgmodelbuilder import emissionspec
 
 from .fields import (DictField, JSONField, StaticField, validate_units, 
-                     NoValSelectField )
+                     NoValSelectField, NumericField)
 from .widgets import SortableTable, InputChoices, StaticIfExists
+from collections import OrderedDict
 
     
+
+
 ################ Model Forms ##############################
 class SaveModelForm(FlaskForm):
     """Form for editing basic bgmodel details"""
@@ -87,11 +93,11 @@ class BaseComponentForm(FlaskForm):
     comment = StringField("Comment", 
                           description="Details of current implementation")
     moreinfo = DictField("Additional Info",
-                         suggested_keys={'owner':"Person responsible for part",
-                                         'partnum': "Part number",
-                                         'vendor': "Part vendor",
-                                         'datasheet': "URL for datasheet"})
-    querymod = JSONField("Query Modifier", default={},
+                         suggested_keys=(('owner',"Part owner/designer/buyer"),
+                                         ('partnum', "Part number"),
+                                         ('vendor', "Part vendor"),
+                                         ('datasheet', "URL for datasheet")))
+    querymod = JSONField("Query Modifier",
                          description="JSON object modifying DB queries")
     specs = FieldList(FormField(BoundSpecForm, default=component.BoundSpec),
                       label="Emission specs",
@@ -120,9 +126,9 @@ class PlacementForm(Form):
                       choices=[(d,d) for d in ('Component','Assembly')],
                       widget=StaticIfExists(Select()),
                       render_kw={'class':'form-control'})
-    weight = FloatField("Quantity", [validators.required()] ,
-                        render_kw={'size':1, 'class':'form-control'})
-    querymod = JSONField("Querymod", default={})
+    weight = NumericField("Quantity", [validators.required()] ,
+                          render_kw={'size':1, 'class':'form-control'})
+    querymod = JSONField("Querymod")
     #edit = StaticField("Edit", default="link goes here");
     #override BaseForm process to restructure placements
     class _FakePlacement(object):
@@ -181,15 +187,16 @@ class EmissionspecForm(FlaskForm):
                                                     "for grouping sources "
                                                     "(usually leave default)"))
     moreinfo = DictField("Additional Details",
-                   suggested_keys={'reference':"Literature or assay source",
-                                   'url': "Link to reference",
-                                   'refdetail': "Summary of reference info",
-                                   'refdate': "Date reference last checked"})
+                   suggested_keys=(('reference',"Literature or assay source"),
+                                   ('url', "Link to reference"),
+                                   ('refdetail', "Summary of reference info"),
+                                   ('refdate', "Date reference last checked")))
     normfunc = StringField("Normalization", description=dedent("""\
         Custom rate normalization function. Will be  using 'eval', with 
         variables 'component' and 'units' defined. Can also be 'piece' or 
         'per piece' indicating that the rate is already normalized"""))
     
+    querymod = JSONField("Querymod", description="Overrides for generating simulation database queries")
 
 class RadioactiveIsotopeForm(Form):
     isotope = StringField("Isotope", [validators.required()],
@@ -202,6 +209,7 @@ class RadioactiveIsotopeForm(Form):
                        render_kw={'size':12,'class':'form-control'})
     islimit = BooleanField("Limit?",
                            description="Is this a measurement upper limit?")
+
 
 class RadioactiveContamForm(EmissionspecForm):
     subspecs = FieldList(FormField(RadioactiveIsotopeForm,
