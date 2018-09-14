@@ -7,7 +7,7 @@ import re
 from pprint import pprint 
 import bson
 from datetime import datetime
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from .bgmodelbuilder.bgmodel import BgModel
 
 class InMemoryCacher(object):
@@ -19,13 +19,22 @@ class InMemoryCacher(object):
         self.empty()
 
     def store(self, key, val):
+        if key in self.registry:
+            return key
         self.registry[key] = val
-        self.byage.append(key)
+        self.byage.appendleft(key)
         if len(self.byage) > self.maxentries:
-            del self.registry[self.byage.pop(0)]
+            try:
+                del self.registry[self.byage.pop()]
+            except KeyError:
+                print("InMemoryCacher Error registry, byage lists out of sync")
         return key
 
     def get(self, key):
+        #move this key to the top of the age queue
+        if key in self.byage and self.byage.index(key) != 0:
+            self.byage.remove(key)
+            self.byage.appendleft(key)
         return self.registry.get(key, None)
         
     def test(self, key):
@@ -42,7 +51,7 @@ class InMemoryCacher(object):
             pass
         
     def empty(self):
-        self.byage = []
+        self.byage = deque([])
         self.registry = {}
 
     
@@ -194,11 +203,11 @@ class ModelDB(object):
         """
         #first see if it's in the cache
         if not projection and not bypasscache:
-            raw = self.get_raw_model(query, {'__modeldb_meta':True})
+            raw = self.get_raw_model(query, {'_id':True})
             if not raw:
                 return None
             #prevents temp models from being loaded from cache:
-            #if not raw.get('__modeldb_meta',{}).get('temporary',False):
+
             model = self._cacher.get(raw['_id'])
             if model: 
                 return model

@@ -152,7 +152,8 @@ class ModelEditor(object):
         return a 403 forbidden
         """
         #todo: enforce that the model is temporary
-        model = self.modeldb.get_model(modelid, bypasscache=toedit)
+        #model = self.modeldb.get_model(modelid, bypasscache=toedit)
+        model = self.modeldb.get_model(modelid)
         if not model:
             abort(404, "Model with ID %s not found"%modelid)
         if toedit and not self.modeldb.is_model_temp(modelid):
