@@ -4,7 +4,7 @@ Common functions and utility classes shared by other units
 import inspect
 from copy import copy
 import pint
-from uncertainties import ufloat_fromstr
+import uncertainties
 
 ###### physical units #######
 units = pint.UnitRegistry()
@@ -28,6 +28,11 @@ units.ppb_U = 12*units['mBq/kg']
 units.ppb_Th = 4.1*units['mBq/kg']
 units.ppb_K = 0.031*units['mBq/kg']
 
+#monkey-punch round() capability onto uncertainties, mostly needed for tests
+uncertainties.core.Variable.__round__ = lambda self,n=0: round(self.n,n)
+uncertainties.core.AffineScalarFunc.__round__ = lambda self,n=0: round(self.n,n)
+
+
 def ensure_quantity(value, defunit=None, convert=False):
     """Make sure a variable is a pint.Quantity, and transform if unitless
     
@@ -49,8 +54,9 @@ def ensure_quantity(value, defunit=None, convert=False):
         u = valunit[1] if len(valunit)>1 else ''
         if q.endswith(')'):
             q = q[1:-1]
-        qval = ufloat_fromstr(q)*units[u]
+        qval = units.Measurement(uncertainties.ufloat_fromstr(q), u)
         
+    #make sure the quantity has the same units as default value
     if (defunit is not None and 
         qval.dimensionality != units.Quantity(1*defunit).dimensionality):
         if qval.dimensionality == units.dimensionless.dimensionality:

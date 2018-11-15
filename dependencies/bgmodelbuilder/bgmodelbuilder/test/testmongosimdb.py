@@ -11,8 +11,7 @@ except:
     numpy = None
 
 from ..simulationsdb.mongosimsdb import MongoSimsDB
-from ..simulationsdb.simdoceval import (LivetimeNormedValue,
-                                        LivetimeNormedSpectrum)
+from ..simulationsdb.simdoceval import DirectValue,DirectSpectrum
 from ..simulationsdb.histogram import Histogram
 from ..component import Component
 from ..emissionspec import RadioactiveContam
@@ -139,8 +138,8 @@ class TestMongoSimsDB(unittest.TestCase):
     def test_eval(self):
         requests = self.simdb.attachsimdata(self.component)
         matches =  sum((r.matches for r in requests), [])
-        vals = (LivetimeNormedValue("counts.C1"),
-                LivetimeNormedValue("counts.C2",unitkey="units.C2"))
+        vals = (DirectValue("counts.C1"),
+                DirectValue("counts.C2",unitkey="units.C2"))
         result = self.simdb.evaluate(vals, matches)
         
         self.assertEqual(len(result), 2)
@@ -152,7 +151,7 @@ class TestMongoSimsDB(unittest.TestCase):
     def test_numpy_eval(self):
         requests = self.simdb.attachsimdata(self.component)
         matches =  sum((r.matches for r in requests), [])
-        vals = (LivetimeNormedSpectrum("counts.C3"),)
+        vals = (DirectSpectrum("counts.C3"),)
         result = self.simdb.evaluate(vals, matches)
         hist = result[0]
         self.assertIsInstance(hist, Histogram)

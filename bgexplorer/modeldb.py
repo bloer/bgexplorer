@@ -22,7 +22,7 @@ class InMemoryCacher(object):
         self.registry[key] = val
         self.byage.append(key)
         if len(self.byage) > self.maxentries:
-            del self.registry[self.byage.pop(0)]
+            self.expire()
         return key
 
     def get(self, key):
@@ -31,11 +31,14 @@ class InMemoryCacher(object):
     def test(self, key):
         return key in self.registry
         
-    def expire(self, key):
-        try:
-            self.byage.remove(key)
-        except ValueError: 
-            pass
+    def expire(self, key=None):
+        if not key:
+            key = self.byage.pop(0)
+        else:
+            try:
+                self.byage.remove(key)
+            except ValueError: 
+                pass
         try:
             del self.registry[key]
         except KeyError:

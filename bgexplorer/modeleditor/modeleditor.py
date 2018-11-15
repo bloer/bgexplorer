@@ -198,8 +198,12 @@ class ModelEditor(object):
     #todo: implement some caching here!
     def newmodel(self):
         """Create a new bare model or clone an existing one for editing"""
-        name = request.form.get('name',"")
-        importfile = request.files.get('import',None)
+        name = ""
+        if request.form:
+            name = request.form.get('name',name)
+        importfile = None
+        if request.files:
+            importfile = request.files.get('import',importfile)
         
         if importfile:
             #try to convert file data

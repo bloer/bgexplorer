@@ -1,5 +1,12 @@
 #Useful build commands for bgexplorer package
 
+ifeq "$VERBOSE" "0"
+VERBOSE=
+endif
+ifdef VERBOSE
+VERBOSE="-v"
+endif
+
 all:	doc test
 
 init:
@@ -8,7 +15,7 @@ init:
 
 test:	
 	@echo "Running test suite..."
-	python -m unittest -v
+	python -m unittest $(VERBOSE)
 
 doc:
 	@echo "Generating documentation..."
