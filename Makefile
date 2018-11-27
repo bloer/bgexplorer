@@ -11,7 +11,9 @@ all:	doc test
 
 init:
 #should we ensure virtenv is setup first?
-	pip install -r requirements.txt
+	. virtenv/bin/activate && \
+	pip install -r requirements.txt && \
+	deactivate
 
 test:	
 	@echo "Running test suite..."
