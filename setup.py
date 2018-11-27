@@ -8,4 +8,14 @@ setup(name='bgexplorer',
       author_email='ben.loer@pnnl.gov',
       license='MIT',
       packages=['bgexplorer'],
-      zip_safe=False)
+      zip_safe=False,
+      install_requires=[
+          'flask',
+          'flask-wtf',
+          'flask-bootstrap',
+          'flask-basicauth',
+          'pint',
+          'numpy',
+          'uncertainties',
+      ]
+)
