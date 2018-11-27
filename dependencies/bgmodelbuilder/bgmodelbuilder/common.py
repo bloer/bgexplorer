@@ -20,13 +20,10 @@ units.load_definitions([
     "ppt_U = 0.001 * ppb_U = pptU",
     "ppt_Th = 0.001 * ppb_Th = pptTh",
     "ppt_K = 0.001 * ppb_K = pptK",
+    "dru = 1./(kg * keV * day) = DRU",
+    "kky = kg * keV * year = kg_keV_yr",
 ])
     
-    
-#some common unit conversions
-units.ppb_U = 12*units['mBq/kg']
-units.ppb_Th = 4.1*units['mBq/kg']
-units.ppb_K = 0.031*units['mBq/kg']
 
 #monkey-punch round() capability onto uncertainties, mostly needed for tests
 uncertainties.core.Variable.__round__ = lambda self,n=0: round(self.n,n)
