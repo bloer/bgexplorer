@@ -8,11 +8,6 @@ import bson
 from time import time
 from copy import copy
 from collections import namedtuple
-#numpy is not a strict requirement
-try:
-    import numpy
-except:
-    numpy = None
 
 from .. import units
 from .simulationsdb import SimulationsDB, SimDataMatch
