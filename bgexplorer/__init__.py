@@ -1,7 +1,9 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, Blueprint
 from flask_bootstrap import Bootstrap
 from flask_basicauth import BasicAuth
 import itertools
+import inspect
+import os
 
 from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
@@ -26,6 +28,10 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
     
     TODO: have instance_path default to PWD? 
     """
+    #if instance_path is not explicitly defined, use the caller's path
+    if instance_path is None:
+        instance_path = os.path.dirname(os.path.abspath(inspect.stack()[1][1]))
+
     app = Flask('bgexplorer', instance_path=instance_path,
                 instance_relative_config=bool(instance_path))
     if config_filename:
@@ -52,6 +58,11 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
         
     Bootstrap(app)
     modeldb = ModelDB(app=app)
+    #register custom templates first so they can override
+    app.register_blueprint(Blueprint('custom', instance_path, 
+                                     static_folder='static', 
+                                     template_folder='templates', 
+                                     url_prefix='/custom'))
     modeleditor = ModelEditor(app=app, modeldb=modeldb)
     modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb,
                               groups=groups, groupsort=groupsort,values=values, 
