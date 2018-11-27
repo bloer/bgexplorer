@@ -52,7 +52,7 @@ class Histogram(object):
             b = bins[-1]
         return (a, b)
         
-    def integrate(self, a, b=None, binwidth=True):
+    def integrate(self, a=None, b=None, binwidth=True):
         """Integrate the histogram from a to b. If a and b do not correspond to 
         exact bin edges, the value in the bin will be interpolated. 
 
@@ -80,7 +80,7 @@ class Histogram(object):
                  +sum(spec[first:max(last-1,first)])
              )
 
-    def average(self, a, b, binwidths=True):
+    def average(self, a=None, b=None, binwidths=True):
         """Calculate the average from a to b. See `integrate` for description
         of the arguments
         """

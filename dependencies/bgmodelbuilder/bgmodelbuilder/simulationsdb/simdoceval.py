@@ -196,7 +196,7 @@ class DirectSpectrum(SimDocEval):
     def __init__(self, speckey, specunit=None, specunitkey=None,
                  bin_edges=None,
                  binskey=None, binsunit=None, binsunitkey=None,
-                 errcalc=None,
+                 errcalc=None, scale=1,
                  *args, **kwargs):
         """Extract a list from `speckey` in the document and convert it to a 
         numpy array.  If `binskey` is provided, bin edges are read from
@@ -209,6 +209,22 @@ class DirectSpectrum(SimDocEval):
         other error definitions, the user can supply the `errcalc` function
         which takes the fully-formed Histogram with units applied as argument
         and returns the array of errors
+
+        Args:
+          speckey (str): key in the document containing the list of bin values
+          specunit: string or pint unit with the units that should be applied
+              to the values list before any other operations
+          specunitkey (str): key in the document containing the specunit. If 
+              both `specunitkey` and `specunit` are provided, `specunit` acts 
+              as a default if `specunitkey` isn't in the document
+          bin_edges (list): list of bin edges corresponding to values. Should
+              have length len(doc.speckey)+1
+          binskey (str): key in document containing the list of bin edges
+          binsunit: str or pint unit for the bin dimensions
+          binsunitkey (str): key in document containing binsunit
+          errcalc (func): custom error calculation function, in case units
+              are already applied or sqrt(N) is not appropriate
+          scale (float): scale the histogram after applying units
         """
         #TODO: add option to integrate/average over range
         super().__init__(*args, **kwargs)
@@ -218,6 +234,7 @@ class DirectSpectrum(SimDocEval):
         self.binskey = binskey
         self.binsunit = UnitsHelper(binsunit, binsunitkey)
         self.errcalc = errcalc
+        self.scale = scale
 
     def project(self, projection):
         projection[self.speckey] = True
@@ -267,6 +284,8 @@ class DirectSpectrum(SimDocEval):
                 result = Histogram(uarray(hist.m,err.m)*hist.u, bin_edges)
             else:
                 result = Histogram(uarray(hist, err), bin_edges)
+        if(scale and scale != 1):
+            result *= scale
         return result
 
     def _key(self):
@@ -274,4 +293,25 @@ class DirectSpectrum(SimDocEval):
         return "DirectSpectrum({},{})".format(self.speckey, self.binskey)
         
 
+class SpectrumAverage(DirectSpectrum):
+    """Average the spectrum over the provided range"""
+    def __init__(self, speckey, a=None, b=None, binwidths=True, **kwargs):
+        super().__init__(speckey, **kwargs)
+        self.a = a
+        self.b = b
+        self.binwidths = binwidths
 
+    def parse(self, doc, match):
+        return super().parse(doc, match).average(self.a, self.b, self.binwidths)
+        
+class SpectrumIntegral(DirectSpectrum):
+    """Integrate the spectrum over the provided range"""
+    def __init__(self, speckey, a=None, b=None, binwidths=True, **kwargs):
+        super().__init__(speckey, **kwargs)
+        self.a = a
+        self.b = b
+        self.binwidths = binwidths
+
+    def parse(self, doc, match):
+        return super().parse(doc, match).integrate(self.a,self.b,self.binwidths)
+        
