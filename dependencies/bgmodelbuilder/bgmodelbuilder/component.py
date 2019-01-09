@@ -212,7 +212,9 @@ class BaseComponent(Mappable):
                             provided
             children (bool): If true and this is an Assembly, call 
                              getsimdata recursively on children, appending 
-                             ourselves to path if provided                
+                             ourselves to path if provided  
+        Returns:
+             List of SimDataRequest objects for all attached specs
         """
         result = []
         if path is not None and (len(path) == 0 or path[-1] != self):

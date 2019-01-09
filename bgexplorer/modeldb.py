@@ -24,10 +24,7 @@ class InMemoryCacher(object):
         self.registry[key] = val
         self.byage.appendleft(key)
         if len(self.byage) > self.maxentries:
-            try:
-                del self.registry[self.byage.pop()]
-            except KeyError:
-                print("InMemoryCacher Error registry, byage lists out of sync")
+            self.expire()
         return key
 
     def get(self, key):
@@ -40,11 +37,14 @@ class InMemoryCacher(object):
     def test(self, key):
         return key in self.registry
         
-    def expire(self, key):
-        try:
-            self.byage.remove(key)
-        except ValueError: 
-            pass
+    def expire(self, key=None):
+        if not key:
+            key = self.byage.pop()
+        else:
+            try:
+                self.byage.remove(key)
+            except ValueError: 
+                pass
         try:
             del self.registry[key]
         except KeyError:
@@ -207,7 +207,7 @@ class ModelDB(object):
             if not raw:
                 return None
             #prevents temp models from being loaded from cache:
-
+            #if not raw.get('__modeldb_meta',{}).get('temporary',False):
             model = self._cacher.get(raw['_id'])
             if model: 
                 return model
