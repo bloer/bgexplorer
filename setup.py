@@ -26,6 +26,6 @@ setup(name='bgexplorer',
           'bgmodelbuilder',
       ],
       dependency_links=[
-          'git+https://github.com/bloer/bgmodelbuilder@develop#egg=bgmodelbuilder',
+          'git+https://github.com/bloer/bgmodelbuilder@develop#egg=bgmodelbuilder-dev',
       ],
 )
