@@ -14,10 +14,8 @@ import wtforms.widgets
 from . import forms
 from .widgets import is_hidden_field 
 from ..modeldb import ModelDB
-from ..bgmodelbuilder.component import Component, Assembly
-from ..bgmodelbuilder import emissionspec
-from ..bgmodelbuilder import bgmodel
-from ..bgmodelbuilder import units
+from bgmodelbuilder.component import Component, Assembly
+from bgmodelbuilder import emissionspec, bgmodel, units
 from ..utils import get_simsdb
 
 

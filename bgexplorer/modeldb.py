@@ -8,7 +8,7 @@ from pprint import pprint
 import bson
 from datetime import datetime
 from collections import OrderedDict, deque
-from .bgmodelbuilder.bgmodel import BgModel
+from bgmodelbuilder.bgmodel import BgModel
 from .utils import getobjectid
 import logging
 log = logging.getLogger(__name__)

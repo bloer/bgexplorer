@@ -11,8 +11,8 @@ from wtforms.compat import text_type
 from wtforms import widgets
 from wtforms.validators import ValidationError
 from collections import OrderedDict
-from ..bgmodelbuilder import units
-from ..bgmodelbuilder.common import to_primitive
+from bgmodelbuilder import units
+from bgmodelbuilder.common import to_primitive
 
 class DictField(TextAreaField):
     """Render a dictionary as a textarea

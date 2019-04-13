@@ -13,8 +13,7 @@ from wtforms import Form
 #FlaskForm needed for wtf.simple_form in flask 
 from flask_wtf import FlaskForm
 
-from  ..bgmodelbuilder import component
-from ..bgmodelbuilder import emissionspec
+from bgmodelbuilder import component, emissionspec
 
 from .fields import (DictField, JSONField, StaticField, validate_units, 
                      NoValSelectField, NumericField)

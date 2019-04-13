@@ -10,7 +10,7 @@ from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
 from .simsviewer.simsviewer import SimsViewer
 from .modeldb import ModelDB
-from .bgmodelbuilder.common import units as ureg
+from bgmodelbuilder.common import units as ureg
 from .utils import getobjectid
 
 def create_app(config_filename=None, simsdb=None, instance_path=None,

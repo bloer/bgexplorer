@@ -1,7 +1,7 @@
 """ functions and classes for building the bill of materials """
 from flask import g
 from collections import namedtuple, OrderedDict
-from bgexplorer.bgmodelbuilder.utilities import Isotope
+from bgmodelbuilder.utilities import Isotope
 
 BOMRow = namedtuple('BOMRow',('outline','path','component',
                               'weight','totalweight'))
