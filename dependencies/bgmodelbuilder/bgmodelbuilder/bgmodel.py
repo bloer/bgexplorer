@@ -15,15 +15,17 @@ from __future__ import (absolute_import, division,
 import copy
 import uuid
 
-from .component import buildcomponentfromdict, Assembly
+from .mappable import Mappable
+from .component import buildcomponentfromdict, Assembly, BaseComponent
 from .emissionspec import EmissionSpec, buildspecfromdict
+from .simulationsdb.simdatamatch import buildmatchfromdict, AssemblyPath
 
-class BgModel(object):
+class BgModel(Mappable):
     def __init__(self, name=None, assemblyroot=None, 
                  version="0", description='',
                  derivedFrom=None, editDetails=None,
-                 components=None, specs=None,simdatamatches=None,
-                 sanitize=True):
+                 components=None, specs=None, simdata=None,
+                 sanitize=True, *args, **kwargs):
         """Store additional info about the model for bookeeping. 
         Params:
             assemblyroot (Assembly): top-level Assembly defining entire model
@@ -36,10 +38,10 @@ class BgModel(object):
                 (e.g. username, date, comment); 
             components (dict): dictionary mapping IDs to components
             specs (dict): dictionary mapping IDs to CompSpecs
-            simdatamatches(dict): dictionary mapping IDs to SimDataMatch objects
+            simdata(dict): dictionary mapping IDs to SimDataMatch objects
             sanitize(bool): add cross references, etc to model on creation
         """
-        
+        super().__init__(*args, **kwargs)
         self.name = name 
         self.assemblyroot = assemblyroot or Assembly(self.name or "World")
         self.version = version
@@ -48,7 +50,7 @@ class BgModel(object):
         self.editDetails = editDetails or {}
         self.components = components or {}
         self.specs = specs or {}
-        self.simdatamatches = simdatamatches or {}
+        self.simdata = simdata or {}
         if sanitize:
             self.sanitize()
         
@@ -66,13 +68,37 @@ class BgModel(object):
 
         return res
     
-    #useful forwards
-    def getsimdata(self):
-        return self.assemblyroot.getsimdata()
-        
-    @property
-    def id(self):
-        return getattr(self,'_id',None)
+    def getsimdata(self, component=None, spec=None, rootspec=None):
+        """Get all simdata, optionally filtered by component or spec
+        Args:
+            component (BaseComponent): Component to filter against 
+                                       (leaf-level only)
+            spec (EmissionSpec): Spec to filter for, must match exactly
+            rootspec (EmissionSpec): Root spect to filter for
+        Returns:
+            matches: generator expression or list of matching SimDataMatch 
+                     objects
+        """
+        res = self.simdata.values()
+        if component is not None:
+            res = (m for m in res if m.component == component)
+        if spec is not None:
+            res = (m for m in res if m.spec == spec )
+        if rootspec is not None:
+            res = (m for m in res if m.spec.getrootspec() == rootspec)
+        return list(res)
+
+    def getspecs(self, rootonly=True):
+        """Get all EmissionSpecs stored in the model.  
+        Args:
+            rootonly (bool): if True (default), only get root-level specs
+        Returns:
+            list or generator expression of all specs
+        """
+        res = self.specs.values()
+        if rootonly:
+            res = (s for s in res if not s.parent)
+        return res
         
     def registerobject(self, obj, registry):
         """ Make sure that obj has an _id attribute and add it to registry
@@ -89,55 +115,56 @@ class BgModel(object):
             raise ValueError(obj._id)
         
     
-    def sanitize(self, comp=None, updatesimdata=False):
+    def connectreferences(self, component):
+        """Convert any raw IDs in a component to actual objects"""
+        if hasattr(component, 'components'):
+            for placement in component.components:
+                if not isinstance(placement.component, BaseComponent):
+                    placement.component = self.components[placement.component]
+                    placement.component.placements.add(placement)
+
+        for boundspec in component.specs:
+            if not isinstance(boundspec.spec, EmissionSpec):
+                boundspec.spec = self.specs[boundspec.spec]
+                boundspec.spec.appliedto.add(component)
+            
+    def sanitize(self, comp=None):
         """Make sure that all objects are fully built and registered"""
 
         if not comp:
             comp = self.assemblyroot
             #do we need to empty the registries at some point? 
 
-        self.connectreferences(comp)
-
-        
-        #make sure that this component has an ID and is in the registry
+        # make sure that this component has an ID and is in the registry
         self.registerobject(comp, self.components);
-        #if the component has CompSpecs, register them too
-        #also make sure the reverse reference to owned component exists
-        for spec in comp.getspecs(deep=False):
+        
+        # make sure all ID references are actual objects
+        self.connectreferences(comp)
+        
+        # make sure all of its specs are in the registery too
+        # also make sure the reverse reference to owned component exists
+        for spec in comp.getspecs(deep=False, children=False):
             self.registerobject(spec, self.specs)
-            #todo: should we use weakrefs instead? 
+            # this should not be necessary, but shouldn't hurt either
             spec.appliedto.add(comp)
+        # also register subspecs now
+        for spec in comp.getspecs(deep=True, children=False):
+            self.registerobject(spec, self.specs)
 
-        for simrequest in comp.getsimdata(path=None, rebuild=False, 
-                                          children=False):
-            for match in simrequest.matches:
-                self.registerobject(match, self.simdatamatches)
-
-        #now recurse for subcomponents in assembly
-        if hasattr(comp, '_components'):
-            for placement in comp._components:
-                #these should both be true already:
+        # now recurse for subcomponents in assembly
+        if hasattr(comp, 'components'):
+            for placement in comp.components:
+                # these should both be true already:
                 placement.parent = comp 
                 placement.component.placements.add(placement) 
                 self.sanitize(placement.component)
 
-        #miscellaneous checks
-        #make sure that the assemblyroot is marked
+        # miscellaneous checks
         if comp is self.assemblyroot:
-            #make sure unplaced components are handled too
+            # make sure unplaced components are handled too
             for comp in self.get_unplaced_components():
                 self.sanitize(comp)
 
-            #register simdata
-            for simrequest in  comp.getsimdata(path=(comp,), 
-                                               rebuild=updatesimdata, 
-                                               children=True):
-                for match in simrequest.matches:
-                    self.registerobject(match, self.simdatamatches)
-            
-
-        
-                    
 
     @staticmethod
     def pack(obj):
@@ -145,88 +172,84 @@ class BgModel(object):
         res.pop('_id',None)
         return res
         
-    def todict(self, sanitize=True, updatesimdata=False):
+    def todict(self, sanitize=True):
         """Export all of our data to a bare dictionary that can in turn be 
         exported to JSON, stored in a database, etc
         """
         
         #first make sure all objects are registered and built sanely
         if sanitize:
-            self.sanitize(updatesimdata=updatesimdata)
+            self.sanitize()
         
         #now convert all objects to dicts, and all references to IDs
         result = copy.copy(self.__dict__)
 
         result['assemblyroot'] = self.assemblyroot._id
         result['specs'] = \
-        {key: self.pack(spec) for key, spec in self.specs.items()}
+        {key: self.pack(spec) for key, spec in self.specs.items()
+         if spec.parent is None } #only do top-level specs
         result['components'] = \
         {key: self.pack(comp) for key, comp in self.components.items()}
-        del result['simdatamatches'] #these are kept by the components
+        result['simdata'] = \
+        {key: self.pack(match) for key, match in self.simdata.items()}
         return result
-
-    def connectreferences(self, comp):
-        """ transform ID references in an exported component to actual objects
-        """
-        for boundspec in getattr(comp,'_specs',[]):
-            try:
-                boundspec.spec = self.specs.get(boundspec.spec, boundspec.spec)
-            except TypeError: #in case boundspec.spec isn't hashable
-                pass
-            if hasattr(boundspec.spec,'appliedto'):
-                boundspec.spec.appliedto.add(comp)
-            for simdata in boundspec.simdata:
-                if hasattr(simdata, 'assemblyPath') and simdata.assemblyPath:
-                    simdata.assemblyPath = tuple(self.components.get(c, c) 
-                                                 for c in simdata.assemblyPath)
-                if (hasattr(simdata, 'spec') 
-                    and not isinstance(simdata.spec,EmissionSpec)):
-                    #this may refer to a subspec of boundspec.spec
-                    if getattr(boundspec.spec,'id',None) == simdata.spec:
-                        simdata.spec = boundspec.spec
-                    else:
-                        for subspec in getattr(boundspec.spec,'subspecs',[]):
-                            if simdata.spec == getattr(subspec,'id'):
-                                simdata.spec = subspec
-                                break
-                    
-        for p in getattr(comp, '_components', []):
-            p.component = self.components.get(p.component, p.component)
-            if hasattr(p.component,'placements'):
-                p.component.placements.add(p) #probably redundant, but harmless
-            
     
     @classmethod
     def buildfromdict(cls, d):
         """ Construct a new BgModel from a dictionary. It's assumed that 
         the dict d was generated from the todict method previously
         """
-        #handle mongo inserting _ids (or should I just make this mappable?)
-        _id = d.pop('_id', None)
         d['sanitize'] = False
         model = cls(**d)
-        if _id:
-            model._id = _id
 
-        #now we need to construct specs and components from their objects
-        #this does not convert ID references to objects!
-        for key, spec in model.specs.items():
+        # now we need to construct specs and components from their objects
+        # this does not convert ID references to objects!
+        for key, spec in list(model.specs.items()):
             spec['_id'] = key
-            model.specs[key] = buildspecfromdict(spec)
+            spec = buildspecfromdict(spec)
+            model.specs[key] = spec
+            if hasattr(spec,'subspecs'):
+                for subspec in spec.subspecs:
+                    model.specs[subspec.id] = subspec
         for key, comp in model.components.items():
             comp['_id'] = key
             model.components[key] = buildcomponentfromdict(comp)
+        for key, match in model.simdata.items():
+            match['_id'] = key
+            model.simdata[key] = buildmatchfromdict(match)
                 
-        #update the assemblyroot to the actual object
+        # update the assemblyroot to the actual object
         if not isinstance(model.assemblyroot, Assembly):
             model.assemblyroot = model.components[model.assemblyroot]
+            
+        # now go through and connect all references
+        # connect component references
+        for comp in model.components.values():
+            model.connectreferences(comp)
+            
+
+        # connect simdata references
+        for match in model.simdata.values():
+            if match.spec:
+                match.spec = model.specs[match.spec]
+            if match.assemblyPath:
+                match.assemblyPath[0] = model.components[match.assemblyPath[0]]
+                match.assemblyPath = AssemblyPath.construct(match.assemblyPath)
+                
         
-        #just to make sure
-        model.sanitize()
+        # should not be necessary
+        #model.sanitize()
 
         return model
     
         
-        
+    def validate(self):
+        """Make sure the model is in a cohererent state for saving"""
+        # TODO: implement this
+        # first, make sure all emissionspecs have correct units
+        return not self.geterrors()
 
-    
+    def geterrors(self):
+        """Return a list of error messages from validation"""
+        # TODO: implement this
+        return []

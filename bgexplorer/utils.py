@@ -49,8 +49,19 @@ def getdatasetordie(datasetid, simsdb=None):
 
 def getsimdatamatchordie(model, matchid):
     """try to find the SimDataMatch with matchid or return 404"""
-    match = model.simdatamatches.get(matchid)
+    match = model.simdata.get(matchid)
     if not match:
         abort(404, "Model %s has no SimDataMatch with ID %s" %
               (model._id, specid))
     return match
+
+def getobjectid(obj):
+    """Try to get the id of an object or dict"""
+    try:
+        return obj.id
+    except AttributeError:
+        try:
+            return obj.get('id', obj.get('_id', None))
+        except AttributeError:
+            pass
+    return obj

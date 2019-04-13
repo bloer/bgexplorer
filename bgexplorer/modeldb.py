@@ -9,6 +9,9 @@ import bson
 from datetime import datetime
 from collections import OrderedDict, deque
 from .bgmodelbuilder.bgmodel import BgModel
+from .utils import getobjectid
+import logging
+log = logging.getLogger(__name__)
 
 class InMemoryCacher(object):
     def __init__(self, maxentries=3):
@@ -94,13 +97,13 @@ class ModelDB(object):
         """Connect to the server and database identified by dburi"""
         if not dburi:
             dburi = self._default_uri
-        print("Connecting to mongodb server at ", dburi)
+        log.info("Connecting to mongodb server at %s", dburi)
 
         self._client = pymongo.MongoClient(dburi)
         try:
             self._database = self._client.get_default_database()
         except pymongo.errors.ConfigurationError:
-            print("WARNING: Database not provided in URI, connecting to 'test'")
+            log.warning("Database not provided in URI, connecting to 'test'")
             self._database = self._client.get_database('test')
         self._collection = self._database.get_collection(self._collectionName)
         #make sure the collection is properly indexed
@@ -117,6 +120,26 @@ class ModelDB(object):
         if not self._collection:
             self.connect()
             #raise RuntimeError("No active database connection")
+            
+
+    def makequery(self, query):
+        """Accept queries in the form of raw IDs, which may be the string form
+        of ObjectIDs. Convert `query` into a good form understandable to mongo
+        """
+        if not isinstance(query,dict):
+            query = dict(_id=query)
+        if '_id' in query:
+            try:
+                query['_id'] = bson.ObjectId(query['_id'])
+            except bson.errors.InvalidId: #id is not an ObjectId string
+                pass
+        else:
+            #can only get temporary models by direct ID query
+            #query.setdefault('__modeldb_meta.temporary',False)
+            pass
+
+        return query
+
         
     def get_raw_model(self, query, projection=None, withmeta=False):
         """Get the raw dict object for a model stored in the db
@@ -129,17 +152,7 @@ class ModelDB(object):
         """
         self.testconnection()
         #convert id query to ObjectId if it is a plain string
-        if not isinstance(query,dict):
-            query = dict(_id=query)
-        if '_id' in query:
-            try:
-                query['_id'] = bson.ObjectId(query['_id'])
-            except bson.errors.InvalidId: #id is not an ObjectId string
-                pass
-        else:
-            #can only get temporary models by direct ID query
-            query.setdefault('__modeldb_meta.temporary',False)
-            
+        query = self.makequery(query)
         #we need to get metadata every time
         projection = projection or {}
         if projection:
@@ -158,6 +171,8 @@ class ModelDB(object):
             self.decodebson(result,encodedkeys)
         if not withmeta:
             result.pop('__modeldb_meta',None)
+
+        #change '_id' to 'id' 
         return result
         
     def is_model_temp(self, modelid):
@@ -176,12 +191,13 @@ class ModelDB(object):
            with the most recent first
         """
         result = []
-        projection = {'name': True, 'version': True, 'editDetails':True}
+        projection = {'name': True, 'version': True, 'editDetails':True, 
+                      'derivedFrom':True}
         while modelid:
             model = self.get_raw_model(modelid, projection)
             if model:
                 result.append(model)
-                modelid = model.get('editDetails', {}).get('derivedFrom',None)
+                modelid = model.get('derivedFrom',None)
             else:
                 modelid = None
         return result
@@ -315,7 +331,8 @@ class ModelDB(object):
                 newversion = "%d.0"%(oldversion[0]+1)
             model['version'] = newversion
         else:
-            model.pop('version',None)
+            #model.pop('version',None)
+            model['version'] = editDetails['date']
                         
         if '_id' in model:
             self._cacher.expire(model['_id'])
@@ -339,7 +356,7 @@ class ModelDB(object):
                     res = self._collection.replace_one({'_id':model['_id']}, 
                                                        model)
             else:
-                editDetails['derivedFrom'] = model['_id']
+                model['derivedFrom'] = model['_id']
                 del model['_id']
 
         #can't use elif since might have been removed in previous step
@@ -381,6 +398,24 @@ class ModelDB(object):
         newid = self.write_model(model, temp=temp, bumpversion="major")
         return self.get_model(newid)
         
+    def del_model(self, modelid):
+        """Delete a model from the database. Not allowed if another model
+        derives from it
+        """
+        #make sure it's an ID and not a model
+        modelid = getobjectid(modelid)
+        query = self.makequery(modelid)
+        model = self.get_raw_model(query, {'derivedFrom':True})
+        if not model:
+            raise KeyError("No model with id %s"%modelid)
+        #see if any models derive from this
+        derived = self._collection.count({'derivedFrom':query['_id']})
+        if derived:
+            raise ValueError("Can't delete model with descendants")
+        
+        self._cacher.expire(modelid)
+        return self._collection.delete_one(query).deleted_count
+                
     def get_models_list(self, includetemp=False, mostrecentonly=True,
                         projection=None):
 
@@ -401,14 +436,13 @@ class ModelDB(object):
         projection=projection or {'name':True, 'version':True,
                                   'description':True, 'editDetails':True}
 
-        if not any(projection.values()):
-            projection.update({'__modeldb_meta.temporary':False})
-        
         #use the aggregation pipeline
         pipeline = []
         if not includetemp:
             match = {'$match': {'__modeldb_meta.temporary':False}}
             pipeline.append(match)
+        else:
+            projection.update({'temporary': '$__modeldb_meta.temporary'})
         pipeline.append({'$sort': 
                          OrderedDict((('name',pymongo.ASCENDING),
                                       ('version',pymongo.DESCENDING)))
@@ -421,6 +455,14 @@ class ModelDB(object):
         if projection is not None:
             pipeline.append({'$project': projection})
 
-        return self._collection.aggregate(pipeline)
+        return list(self._collection.aggregate(pipeline))
             
+    def removecache(self, model):
+        """ Remove the model from cache
+        Args:
+            model (BgModel or id): The model to remove
+        """
+        if hasattr(model,'id'):
+            model = model.id
+        self._cacher.expire(model)
             

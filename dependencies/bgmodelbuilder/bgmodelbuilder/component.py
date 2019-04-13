@@ -12,10 +12,11 @@ from builtins import super
 
 from .common import units, ensure_quantity, removeclasses
 from .mappable import Mappable
-from .simulationsdb import simdatamatch
 
 from collections import OrderedDict
 from copy import copy
+import logging
+log = logging.getLogger(__name__)
 
 #utility function for selections
 def selectany(comp=None, spec=None):
@@ -30,14 +31,10 @@ class BoundSpec(object):
         simdata:   List of SimDataRequest objects for binding simulation 
                    data to spec's subspecs
     """
-    def __init__(self, spec=None, querymod=None, simdata=None):
+    def __init__(self, spec=None, querymod=None):
         self.spec = spec
         self.querymod = querymod 
-        self.simdata=simdata or []
-        for i, simd in enumerate(self.simdata):
-            if isinstance(simd, dict):
-                self.simdata[i] = simdatamatch.SimDataRequest(**simd)
-        
+                
     def __eq__(self, other): 
         if hasattr(other, 'spec'):
             return self.spec == other.spec
@@ -47,7 +44,6 @@ class BoundSpec(object):
         return dict(
             spec = self.spec,
             querymod = self.querymod,
-            simdata = self.simdata,
         )
         
     @classmethod
@@ -102,7 +98,7 @@ class BaseComponent(Mappable):
     def specs(self, newspecs):
         self._specs = []
         for spec in newspecs:
-            if type(spec) in [tuple, list]:
+            if isinstance(spec, (tuple, list)):
                 self.addspec(*spec)
             else:
                 self.addspec(spec)
@@ -113,9 +109,10 @@ class BaseComponent(Mappable):
     def __repr__(self):
         return "%s('%s')"%(type(self).__name__, self.id)
     
-    def clone(self):
-        myclone = super().clone()
-        myclone.specs = copy(self.specs)
+    def clone(self, newname=None):
+        myclone = super().clone(newname, deep=False)
+        # make new boundspec objects, remove simdata hits
+        myclone.specs = [copy(spec) for spec in self.specs]
         myclone.placements = set()
         return myclone
         
@@ -124,13 +121,15 @@ class BaseComponent(Mappable):
             index = len(self.specs)
         if isinstance(spec, dict):
             spec = BoundSpec(**spec)
-        if isinstance(spec, BoundSpec):
-            self._specs.insert(index, spec)
-            spec = spec.spec
+        elif isinstance(spec, BoundSpec):
+            pass
         else:
-            self._specs.insert(index, BoundSpec(spec,querymod))
+            spec = BoundSpec(spec,querymod)
+
         if hasattr(spec, 'appliedto'):
             spec.appliedto.add(self)
+        self._specs.insert(index, spec)
+        return spec
 
     def delspec(self, spec):
         """Remove this spec from our reference. type(spec) can be a 
@@ -155,7 +154,9 @@ class BaseComponent(Mappable):
             #concatenate all subspecs
             result = sum((s.subspecs if hasattr(s,'subspecs') else [s]
                           for s in result), [])
-        return set(result)
+        # can we assume they are unique?
+        #return set(result) # this messes up order!
+        return result
             
     def gettotalweight(self, fromroot=None):
         """Get the total weight (usually number of) placed components
@@ -200,55 +201,6 @@ class BaseComponent(Mappable):
         return []
 
 
-    def getsimdata(self, path=None, rebuild=False, children=True):
-        """ Get any simulation data associated to this component, and/or 
-        generate empty SimDataRequest objects if missing.
-        Args:
-            path: tuple of parent Assemblies to restrict match to in 
-                  branch to leaf order. If path is None, return all 
-                  simdata, but will not generate "empty" match objects
-            rebuild (bool): If True, recalculate cached values in all match 
-                            objects, and generate empty objects if path is
-                            provided
-            children (bool): If true and this is an Assembly, call 
-                             getsimdata recursively on children, appending 
-                             ourselves to path if provided  
-        Returns:
-             List of SimDataRequest objects for all attached specs
-        """
-        result = []
-        if path is not None and (len(path) == 0 or path[-1] != self):
-            path = tuple(path) + (self,)
-        for boundspec in self._specs:
-            found = [d for d in boundspec.simdata 
-                     if path is None or d.assemblyPath == path]
-            if rebuild:
-                for match in found:
-                    match.recalculate()
-                if path:
-                    #generate new empty matches
-                    new = []
-                    specs = [boundspec.spec]
-                    if hasattr(boundspec.spec,'subspecs'):
-                        specs = boundspec.spec.subspecs
-                    for spec in specs:
-                        foundspec = False
-                        for request in found:
-                            if request.spec == spec:
-                                foundspec = True
-                                break
-                        if not foundspec:
-                            new.append(simdatamatch.SimDataRequest(path, spec))
-
-                    found = found+new
-                    boundspec.simdata.extend(new)
-            
-            result.extend(found)
-            #remove hits with invalid emissionrate
-            if rebuild:
-                result = [r for r in result if r.emissionrate.n]
-        return result
-        
     def getstatus(self):
         result = ""
         #first make sure all our specs give the right units
@@ -256,7 +208,7 @@ class BaseComponent(Mappable):
             try:
                 spec.emissionrate(self).to('1/s')
             except units.errors.DimensionalityError:
-                result += (" DimensionalityError: emissionrate spec for '{}' ({}) "
+                result += (" DimensionalityError: emissionrate spec for '{}'({}) "
                            .format(spec.name, spec.id))
 
         return result
@@ -270,8 +222,6 @@ class BaseComponent(Mappable):
         del result['placements']
         return result
         
-
-
 class Component(BaseComponent):
     """Helper class to store list of component physical parameters
 
@@ -363,7 +313,9 @@ class Placement(object):
     in an experiment, and so will need to be associated to different simulation
     datasets. This lets us avoid copying components. 
     """
-    def __init__(self, parent=None, component=None, weight=1, querymod=None):
+    # TODO: give placements names!
+    def __init__(self, parent=None, component=None, weight=1, querymod=None,
+                 name=None):
         """Args:
             parent (Assembly): assembly in which we're being placed
                 Unlike components, placements should be unique
@@ -371,12 +323,16 @@ class Placement(object):
             weight (numeric): Usually, how many of this component, but could 
                 be fractional in some cases
             querymod (dict): modifier to DB query to locate sim datasets
+            name (str): Name associated with this particular placement. By 
+                        default will adopt the name of the component
             
         """
         self.parent = parent
         self.component = component
         self.weight = weight
         self.querymod = querymod
+        self._name = None
+        self.name = name
         if hasattr(component, 'placements'): #it might still be a reference
             component.placements.add(self)
 
@@ -389,13 +345,37 @@ class Placement(object):
 
     @property
     def name(self):
-        return self.component.name if self.component else None
+        if self._name:
+            return self._name
+        return getattr(self.component, 'name', None)
+
+    @name.setter
+    def name(self, newname):
+        if newname != getattr(self.component,'name',None):
+            self._name = newname
 
     def todict(self):
         result = removeclasses(copy(self.__dict__))
+        #don't save 'name' unless it is different from component
+        if self.name == getattr(self.component,'name'):
+            del result['name']
         #replace objects with ID references
         del result['parent'] #this gets reset on construction
         return result
+
+    def tocompact(self):
+        """Reduce this to a referenceable form"""
+        try:
+            pid = self.parent.id
+        except:
+            pid=None
+        try:
+            index = self.parent.components.index(self)
+        except:
+            index=None
+
+        return (pid, index)
+        
 
 
 class Assembly(BaseComponent):
@@ -428,7 +408,7 @@ class Assembly(BaseComponent):
 
     def clone(self):
         myclone = super().clone()
-        myclone._components = copy(self._components)
+        myclone.components = [copy(plcmnt) for plcmnt in self.components]
         return myclone 
 
     def addcomponent(self, placement, index=None):
@@ -474,7 +454,7 @@ class Assembly(BaseComponent):
         elif type(comp) is int:
             del self._components[comp]
         if len(self._components) != before-1:
-            print("Unable to delete component ", comp)
+            log.warning("Unable to delete component %s", comp)
             
     #functions for inspecting the tree of subcomponents
     def getcomponents(self, deep=False, withweight=False, merge=True):
@@ -575,22 +555,10 @@ class Assembly(BaseComponent):
         
         if children:
             for comp in self.getcomponents(deep=True, withweight=False):
-                result.update(comp.get(name=name, deep=deep))
-
-        return result
+                result.extend(comp.getspecs(deep=deep, children=children))
+        # may have overlaps, so need to filter
+        return set(result)
     
-    def getsimdata(self, path=None, rebuild=False, children=True):
-        mydata = super().getsimdata(path,rebuild,children=False)
-        if children:
-            if path is None or len(path) == 0:
-                path = (self,)
-            elif path[-1] != self:
-                path = tuple(path) + (self,)
-            for child in self.getcomponents(deep=False):
-                cpath = path+(child,)
-                mydata.extend(child.getsimdata(cpath,rebuild,children))
-        return mydata
-
     @property
     def material(self):
         return None
@@ -636,3 +604,5 @@ def buildcomponentfromdict(args):
             raise ValueError("buildcomponentfromdict: Unknown class name '%s'"
                              %classname)
     return cls(**args)
+
+

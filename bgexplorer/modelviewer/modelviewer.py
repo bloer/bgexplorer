@@ -113,12 +113,16 @@ class ModelViewer(object):
                     values.setdefault('version',
                                       version if not g.get('permalink')
                                       else self.defaultversion)
+            elif 'modelid' in values:
+                values['modelname'] = values.pop('modelid')
+                values['version'] = '_'
+                values['permalink'] = 1
                 
             #transform components, specs into IDs
             if 'component' in values:
                 values['componentid'] = values.pop('component').id
             if 'spec' in values:
-                values['specid'] = values.pop('spec').id
+                values['specid'] = values.pop('spec').getrootspec().id
             if 'match' in values:
                 values['matchid'] = values.pop('match').id
 
@@ -130,7 +134,9 @@ class ModelViewer(object):
             elif 'modelname' in values:
                 query={'name': values.pop('modelname')}
                 version = values.pop('version',self.defaultversion)
-                if version != self.defaultversion:
+                if version == '_': #special, means name is actually ID
+                    query['_id'] = query.pop('name')
+                elif version != self.defaultversion:
                     query['version'] = version
             if not query:
                 abort(400, "Incomplete model specification")
@@ -164,20 +170,16 @@ class ModelViewer(object):
 
         @self.bp.route('/emissions/')
         def emissionsoverview():
-            return render_template("emissionsoverview.html")
+            rootspecs = [ s for s in g.model.specs.values() if not s.parent]
+            return render_template("emissionsoverview.html", 
+                                   rootspecs=rootspecs)
 
         @self.bp.route('/emission/<specid>')
         def emissionview(specid):
             spec = utils.getspecordie(g.model, specid)
             #find all simulation datasets associated to this spec
-            datasets = []
-            for comp in spec.appliedto:
-                for simd in comp.getsimdata(rebuild=False, children=False):
-                    if (simd.spec is spec 
-                        or simd.spec in getattr(spec,'subspecs',[])):
-                        for match in simd.matches:
-                            if match.dataset:
-                                datasets.append(match.dataset)
+            matches = g.model.getsimdata(spec=spec)
+            datasets = sum((m.dataset or [] for m in matches), [])
             return render_template('emissionview.html', spec=spec, 
                                    datasets=datasets)
 
@@ -189,32 +191,25 @@ class ModelViewer(object):
         def queriesoverview():
             #build a unique list of all queries
             queries = {}
-            for request in g.model.assemblyroot.getsimdata():
-                for match in request.matches:
-                    try:
-                        queries[str(match.query)].append(match)
-                    except KeyError:
-                        queries[str(match.query)] = [match]
+            for m in g.model.getsimdata():
+                key = str(m.query)
+                if key not in queries:
+                    queries[key] = []
+                queries[key].append(m)
+
             return render_template('queriesoverview.html',queries=queries)
          
         @self.bp.route('/dataset/<dataset>')
         def datasetview(dataset):
-            detail = detail=self.simsdb.getdatasetdetails(dataset)
+            detail = self.simsdb.getdatasetdetails(dataset)
             return render_template("datasetview.html", dataset=dataset, 
                                    detail = detail)
                                    
         @self.bp.route('/simdatamatch/<matchid>')
         def simdatamatchview(matchid):
             match = utils.getsimdatamatchordie(g.model, matchid)
-            #might not be able to generate a link to a subspec, so build here
-            linkspec = match.request.spec
-            if not hasattr(linkspec,'id') or linkspec.id not in g.model.specs:
-                for spec in match.request.assemblyPath[-1].getspecs():
-                    if hasattr(spec,'subspecs') and linkspec in spec.subspecs:
-                        linkspec = spec
-                        break
-            return render_template("simdatamatchview.html", match=match,
-                                   linkspec=linkspec)
+            linkspec = match.spec.getrootspec()
+            return render_template("simdatamatchview.html", match=match)
             
         
         @self.bp.route('/billofmaterials')
@@ -246,8 +241,8 @@ class ModelViewer(object):
             #replace ObjectIds with strings
             if isinstance(d.get('_id'), ObjectId):
                 d['_id'] = str(d['_id'])
-            if isinstance(d.get('editDetails',{}).get('derivedFrom'), ObjectId):
-               d['editDetails']['derivedFrom'] = str(d['editDetails']['derivedFrom'])
+            if isinstance(d.get('derivedFrom'), ObjectId):
+               d['derivedFrom'] = str(d['derivedFrom'])
             return Response(json.dumps(d), mimetype="application/json")
          
     #need to pass simsdb because it goes out of context
@@ -257,7 +252,7 @@ class ModelViewer(object):
         #can't evaluate values if we don't have a simsdb
         values = self.values if simsdb else {}
         valitems = list(values.values())
-        matches = model.simdatamatches.values()
+        matches = model.simdata.values()
         #send the header
         valheads = ['V_'+v+(' [%s]'%self.values_units[v] 
                             if v in self.values_units else '') 

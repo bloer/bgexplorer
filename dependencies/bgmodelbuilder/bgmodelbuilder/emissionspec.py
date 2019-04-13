@@ -39,6 +39,7 @@ class EmissionSpec(Mappable):
                  category="", comment="", moreinfo=None,
                  appliedto=None,
                  querymod = None,
+                 parent=None,
                  **kwargs):
         """Make a new EmissionSpec
 
@@ -59,6 +60,7 @@ class EmissionSpec(Mappable):
             moreinfo (dict): key-value pairs for any other information
             appliedto (set): set of components this spec is bound to
             querymod (dict): overrides for database queries
+            parent (EmissionSpec): set the owner in case this is a subspec
         """
         super().__init__(**kwargs)
 
@@ -71,6 +73,7 @@ class EmissionSpec(Mappable):
         self.moreinfo = moreinfo or {}
         self.appliedto = appliedto or set()
         self.querymod = querymod or {}
+        self.parent = parent
         
     def __str__(self):
         return "%s('%s')"%(type(self).__name__, self.name)
@@ -159,7 +162,7 @@ class EmissionSpec(Mappable):
         if multiplier is None:
             multiplier = 0
 
-        return (self.rate * multiplier).to('1/s').plus_minus(self.err,relative=True)
+        return (self.ratewitherr * multiplier).to('1/s')
     
     def totalemissionrate(self):
         """Get the total emission rate from all associated components 
@@ -179,13 +182,28 @@ class EmissionSpec(Mappable):
                            .format(comp.name, comp.id))
         return result
         
+    def getrootspec(self):
+        """Get the top-level EmissionSpec that we belong to"""
+        try:
+            return self.parent.getrootspec()
+        except AttributeError:
+            return self
+    
+    _copy_attrs = ['normfunc', 'distribution', 'category', 'appliedto']
+    
     def todict(self):
         """Export this instance to a plain object"""
         result = copy(self.__dict__)
         result['__class__'] = type(self).__name__
-        result = removeclasses(result, replaceids=False)
-        #all 'appliedto' will get rebuilt on restore
+        #remove attributes that are copied from parent
+        if self.parent:
+            for attr in self._copy_attrs:
+                del result[attr]
+        #all 'appliedto' and 'parent' will get rebuilt on restore
         result.pop('appliedto',None)
+        result.pop('_appliedto', None)
+        result.pop('parent', None)
+        result = removeclasses(result, replaceids=False)
         return result
 
         
@@ -233,14 +251,13 @@ class CombinedSpec(EmissionSpec):
             self.addspec(spec)
     
     
-    _copy_attrs = ['normfunc', 'distribution', 'category', 'appliedto']
-    
     def addspec(self,spec):
         if not isinstance(spec, EmissionSpec):
             spec = buildspecfromdict(spec)
         #todo: is this really a good plan??
         for attr in self._copy_attrs:
             setattr(spec,attr, getattr(self,attr))
+        spec.parent = self
         self._subspecs.append(spec)
         
     def __repr__(self):
@@ -269,7 +286,7 @@ class CombinedSpec(EmissionSpec):
             return setattr(self, hidden, val)
         setattr(cls, attr, property(get, set))
 
-for attr in CombinedSpec._copy_attrs:
+for attr in EmissionSpec._copy_attrs:
     CombinedSpec.copytosubs(attr)
         
 
@@ -295,6 +312,8 @@ class RadioactiveContam(EmissionSpec):
         self.isotope = isotope or name
         if isinstance(self.isotope, dict): #handle imports
             self.isotope = RadioactiveIsotope(**self.isotope)
+        if isinstance(self.isotope, RadioactiveIsotope):
+            kwargs.setdefault('_id', isotope.id)
         if not name:
             if isinstance(self.isotope, RadioactiveIsotope):
                 name = self.isotope.name
@@ -461,7 +480,6 @@ class CosmogenicSource(RadioactiveContam):
         if isinstance(isotope, dict): #handle imports
            isotope = CosmogenicIsotope(**isotope)
         kwargs.setdefault('name', isotope.name)
-        kwargs.setdefault('_id', isotope._id)
         super().__init__(isotope=isotope, **kwargs)    
         self.exposure = ensure_quantity(exposure, units.day)
         self.cooldown = ensure_quantity(cooldown, units.day)

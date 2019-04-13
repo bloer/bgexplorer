@@ -1,0 +1,34 @@
+{% macro datatable(tableid, options={}) %}
+    <!-- DataTable stylesheet and custom styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}"> 
+    <style>
+     /*table.dataTable th {border:1px solid black}*/
+     table.dataTable tbody td {white-space: nowrap; padding: 4px 4px}
+     .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
+     .truncate:hover {white-space: normal}
+     div.dt-buttons { float:left;}
+     div.dt-buttons a.btn {font-size:small}
+     #{{ tableid }}_filter { display:inline-block; float:right}
+     #{{ tableid }}_wrapper {font-size:default}
+     
+    </style>
+
+    <!-- DataTable javascript -->
+    <script type="text/javascript" src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}"></script>
+    <script type="text/javascript">
+     $(document).ready(function(){
+	 var table = $("#{{ tableid }}").DataTable({
+	     paging: {{ options.paging or 0 }},
+	     ordering: {{ options.ordering or 1 }},
+	     order: [],
+	     scrollY: $(window).height() - $("#{{ tableid }}").offset().top - 90,
+	     scrollX: {{ options.scrollX or 1 }},
+	     scrollCollapse: {{ options.scrollCollapse or 1 }},
+	     fixedColumns: {{ options.fixedColumns or 0 }},
+	     buttons: {{ options.buttons or [] }},
+	     dom: {{ options.dom or "B<'clear'>lfrtip" | tojson }},
+	 });
+     });
+    </script>
+    
+{% endmacro %}

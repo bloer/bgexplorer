@@ -197,6 +197,8 @@ class StaticIfExists(object):
         else:
             if not hasattr(field, '_value'):
                 field._value = types.MethodType(lambda self: self.data, field)
+            if hasattr(field,'link'):
+                value = '<a href="%s">%s</a>'%(field.link, value)
             return HTMLString(HiddenInput()(field, **kwargs)+
                               '<p class="form-control-static">'+value
                               +'</p')

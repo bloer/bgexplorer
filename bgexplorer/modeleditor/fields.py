@@ -69,17 +69,16 @@ class DictField(TextAreaField):
     def _value(self):
         if not self.data:
             self.data = OrderedDict()
+        data = OrderedDict(**self.data)
         if self.required_keys:
             for key, val in self.required_keys.items():
-                self.data.setdefault(key, val)
+                data.setdefault(key, val)
 
         if self.suggested_keys:
             for key, val in self.suggested_keys.items():
-                self.data.setdefault(key, val)
+                data.setdefault(key, val)
         
-        res = ''
-        if self.data:
-            res = '\n'.join("%s: %s"%(k,v) for k,v in self.data.items())
+        res = '\n'.join("%s: %s"%(k,v) for k,v in data.items())
         return res
 
     @property

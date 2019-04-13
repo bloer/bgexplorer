@@ -1,5 +1,6 @@
 import uuid
 import copy
+from collections import OrderedDict
 
 class Mappable(object):
     """ Mappable is a basic class to ensure an object has a hashable ID """
@@ -11,8 +12,13 @@ class Mappable(object):
     @property
     def id(self):
         return self._id
+        
+    @id.setter
+    def id(self, newid): # this is probably a bad idea...
+        if newid:
+            self._id = newid
 
-    def clone(self, newname=None, deep=True):
+    def clone(self, newname=None, deep=False):
         clone = copy.deepcopy(self) if deep else copy.copy(self)
         clone._id = str(uuid.uuid4())
         if newname and hasattr(clone, 'name'):
@@ -27,3 +33,4 @@ class Mappable(object):
 
     def __hash__(self):
         return hash(self.id)
+

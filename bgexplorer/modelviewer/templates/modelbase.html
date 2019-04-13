@@ -10,33 +10,21 @@
 
 
 {% block navbarlinks %}
-    <li style="border-left:1px" ><a href="{{ url_for('.overview') }}">Overview</a></li>
-
-    <li class="dropdown" ><a class="dropdown-toggle" data-toggle="dropdown" href="#" >Components<span class="caret"></span></a>
-	    <ul class="dropdown-menu" >
-	        <li> <a href="{{ url_for('.componentview') }}" >Quick List</a></li>
-	        <li> <a href="{{ url_for('.billofmaterials') }}">Bill Of Materials</a></li>
-	    </ul>
-    </li>
-
-    <li><a href="{{ url_for('.emissionsoverview') }}" >Emissions</a></li>
-
-    <li class="dropdown" ><a class="dropdown-toggle" data-toggle="dropdown" href="#">Simulations<span class="caret"></span></a>
-        <ul class="dropdown-menu">
-            <li class="dropdown-header" >Group by:</li>
-            <li><a href="{{ url_for('.simulationsoverview') }}" >Placement path, spec</a></li>
-            <li><a href="{{ url_for('.queriesoverview') }}" >Database Query</a></li>
-        </ul>
-    </li>
-
-    <li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#">Results<span class="caret"></span></a>
-	    <ul class="dropdown-menu">
-	        <li> <a href="{{ url_for('.tablesdefault') }}">Tables</a></li>
-	        <li> <a href="{{ url_for('.chartsdefault') }}">Charts</a></li>
-            <li> <a href="{{ url_for('.datatable') }}">Export Raw Data</a></li>
-	        {# <li> <a href="#">Pie charts</a></li> #}
-	    </ul>
-    </li>
+    {{ navbaritem(url_for('.overview'),"Overview") }}
+    {{ navbardropdown("Components",[
+      (url_for('.componentview'),"Quick List"),
+      (url_for('.billofmaterials'),"Bill of materials"),
+    ]) }}
+    {{ navbaritem(url_for('.emissionsoverview'),"Emissions") }}
+    {{ navbardropdown("Simulations",[
+	(url_for('.simulationsoverview'),"by Placement path, spec"),
+	(url_for('.queriesoverview'),"by Database Query"),
+    ]) }}
+    {{ navbardropdown("Results",[
+	(url_for('.tablesdefault'),"Tables"),
+	(url_for('.chartsdefault'),"Charts"),
+	(url_for('.datatable'),"Export Raw Data"),
+    ]) }}
     {% include ['navbarcustom.html','customlinks.html'] ignore missing %}
 {% endblock %}
     

@@ -3,7 +3,8 @@ import operator
 import numpy as np
 from uncertainties import ufloat
 from uncertainties.unumpy import uarray
-
+import logging
+log = logging.getLogger(__name__)
 from .. import units
 from .histogram import Histogram
 
@@ -57,8 +58,8 @@ class SimDocEval(abc.ABC):
             try:
                 return result / match.livetime
             except ZeroDivisionError:
-                print("SimDataMatch found with 0 livetime",
-                      match.id, match.query)
+                log.warnking("SimDataMatch found with 0 livetime %s %s",
+                             match.id, match.query)
                 return result / (1e-6*units.second)
         return result
 
@@ -137,7 +138,7 @@ class UnitsHelper(object):
         """
         super().__init__(*args, **kwargs)
         self.unit = unit
-        if unit is not None:
+        if isinstance(unit,str):
             self.unit = self.units(unit)
         self.unitkey = unitkey
         self.evalunitkey = evalunitkey 
@@ -156,7 +157,8 @@ class UnitsHelper(object):
                 unit = self.evalunitkey(document, self.unitkey) 
             except KeyError:
                 pass
-            unit = self.units(unit)
+            if isinstance(unit,str):
+                unit = self.units(unit)
         if unit:
             try:
                 result = result * unit
@@ -176,6 +178,7 @@ class DirectValue(SimDocEval, UnitsHelper):
         super().__init__(*args, **kwargs)
         self.val = val
         self.converter = converter
+        self.errcalc = errcalc
 
     def project(self, projection):
         projection[self.val] = True
@@ -284,8 +287,8 @@ class DirectSpectrum(SimDocEval):
                 result = Histogram(uarray(hist.m,err.m)*hist.u, bin_edges)
             else:
                 result = Histogram(uarray(hist, err), bin_edges)
-        if(scale and scale != 1):
-            result *= scale
+        if(self.scale and self.scale != 1):
+            result *= self.scale
         return result
 
     def _key(self):

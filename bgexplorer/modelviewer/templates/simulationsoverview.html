@@ -13,37 +13,52 @@
     <h1> Simulation Data</h1>
 {% endblock %}
 
+
+{% macro printdataset(dataset, name=None) %}
+    {% if dataset is iterable and dataset is not string %}
+	{% for ds in dataset %}
+	    {{ printdataset(ds, loop.index) }}
+	{% endfor %}
+    {% else %}
+	<a href="{{ url_for('simsviewer.detailview', dataset=dataset) }}">{{ name or dataset }}</a>
+    {% endif %}
+{% endmacro %}
+
+{% macro printassemblypath(assemblyPath) %}
+    <ol class="breadcrumb placementmath">
+	{% for placement in assemblyPath %}
+	    {% if loop.index0 == 0 %}
+		<li class="breadcrumb-item component assembly">
+		    <a href="{{ url_for('.componentview', component=placement.parent) }}">{{ placement.parent.name }}
+		    </a>
+		</li>
+	    {% endif %}
+	    <li class="breadcrumb-item component">
+		<a href="{{ url_for('.componentview', component=placement.component) }}">{{ placement.name }}{% if placement.weight != 1 %} ({{ placement.weight }}){% endif %}</a>
+	    </li>
+	{% endfor %}
+    </ol>
+{% endmacro %}
+
 {% block pagecontent %}
     <table class="table" id="simdatatable">
 	<thead>
 	    <tr><th>Placement</th><th>Emission Spec<th>Emission Rate (/day)</th>
 		<th>Query</th><th>Dataset</th><th>Livetime</th></tr>
 	</thead>
-	<tbody>{% for request in g.model.assemblyroot.getsimdata() %}{% for match in request.matches %}
+	<tbody>{% for match in g.model.getsimdata() %}
 	    <tr class="simdata">
-		{% if loop.index0 == 0 %}
-		<td><ol class="breadcrumb assemblyPath">
-		    {%- for comp in request.assemblyPath -%}
-			<li><a href="{{ url_for('.componentview', component=comp) }}" class="component">
-			    {{ comp.name }}
-			</a></li>
-		    {%- endfor -%}
-		</ol></td>
-		<td class="spec">{{ request.spec.name }} FIXME</td>
-		<td>{{ "{:.3e}".format(request.emissionrate.to('1/day').m) }}</td>
-		{% else %}
-		<td colspan="3"></td>
-		{% endif %}
+		<td>{{ printassemblypath(match.assemblyPath) }}</td>
+		<td class="spec"><a href="{{ url_for('.emissionview', specid=match.spec.getrootspec().id) }}">{{ match.spec.name }} </a></td>
+		<td>{{ "{:.3e}".format(match.emissionrate.to('1/day').m) }}</td>
 		<td class="query" >
 		    <a href="{{ url_for('.simdatamatchview', match=match) }}">{{ match.query }}</a>
 		</td>
-		<td class="dataset" >{% if match.dataset -%}
-		    <a href="{{ url_for('.datasetview',dataset=match.dataset) }}">{{ match.dataset }}</a>
-		{%- endif -%}</td>
+		<td class="dataset" >{% if match.dataset -%} {{ printdataset(match.dataset) }}{% endif %}</td>
 		<td class="livetime" data-livetime="{{ match.livetime.to('day').m }}">
 		    {{ match.livetime.to('day') }}
 		</td>
 	    </tr>
-	{% endfor %}{% endfor %}</tbody>
+	{% endfor %}</tbody>
     </table>
 {% endblock %}

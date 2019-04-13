@@ -15,6 +15,7 @@ from ..simulationsdb.simdoceval import DirectValue,DirectSpectrum
 from ..simulationsdb.histogram import Histogram
 from ..component import Component
 from ..emissionspec import RadioactiveContam
+from ..bgmodel import BgModel
 from .. import units
 
 #TODO: Don't hardcode the DB connection parameters
@@ -22,11 +23,14 @@ from .. import units
 
 #callbacks for new mongosimsdb implementation
 def buildquery(request):
-    request.addquery({
+    if not request or not request.component or not request.spec:
+        return None
+    request.query = {
         'volume': request.component.name,
         'distribution': request.spec.distribution,
         'primary': request.spec.name,
-    })
+    }
+    return [request]
 
 def livetime(match, hits):
     return sum(doc['nprimaries'] for doc in hits)/match.emissionrate
@@ -121,6 +125,9 @@ class TestMongoSimsDB(unittest.TestCase):
             RadioactiveContam("P1", distribution="bulk", rate="2 Bq/kg"),
             RadioactiveContam("P3", distribution="surface", rate="5 Bq/cm**2")
                                    ])
+        self.model = BgModel(name="testmongo")
+        self.model.assemblyroot.addcomponent(self.component)
+        self.matches = self.simdb.updatesimdata(self.model)
         
         
     def tearDown(self):
@@ -128,19 +135,16 @@ class TestMongoSimsDB(unittest.TestCase):
 
     
     def test_find_default(self):
-        for request in self.component.getsimdata([], rebuild=True):
-            matches = self.simdb.findsimentries(request)
-            self.assertEqual(len(matches), 1)
-            self.assertAlmostEqual(matches[0].livetime.to('s').m, 1e5)
-            self.assertEqual(len(matches[0].dataset), 1)
+        self.assertEqual(len(self.matches), 2)
+        for match in self.matches:
+            self.assertAlmostEqual(match.livetime.to('s').m, 1e5)
+            self.assertEqual(len(match.dataset), 1)
                 
 
     def test_eval(self):
-        requests = self.simdb.attachsimdata(self.component)
-        matches =  sum((r.matches for r in requests), [])
         vals = (DirectValue("counts.C1"),
                 DirectValue("counts.C2",unitkey="units.C2"))
-        result = self.simdb.evaluate(vals, matches)
+        result = self.simdb.evaluate(vals, self.matches)
         
         self.assertEqual(len(result), 2)
         self.assertAlmostEqual(result[0].to("1/s").m, 110./1e5)
@@ -149,10 +153,8 @@ class TestMongoSimsDB(unittest.TestCase):
 
     @unittest.skipUnless(numpy, "requires numpy")
     def test_numpy_eval(self):
-        requests = self.simdb.attachsimdata(self.component)
-        matches =  sum((r.matches for r in requests), [])
         vals = (DirectSpectrum("counts.C3"),)
-        result = self.simdb.evaluate(vals, matches)
+        result = self.simdb.evaluate(vals, self.matches)
         hist = result[0]
         self.assertIsInstance(hist, Histogram)
         self.assertIsInstance(hist.hist, units.Quantity)

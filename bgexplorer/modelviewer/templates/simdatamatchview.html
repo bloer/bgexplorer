@@ -1,4 +1,8 @@
 {% extends "modelbase.html" %}
+
+
+{% from "simulationsoverview.html" import printdataset, printassemblypath %}
+
 {% block title %}Sim Data Query{% endblock %}
 
 {% block pageheader %}
@@ -11,23 +15,18 @@
 	    <h2>Data Request</h2>
 
 	    <h3>Placement</h3>
-	    <ol class="breadcrumb placementpath">
-		{% for comp in match.request.assemblyPath %}
-		    <li class="breadcrumb-item component">
-			<a href="{{ url_for('.componentview', component=comp) }}">{{ comp.name }}</a>
-		    </li>
-		{% endfor %}
-	    </ol>
+	    {{ printassemblypath(match.assemblyPath) }}
 
 	    <h3>Emission spec</h3>
-	    {% set spec = match.request.spec %}
-	    <a href="{{ url_for('.emissionview', spec=linkspec) }}">{{ linkspec.name }}</a>
-	    {%- if linkspec != spec %} / {{ spec.name }} {% endif -%}
+	    {% set spec = match.spec %}
+	    {% set rootspec = spec.getrootspec() %}
+	    <a href="{{ url_for('.emissionview', spec=rootspec) }}">{{ rootspec.name }}</a>
+	    {%- if rootspec != spec %} / {{ spec.name }} {% endif -%}
 	    <dl class="dl-horizontal" >
 		<dt>Rate</dt> <dd>{{ spec.getratestr() }}</dd>
-		<dt>Total Weight</dt> <dd>{{ match.request.weight }}</dd>
+		<dt>Total Weight</dt> <dd>{{ match.weight }}</dd>
 		<dt>Total Emission Rate</dt> <dd>
-		    {{ "{:e}".format(match.request.emissionrate.to('1/day').m) }} / day
+		    {{ "{:e}".format(match.emissionrate.to('1/day').m) }} / day
 		</dd>
 	    </dl>
 	</div><!-- end col-md-6 for data request -->
@@ -36,11 +35,12 @@
 	    <h2>Simulation Database</h2>
 	
 	    <dl class="dl-horizontal">
-		<dt>Generated Query</dt> <dd>{{ match.query }}</dd>
+		<dt>Generated Query</dt> <dd>
+		    {% if match.query %}<a href="{{ url_for('simsviewer.overview', query=match.query) }}">
+			{{ match.query }}</a>{% endif %}
+		</dd>
 		<dt>Query Weight</dt> <dd>{{ match.weight }}</dd>
-		<dt>Matching dataset</dt> <dd>{% if match.dataset -%}
-		    <a href="{{ url_for('.datasetview', dataset=match.dataset) }}">{{ match.dataset }}</a>
-		{%- endif -%}</dd>
+		<dt>Matching dataset</dt> <dd>{{ printdataset(match.dataset) }}</dd>
 		<dt>Simulated Livetime</dt> <dd>{{ match.livetime.to('day') }}</dd>
 		<dt>Status</dt> <dd>{{ match.status }}</dd>
 	    </dl>

@@ -3,7 +3,7 @@
 {% block title %}Bill Of Materials{% endblock %}
 
 {% block mystyles %}
-    <link rel="stylesheet" href="{{ url_for('.static', filename='DataTables/datatables.min.css') }}"> 
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}"> 
     <style>
      .modelname {color:blue}
      
@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block myscripts %}
-    <script type="text/javascript" src="{{ url_for('.static', filename='DataTables/datatables.min.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}"></script>
     <script type="text/javascript">
      
      $(document).ready(function(){

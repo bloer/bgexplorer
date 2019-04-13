@@ -33,7 +33,8 @@ class TestEmissionspec(unittest.TestCase):
             self.assertIsInstance(string, str)
             clone = emissionspec.buildspecfromdict(export)
             self.assertIs(type(spec), type(clone))
-            self.assertEqual(spec.todict(), clone.todict())
+            if not spec.parent:
+                self.assertEqual(spec.todict(), clone.todict())
             self.assertEqual(spec.rate, clone.rate)
 
     def testRadioVal(self):

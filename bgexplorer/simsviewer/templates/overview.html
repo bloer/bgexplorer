@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Simulations Overview{% endblock %}
+
+{% block pageheader %}
+    <h1> Simulation Database </h1>
+{% endblock %}
+
+{% block pagecontent %}
+    {% if sims %}
+	{% set colnames = sims[0].keys() %}
+	<table id="simdata"  class="table table-condensed table-bordered" width="100%">
+	    <thead>
+		<tr>{% for col in colnames %}
+		    <th>{{ col }}</th>
+		    {% endfor %}
+		</tr>
+	    </thead>
+	</table>
+    {% else %}
+    <span class="error" >No simulation data found</span>
+    {% endif %}
+{% endblock %}

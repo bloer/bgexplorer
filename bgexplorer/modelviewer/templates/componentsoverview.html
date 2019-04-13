@@ -14,10 +14,11 @@
 		<th>Name</th><th>Weight</th><th>Description</th></tr>
 	    </tr>
 	</thead>
-	<tbody>{% for component,weight in [(g.model.assemblyroot,'')] recursive %}
-	    <tr class="comp" >
-		<td style="padding-left: {{loop.depth0}}em" >
-		    <a href="{{ url_for('.componentview', component=component) }}">{{ component.name }}</a>
+	<tbody>{% for component,weight in [(g.model.assemblyroot,1)] recursive %}
+	    <tr class="comp {% if component==g.model.assemblyroot %}assemblyroot{% endif %}" >
+		<td style="padding-left: {{ (loop.depth0-1,0) | max }}em" >
+		    <a href="{{ url_for('.componentview', component=component) }}">{{ component.name }}
+			{%- if component == g.model.assemblyroot %} (assemblyroot){% endif -%}</a>
 		</td>
 		<td>{{ weight }}</td>
 		<td>{{ component.description }}</td>

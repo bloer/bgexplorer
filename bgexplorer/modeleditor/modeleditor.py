@@ -65,6 +65,8 @@ class ModelEditor(object):
         baseroute = '/edit/<modelid>'
         self.bp.add_url_rule('/new', view_func=self.newmodel, 
                              methods=('POST',))
+        self.bp.add_url_rule('/del', view_func=self.delmodel, 
+                             methods=('POST',))
         self.bp.add_url_rule(baseroute+'/', view_func=self.editmodel,
                              methods=('GET', 'POST'))
         self.bp.add_url_rule(baseroute+'/save', 
@@ -146,14 +148,14 @@ class ModelEditor(object):
         return dict(spectypes=list(self.specregistry.keys()))
     
     ###### Utility functions for DB access ##########
-    def getmodelordie(self, modelid, toedit=True):
+    def getmodelordie(self, modelid, toedit=True, bypasscache=False):
         """try to get model with modelid from the db, else return 404. 
         If we're trying to edit this model (toedit=True) and it's not temp,
         return a 403 forbidden
         """
         #todo: enforce that the model is temporary
         #model = self.modeldb.get_model(modelid, bypasscache=toedit)
-        model = self.modeldb.get_model(modelid)
+        model = self.modeldb.get_model(modelid, bypasscache=bypasscache)
         if not model:
             abort(404, "Model with ID %s not found"%modelid)
         if toedit and not self.modeldb.is_model_temp(modelid):
@@ -183,15 +185,19 @@ class ModelEditor(object):
             if hasattr(field,'entries'):
                 for entry in field:
                     href=None
+                    field=None
                     if entry.form_class is forms.PlacementForm:
                         href = url_for('.editcomponent',modelid=modelid,
                                        componentid=entry['component'].data)
+                        field = 'cls'
                     elif entry.form_class is forms.BoundSpecForm:
                         href = url_for('.editspec', modelid=modelid,
                                        specid=entry['id'].data)
+                        field = 'name'
                     if href:
-                        entry['name'].data = ("<a href='%s'>%s</a>"
-                                              %(href, entry['name'].data))
+                        entry[field].link = href
+                        #entry[field].data = ("<a href='%s'>%s</a>"
+                        #                      %(href, entry[field].data))
 
                                               
 
@@ -225,13 +231,27 @@ class ModelEditor(object):
         #todo: handle error no model returned, probably DB down
         return redirect(url_for('.editmodel', modelid=str(newid)))
 
-    #todo: implement delete model
+    def delmodel(self):
+        modelid = request.form.get('modelid',None)
+        try:
+            ndeleted = self.modeldb.del_model(modelid)
+        except KeyError as e:
+            abort(404, e)
+        except ValueError as e:
+            abort(403, e)
+        
+        if ndeleted == 1:
+            flash("Successfully deleted model %s"%modelid,'success')
+        else:
+            flash("An error occurred trying to delete this model",'warning')
+        return redirect(url_for('index'))
 
-    #all endpoints build on the same route from here out
-    
+    #all endpoints build on the same route from here out    
     def editmodel(self, modelid):
         """return a page with forms for model editing"""
-        model = self.getmodelordie(modelid, toedit=True)
+        bypasscache = request.args.get('bypasscache',False)
+        model = self.getmodelordie(modelid, toedit=True, 
+                                   bypasscache=bypasscache)
         return render_template('editmodel.html', model=model)
 
     def savemodel(self, modelid):
@@ -242,15 +262,21 @@ class ModelEditor(object):
         form = forms.SaveModelForm(request.form, obj=model, prefix='savemodel')
         if request.method == 'POST' and form.validate():
             form.populate_obj(model)
-            #make sure all sim data is up-to-date
+            # make sure the simulation data is updated
             simsdb = get_simsdb()
-            if simsdb:
-                try:
-                    simsdb.attachsimdata(model.assemblyroot)
-                except units.errors.DimensionalityError as e:
-                    message("A component/spec has incorrect units")
-                    return url_for('.editmodel', modelid=modelid, 
-                                   showstatus=True)
+            error = ""
+            if not simsdb:
+                error += " No registered SimulationsDB"
+            try:
+                update = form.updatesimdata
+                simsdb.updatesimdata(model, attach=True, 
+                                     findnewmatches=update, findnewdata=update)
+            except units.errors.DimensionalityError as e:
+                error += " Invalid unit settings: '%s'"%e
+            # make sure the model is valid
+            if error or not model.validate():
+                flash("The model failed to validate: %s"%error,'error')
+                return url_for('.editmodel', modelid=modelid, bypasscache=True)
             self.modeldb.write_model(model, temp=False, bumpversion="major")
             flash("Model '%s' successfully saved"%(model.name),
                   'success')
@@ -473,34 +499,28 @@ class ModelEditor(object):
             
         model = self.getmodelordie(modelid, toedit=False)
         try:
-            simreqs = simsdb.attachsimdata(model.assemblyroot)
+            matches = simsdb.updatesimdata(model)
         except units.errors.DimensionalityError as e:
             abort(400,"Invalid unit settings: '%s'"%e)
-        matches = sum((r.matches for r in simreqs),[])
         #form = forms.BindSimDataForm(request.form)
         if request.method == 'POST': # and form.validate():
+            self.modeldb.removecache(model.id)
             istemp = self.modeldb.is_model_temp(modelid)
-            newid = str(self.modeldb.write_model(model, bumpversion="minor", 
-                                                 temp=istemp))
+            model.simdata = {m.id : m for m in matches}
+            try:
+                newid = str(self.modeldb.write_model(model, 
+                                                     bumpversion="minor", 
+                                                     temp=istemp))
+            except Exception as e:
+                abort(501, 'Error saving model: %s'%e)
             if istemp:
                 return redirect(url_for('.editmodel', modelid=newid))
             else:
                 #TODO: add a url for viewmodel here
-                return redirect(url_for('index'))
+                return redirect(url_for('modelviewer.overview',modelid=newid))
                 #sort the requests by spec and assembly
-        bypath = {}
-        byspec = {}
-        for req in simreqs:
-            pathstr = ' / '.join(c.name for c in req.assemblyPath)
-            bypath.setdefault(pathstr, [])
-            bypath[pathstr].append(req)
-            byspec.setdefault(req.spec, [])
-            byspec[req.spec].append(req)
         
-
         return render_template('bindsimdata.html', model=model,
-                               #form=form,
-                               matches=matches, requests=simreqs,
-                               bypath=bypath, byspec=byspec)
+                               matches=matches)
         
         

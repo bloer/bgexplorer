@@ -28,14 +28,16 @@ from collections import OrderedDict
 class SaveModelForm(FlaskForm):
     """Form for editing basic bgmodel details"""
     name = StringField('Model Name', [validators.required()])
-    version = IntegerField("Version", render_kw={'disabled':'disabled'})
+    #version = IntegerField("Version", render_kw={'disabled':'disabled'})
     description = StringField("Description", [validators.required()])
     user = StringField("Your name", [validators.required()])
     comment = StringField("Describe your edits", [validators.required()])
+    updatesimdata = BooleanField("Update with latest simulation data",
+                                 default=True);
     
     def populate_obj(self, obj):
         obj.name = self.name.data
-        obj.version = self.version.data
+        #obj.version = self.version.data
         obj.description = self.description.data
         obj.editDetails.update(dict(user=self.user.data, 
                                     comment=self.comment.data))
@@ -120,7 +122,8 @@ class ComponentForm(BaseComponentForm):
     
 class PlacementForm(Form):
     component = HiddenField()
-    name = StringField("Name",[validators.required()], widget=StaticIfExists(),
+    name = StringField("Name",[validators.required()], 
+                       #widget=StaticIfExists(),
                        render_kw={'class':'form-control'})
     cls = SelectField("Type", [validators.required()],
                       choices=[(d,d) for d in ('Component','Assembly')],
@@ -156,9 +159,10 @@ class PlacementForm(Form):
                 'name': self.name.data
             })
         obj.component = comp
+        obj.name = self.name.data
         obj.weight = self.weight.data
         obj.querymod = self.querymod.data
-
+        
 class AssemblyForm(BaseComponentForm):
     """Basic info plus subcomponents"""
     #components = JSONField(default=list, widget=HiddenInput())
@@ -199,6 +203,7 @@ class EmissionspecForm(FlaskForm):
     querymod = JSONField("Querymod", description="Overrides for generating simulation database queries")
 
 class RadioactiveIsotopeForm(Form):
+    id = HiddenField("ID")
     isotope = StringField("Isotope", [validators.required()],
                           render_kw={'size':7,'class':'form-control'})
     rate = StringField("Decay rate",[validate_units(), 
@@ -237,6 +242,7 @@ class RadonExposureForm(EmissionspecForm):
     
 
 class CosmogenicIsotopeForm(Form):
+    id = HiddenField("ID")
     name = StringField("Isotope",[validators.required()])
     halflife = StringField("Half-life", 
                            [validate_units('second'), validators.required()])

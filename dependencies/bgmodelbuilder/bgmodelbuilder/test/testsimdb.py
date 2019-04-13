@@ -13,25 +13,25 @@ class TestingSimulationsDB(SimulationsDB):
         super().__init__(*args, **kwargs)
         self.baserates = dict(U238=4, Th232=3, Co60=2, K40=1)
 
-    def findsimentries(self, request):
+    def genqueries(self, request, findnewdata=True):
+        result = [request]
         #We only know a few things
-        if request.spec.name not in self.baserates:
-            request.addquery("FIND "+request.spec.name)
+        request.query = "FIND "+request.spec.name
         
-        else:
+        if request.spec.name in self.baserates:
             #Add 1e7 gammas for all 
-            dataset = (request.spec.name, len(request.assemblyPath), "gamma")
-            livetime = (self.getprimaries(None)/request.emissionrate)
-            request.addquery(dataset, dataset=dataset, livetime=livetime)
+            dataset = (request.spec.name, "gamma")
+            request.livetime = (self.getprimaries(None)/request.emissionrate)
+            request.dataset = dataset
+            
             if dataset[0] in ('U238', 'Th232'):
-                dataset = (request.spec.name, len(request.assemblyPath), 
-                           "neutron")
+                query = request.query + " neutron"
+                dataset = (request.spec.name, "neutron")
                 weight = 1.e-6
-                livetime *= 1 / weight
-                request.addquery(dataset, weight=weight, livetime=livetime,
-                                 dataset=dataset)
+                livetime = request.livetime / weight
+                result.append(request.clone(query, weight, dataset, livetime))
         
-        return request.matches
+        return result
             
     def evaluate(self, values, matches):
         #we know how to evaluate "primaries" and "rate"
@@ -46,12 +46,12 @@ class TestingSimulationsDB(SimulationsDB):
             result["gammarate"] = sum(self.gethits(match)/match.livetime 
                                       for match in matches 
                                       if match.dataset 
-                                      and match.dataset[2]=="gamma")
+                                      and match.dataset[1]=="gamma")
         if "neutronrate" in values:
             result["neutronrate"] = sum(self.gethits(match)/match.livetime 
                                       for match in matches 
                                       if match.dataset 
-                                      and match.dataset[2]=="neutron")
+                                      and match.dataset[1]=="neutron")
         return result
         
 
@@ -60,9 +60,9 @@ class TestingSimulationsDB(SimulationsDB):
         
     def gethits(self, match):
         base = 100 * self.baserates[match.dataset[0]]
-        if match.dataset[2] == "neutron":
+        if match.dataset[1] == "neutron":
             base /= 1e5
-        return base * match.dataset[1]
+        return base 
 
 
 
@@ -92,51 +92,46 @@ class TestSimsDB(unittest.TestCase):
                 ])
             ])
         ])
-        self.model = BgModel(self.assembly)
+        self.model = BgModel("test", self.assembly)
         
         self.simdb = TestingSimulationsDB()
-        self.requests = self.simdb.attachsimdata(self.assembly)
+        self.simdata = self.simdb.updatesimdata(self.model)
         
                                  
     def test_numrequests(self):
         """Test that the expected number of requests were generated"""
-        self.assertEqual(len(self.requests), 10)
+        self.assertEqual(len(self.simdata), 14)
+        self.assertEqual(self.simdata[0].dataset[1], 'gamma')
+        self.assertEqual(self.simdata[1].dataset[1], 'neutron')
         
-    def test_matches(self):
-        """Test that the correct number of matches was returned"""
-        for request in self.requests:
-            if request.spec.name in ("U238", "Th232"):
-                self.assertEqual(len(request.matches), 2)
-            else:
-                self.assertEqual(len(request.matches), 1)
-
+        
     def test_emissionrate(self):
         """Test that the emissionrate is as we expect"""
         #C1, Th232: 1 kg @ 2 mBq/kg = 2 mBq
-        self.assertEqual(self.requests[1].emissionrate, (2*units.mBq).to('1/s'))
-        #C2, K40: 2kg @ 100 mBq/kg, weigh2 = 400 mBq
-        self.assertEqual(self.requests[4].emissionrate, 
+        self.assertEqual(self.simdata[2].emissionrate, (2*units.mBq).to('1/s'))
+        #C2, K40: 2kg @ 100 mBq/kg, weight2 = 400 mBq
+        self.assertEqual(self.simdata[6].emissionrate, 
                          (400*units.mBq).to('1/s'))
         #C3, Co60: 3kg @ 4mBq/kg, weight3 = 36 mBq/kg
-        self.assertEqual(self.requests[9].emissionrate, 
+        self.assertEqual(self.simdata[13].emissionrate, 
                          (36*units.mBq).to('1/s'))
+
+        #C1, U238 neutrons: 1kg @ 1 mBq/kg*1e-6 = 1e-6 mBq/kg
+        self.assertEqual(self.simdata[1].emissionrate, (1e-6*units.mBq).to('1/s'))
 
     def test_livetime(self):
         """Test that the calculated livetime is as we expect"""
-        self.assertEqual(self.requests[0].matches[0].livetime, 
-                          1.e7/units.mBq )
-        self.assertEqual(self.requests[0].matches[1].livetime, 
-                          1.e7/(1e-6*units.mBq) )
+        self.assertEqual(self.simdata[0].livetime, 1.e10*units.s)
+        self.assertEqual(self.simdata[1].livetime, 1.e16*units.s)
 
     def test_rates(self):
         """Test that the total calculated rates are as expected"""
-        #todo: need convenience method to roll up list of matches
         rates = self.simdb.evaluate(("gammarate", "neutronrate", "rate"),
-                                    sum((r.matches for r in self.requests), []))
+                                    self.simdata)
         #convert to dimensionless numbers to use AlmostEqual and avoid 
         #floating point nonsense. 
         self.assertAlmostEqual(rates['gammarate'].to('1/s').m, 
-                               (1.998E-2*units.mBq).to('1/s').m)
+                               (6.1e-3*units.mBq).to('1/s').m)
         self.assertAlmostEqual(rates['neutronrate'].to('1/s').m, 
                                (3.8E-14*units.mBq).to('1/s').m)
 

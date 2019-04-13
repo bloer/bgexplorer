@@ -1,4 +1,5 @@
 {% extends "modelbase.html" %}
+
 {% block mystyles %}
     <style>
      tr.spec { background-color:rgb(245, 245, 245) }
@@ -22,7 +23,7 @@
 		<th>Name</th><th>Category</th><th>Distribution</th><th>Spec</th><th>Rate</th><th>Components</th></tr>
 	    </tr>
 	</thead>
-	<tbody>{% for spec in g.model.specs.values() recursive %}
+	<tbody>{% for spec in rootspecs recursive %}
 	    <tr class="spec {%- if loop.depth0 %} subspec {% endif -%}" >
 		<td>{% if loop.depth0==0 %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif -%}
 		    {{ spec.name }}

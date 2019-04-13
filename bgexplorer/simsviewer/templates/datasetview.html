@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Simulations Overview{% endblock %}
+
+{% block pageheader %}
+    <h1> Simulation Dataset {{ dataset }} </h1>
+{% endblock %}
+
+{% block pagecontent %}
+    <a href="{{ url_for('.rawview',dataset=dataset) }}">Raw data</a>
+    <h3> Full entry:</h3>
+    <pre>{{ detail|tojson(indent=2) }}
+    </pre>
+{% endblock %}

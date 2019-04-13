@@ -9,15 +9,16 @@
 	<style>
 	 /* all this crap is needed to get scrolling to work */
 	 .scroll {overflow:auto}
-     div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
+	 div.alert {margin-bottom:2px; padding-top:8px; padding-bottom:8px;}
 	 /*body, .btn, .form-control, .glyphicon {font-size:small;}*/
 	 .linklike {cursor:pointer; }
 	 .Assembly td:first-child:after {content:"↴"; padding-left:0.15em; color:green;}
 	 #componentsdiv td[data-column=weight] {display:none}
-     #editor h2 {margin-top: 5px; margin-bottom:2px ; padding-bottom: 10px; border-bottom: 1px solid #ddd }
+	 #editor h2 {margin-top: 5px; margin-bottom:2px ; padding-bottom: 10px; border-bottom: 1px solid #ddd }
 	 #editor td[data-column=description] {display:none}
 	 .form-inline, .form-inline div.input-group {display:inline-block}
-	     
+	 tr.childofactive td { background-color: lightyellow; }
+	 tr.parentofactive td {background-color:lightgreen;}    
 	</style>
     {% endblock %} 
 
@@ -95,7 +96,10 @@
 {% import "bootstrap/wtf.html" as wtf %}
 
 
-{% macro componentrow(comp, level) %}
+{% macro componentrow(comp, level, name=None) %}
+    {% if not name %}
+	{% set name = comp.name %}
+    {% endif %}
     <tr class="linklike component 
 	       {% if editcomponent is defined %} 
 	       {% if comp.id == editcomponent.id %} info 
@@ -105,11 +109,14 @@
 	       {% endif %}
 	       {%- if comp._components is defined %} Assembly {% endif -%} 
 	       {%- if editspec is defined and editspec in comp.getspecs(deep=False) -%} parentofactive {% endif -%}"
-	       data-component="{{ comp.id }}" 
-	       data-name="{{ comp.name }}" 
-	       data-cls="{{ 'Assembly' if comp._components is defined else 'Component' }}"
-	       onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" >
-	<td data-column="name" style="padding-left:{{ 15*level }}px" >{{ comp.name }}</td>
+	data-component="{{ comp.id }}" 
+	data-name="{{ comp.name }}" 
+	data-cls="{{ 'Assembly' if comp._components is defined else 'Component' }}"
+	onclick="window.location='{{ url_for('.editcomponent',modelid=model.id, componentid=comp.id) }}'" 
+        title="{{ comp.comment }}">
+	<td data-column="name" style="padding-left:{{ 15*level }}px" >
+	    {{ name }}
+	</td>
 	<td data-column="description">{{ comp.description or "" }}</td>
     {% set status = "" %}
     {% if request.args.get('showstatus') %}
@@ -137,13 +144,19 @@
 	</thead>
 	<tbody>
 	    {% for comp in components recursive %}
+		{# comp may be a Component or a Placement #}
+		{% set name = comp.name %}
+		{% if comp.component is defined %}
+		    {% set comp = comp.component %}
+		{% endif %}
 		{% if comp == model.assemblyroot %}
 		    <tr><th colspan="5" style="background-color:#fafafa;" > Assembly Tree</th></tr>
 		{% endif %}
-		{{ componentrow(comp, loop.depth0) }}
+		{{ componentrow(comp, loop.depth0, name) }}
 		{% if recursive %}
-		    {% if comp.getcomponents is defined %}
-			{{ loop(comp.getcomponents(deep=False, withweight=False, merge=False)) }}
+		    {% if comp.components is defined %}
+			{{ loop(comp.components) }}
+			{# {{ loop(comp.getcomponents(deep=False, withweight=False, merge=False)) }} #}
 		    {% endif %}
 		{% endif %}
 		{% if comp == model.assemblyroot %}
@@ -205,8 +218,7 @@
 {% block pageheader %}
     <div class="row" >
 	<div class="col-sm-7"> 
-	    <h1>Editing Model: <small>{{ model.name }} v{{ model.version }}
-	    </small></h1>
+	    <h1>Editing Model: <small>{{ model.name }}</small></h1>
 	    <small>{{ model.description }}</small>
 	</div>
 	<div class="col-sm-5" >
@@ -306,7 +318,7 @@
 			    </div>
 			</form>
 		    </small></h2>
-		    {{ spectable(model.specs.values()) }}
+		    {{ spectable(model.getspecs(rootonly=true)) }}
 		</div> {# close specsdiv #}
 	    </div> {# close tab-content  #}
 	</div> {# close col-sm-6 #}

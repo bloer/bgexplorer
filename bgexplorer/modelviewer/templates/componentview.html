@@ -1,5 +1,7 @@
 {% extends "modelbase.html" %}
 
+{% from "simulationsoverview.html" import printassemblypath %}
+
 {% set class = "Component" %}
 {% if component.components is defined %}
     {% set class = "Assembly" %}
@@ -24,27 +26,28 @@
 
 
 {% macro speccells(spec, link=true) %}
-    <td>{% if link %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif %}
-	{{ spec.name }}
-    {% if link %}</a>{% endif %}</td>
+    <td {% if spec.querymod %} title="querymod: {{ spec.querymod }}" {% endif %}>
+	{% if link %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif %}
+	    {{ spec.name }}
+	    {% if link %}</a>{% endif %}
+    </td>
     <td>{{ spec.category }}</td>
     <td>{{ spec.distribution }}</td>
     <td>{{ spec.getratestr(2) }}</td>
-{% endmacro %}
-
-{% macro printsimdata(spec, simdata) %}
-{% for simd in simdata %}{% if simd.spec == spec and simd.matches %}
-    <tr class="simdata" >
-	<td colspan="5" >
-	    Simdata: Emission rate = {{ "{:.3e}".format(simd.emissionrate.to('1/day').m) }}/day. 
-	    {% for match in simd.matches %} 
-		<a href="{{ url_for('.simdatamatchview', match=match) }}">
-		    Query {{ loop.index }}
-		</a>: {{ match.livetime.to('day') }}
-	    {% endfor %}
-	</td>
-    </tr>
-{% endif %}{% endfor %}
+    
+    {% set simdata = g.model.getsimdata(component=component, spec=spec) %}
+    <td>{% for match in simdata %}
+	{% if loop.index0 %}<br>{% endif %}
+	<a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
+	    {{ "{:.2g}".format(match.emissionrate.to('1/day').m) }} /day </a>
+	{% endfor %}
+    </td>
+    <td>{% for match in simdata %}
+	{% if loop.index0 %}<br>{% endif %}
+	<a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
+	    {{"{:.2g}".format( match.livetime.to('day').m) }} day </a>
+	{% endfor %}
+    </td>    
 {% endmacro %}
 
 {% block pagecontent %}
@@ -72,26 +75,7 @@
 
 	    <h2>Placements <small>Total weight: {{ component.gettotalweight(g.model.assemblyroot) }}</small></h2>
 	    {% for path in g.model.assemblyroot.gethierarchyto(component,placements=True) or [] %}
-		<ol class="breadcrumb placementpath">{% for step in path %}
-		    {% if loop.index0 == 0 %}
-			<li class="breadcrumb-item">
-			    <a href="{{ url_for('.componentview', component=step.parent) }}">
-				{{ step.parent.name }}
-			    </a>
-			</li>
-		    {% endif %}
-		    {% if loop.revindex0 > 0 %}
-			<li class="breadcrumb-item">
-			    <a href="{{ url_for('.componentview', component=step.component) }}">
-				{{ step.component.name }}{%- if step.weight != 1 %} ({{ step.weight }}){%- endif -%}
-			    </a>
-			</li>
-		    {% else %}
-			<li class="breadcrumb-item active">
-			    {{ step.component.name }}{%- if step.weight != 1 %} ({{ step.weight }}){%- endif -%}
-			</li>
-		    {% endif %}
-		{% endfor %}</ol>
+		{{ printassemblypath(path) }}
 	    {% endfor %}
 	    
 	    {% if component.components %}
@@ -103,7 +87,7 @@
 		    <tbody>{% for placement in component.components %}
 			<tr class="placement" >
 			    <td><a href="{{ url_for('.componentview',component=placement.component) }}">
-				{{ placement.component.name }}</a></td>
+				{{ placement.name }}</a></td>
 			    <td>{{ placement.weight }}</td>
 			    <td>{{ placement.querymod | default('',true) }}</td>
 			</tr>
@@ -121,21 +105,22 @@
     <table id="specstable" class="table table-compact">
 	<thead>
 	    <tr>
-		<th>Name</th><th>Type</th><th>Dist.</th><th>Rate</th><th>Query Mod.</th>
+		<th>Name</th>
+		<th>Type</th>
+		<th>Dist.</th>
+		<th>Rate spec</th>
+		<th>Total Rate</th>
+		<th>Simulated Livetime</th>
 	    </tr>
 	</thead>
     {% for boundspec in component.specs %}
 	<tr class="spec" >
-	    {{ speccells(boundspec.spec,link=True) }}
-	    <td>{% if boundspec.querymod %}Querymod: {{ boundspec.querymod }}{% endif %}</td>
+	    {{ speccells(boundspec.spec, link=True) }}
 	</tr>
-	{{ printsimdata(boundspec.spec, boundspec.simdata) }}
 	{% if boundspec.spec.subspecs %}{% for subspec in boundspec.spec.subspecs %}
 	    <tr class="spec subspec">
 		{{ speccells(subspec, link=False) }}
-		<td></td>
 	    </tr>
-	    {{ printsimdata(subspec, boundspec.simdata) }}
 	{% endfor %}{% endif %}
     {% endfor %}
     {% endif %}

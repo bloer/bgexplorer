@@ -28,8 +28,6 @@ class TestComponent(unittest.TestCase):
                 ]), 2)
             ]), 5),
         ])
-        self.assembly.getsimdata(path=(self.assembly,),rebuild=True,
-                                 children=True)
         self.model = BgModel("Test Model", self.assembly)
 
 

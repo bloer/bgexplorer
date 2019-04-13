@@ -17,6 +17,7 @@ units.load_definitions([
     "ppb_U = 12 * mBq/kg = ppbU",
     "ppb_Th = 4.1 * mBq/kg = ppbTh",
     "ppm_K = 31 * mBq/kg = ppbK",
+    "ppb_K = 0.001 * ppm_K = ppbK",
     "ppt_U = 0.001 * ppb_U = pptU",
     "ppt_Th = 0.001 * ppb_Th = pptTh",
     "ppt_K = 0.001 * ppb_K = pptK",

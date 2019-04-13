@@ -1,4 +1,25 @@
 {# reimplementation of bootstrap/base.html #}
+
+{% macro navbaritem(url, label) %}
+    <li {% if request.path|urlencode == url %}class="active"{% endif %}>
+	<a href="{{ url }}">{{ label }} </a>
+    </li>
+{% endmacro %}
+
+{% macro navbardropdown(label, items) %}
+{# Create a dropdown menu in the navbar.  `items` is a list of url, label pairs
+ #}
+{% set active = request.path|urlencode in items|map(attribute=0) %} 
+<li class="dropdown {% if active %}active{% endif %}" >
+    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+	{{ label }}<span class="caret"></span>
+    </a>
+    <ul class="dropdown-menu">{% for url, sublabel in items %}
+	{{ navbaritem(url, sublabel) }}
+    {% endfor %}</ul>
+</li>
+{% endmacro %}
+
 {% block doc -%}
 <!DOCTYPE html>
 <html{% block html_attribs %}{% endblock html_attribs %}>
@@ -23,7 +44,7 @@
 	     #content {background-color: white; margin-top:0px; min-height:90%}
 	     nav.navbar { margin-bottom: 0px; background-color: #FCF8E3}
 	     nav img {max-height:50px}
-         .table-condensed { font-size:smaller; }
+         .table-condensed { font-size:small; }
 	     #messages {position:absolute; top:30px; right:2px; width:30%; z-index: 1}
 	    </style>
 	    {% block mystyles %}{% endblock %}
@@ -54,7 +75,11 @@
 		</div>
 		<div class="collapse navbar-collapse" id="navbarcontent" >
 		    <ul class="nav navbar-nav" >
-			<li><a href="{{ url_for('index') }}">Home</a></li>
+			{{ navbaritem(url_for('index'),"Home") }}
+			{{ navbaritem(url_for('simsviewer.overview'),"Sim Data") }}
+			{# <li><a href="{{ url_for('index') }}">Home</a></li>
+			<li><a href="{{ url_for('simsviewer.overview') }}">Sim Data</a></li>
+			#}
 			{% block navbarlinks %}{% endblock %}
 		    </ul>
 		    {% block navbarextra %}{% endblock %}

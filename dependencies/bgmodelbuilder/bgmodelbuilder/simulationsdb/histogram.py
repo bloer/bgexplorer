@@ -1,12 +1,20 @@
 import operator
 import numpy as np
+from ..common import units
 
 class Histogram(object):
     """2-tuple mimicking np.histogram structure, with operator overloads
     so that bins are not added/scaled etc 
     """
     def __init__(self, hist, bin_edges=None):
-        self.hist = np.array(hist)
+        # todo: make sure we don't steal an array? 
+        if isinstance(hist, units.Quantity):
+            if not isinstance(hist.m, np.ndarray):
+                hist = units.Quantity(np.array(hist.m), hist.u)
+        elif not isinstance(hist, np.ndarray):
+            hist = np.array(hist)
+            
+        self.hist = hist
         self.bin_edges = bin_edges
         if bin_edges is None:
             self.bin_edges = np.arange(len(self.hist))
@@ -114,7 +122,6 @@ class Histogram(object):
         except AttributeError:
             #how to tell the difference between a 2-tuple and 1D array???
             otherhist = other
-        
         if inplace:
             self.hist = op(self.hist, otherhist)
             return self
@@ -127,29 +134,32 @@ class Histogram(object):
     def __add__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.add)
+        try:
+            return self._combine(other, np.add)
+        except units.errors.DimensionalityError:
+            return self._combine(other, operator.add)
      
     def __sub__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.sub)
+        return self._combine(other, np.subtract)
     
     def __mul__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.mul)
+        return self._combine(other, np.multiply)
     
     def __floordiv__(self, other):
-        return self._combine(other, operator.floordiv)
+        return self._combine(other, np.floor_divide)
     
     def __truediv__(self, other):
-        return self._combine(other, operator.truediv)
+        return self._combine(other, np.true_divide)
     
     def __mod__(self, other):
-        return self._combine(other, operator.mod)
+        return self._combine(other, np.mod)
     
     def __pow__(self, other):
-        return self._combine(other, operator.pow)
+        return self._combine(other, np.power)
     
     #do we need logical/bitwise operators??
         
@@ -157,29 +167,29 @@ class Histogram(object):
     def __iadd__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.iadd, inplace=True)
+        return self._combine(other, np.add, inplace=True)
      
     def __isub__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.isub, inplace=True)
+        return self._combine(other, np.subtract, inplace=True)
     
     def __imul__(self, other):
         if other is None:
             other = 0
-        return self._combine(other, operator.imul, inplace=True)
+        return self._combine(other, np.multiply, inplace=True)
     
     def __ifloordiv__(self, other):
-        return self._combine(other, operator.ifloordiv, inplace=True)
+        return self._combine(other, np.floor_divide, inplace=True)
     
     def __itruediv__(self, other):
-        return self._combine(other, operator.itruediv, inplace=True)
+        return self._combine(other, np.true_divice, inplace=True)
     
     def __imod__(self, other):
-        return self._combine(other, operator.imod, inplace=True)
+        return self._combine(other, np.mod, inplace=True)
     
     def __ipow__(self, other):
-        return self._combine(other, operator.ipow, inplace=True)
+        return self._combine(other, np.power, inplace=True)
 
     #reverse binary operators
     #these should only ever be called if type(other) != type(self)
@@ -217,7 +227,7 @@ class Histogram(object):
         return self.__class__(-self.hist, self.bin_edges)
     
     def __abs__(self):
-        return self.__class__(abs(self.hist), self.bin_edges)
+        return self.__class__(np.abs(self.hist), self.bin_edges)
         
     
     

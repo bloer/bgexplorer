@@ -1,5 +1,7 @@
 {% extends "modelbase.html" %}
 
+{% from "simulationsoverview.html" import printdataset %}
+
 {% block mystyles %}
     <style>
 	td .breadcrumb { margin:0px; padding:0px }
@@ -20,18 +22,16 @@
 	</thead>
 	<tbody>{% for query, matches in queries.items() %}
         <tr class="simquery" >
-            <td>{{ query }}</td>
+            <td><a href="{{ url_for('simsviewer.overview',query=matches[0].query) }}">{{ query }}</a></td>
 
             <td>{% for match in matches %}
                 {%-  if loop.index0 > 0 %} | {% endif -%}
                 <a href="{{ url_for('.simdatamatchview', match=match) }}"> 
-                    {{ match.request.component.name }} 
+                    {{ match.component.name }} 
                 </a>
             {% endfor %}</td>
 
-            <td>{% for dataset, matches in matches | groupby('dataset') %}{% if dataset %}
-                <a href="{{ url_for('.datasetview',dataset=dataset) }}">{{ dataset }}</a>
-            {% endif %}{% endfor %}</td>
+            <td>{% for dataset, matches in matches | groupby('dataset') %}{{ printdataset(dataset) }}{% endfor %}</td>
 
             <td>{{ matches | sum(attribute='livetime') }}</td>
         </tr>
