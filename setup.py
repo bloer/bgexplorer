@@ -12,6 +12,7 @@ setup(name='bgexplorer',
           'bgexplorer': ['templates/*.html','static/*','static/*/*'],
           'bgexplorer.modeleditor': ['templates/*.html'],
           'bgexplorer.modelviewer':['templates/*.html','static/*','static/*/*'],
+          'bgexplorer.simsviewer':['templates/*.html'],
       },
       zip_safe=False,
       install_requires=[
