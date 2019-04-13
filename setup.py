@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='bgexplorer',
-      version='0.1',
+      version='0.2',
       description='Web app for exploring details of background modeling',
       url='http://github.com/bloer/bgexplorer',
       author='Ben Loer',
@@ -23,9 +23,9 @@ setup(name='bgexplorer',
           'pint',
           'numpy',
           'uncertainties',
-          'bgmodelbuilder==dev',
+          'bgmodelbuilder>=0.2',
       ],
       dependency_links=[
-          'git+https://github.com/bloer/bgmodelbuilder@develop#egg=bgmodelbuilder-dev',
+          'git+https://github.com/bloer/bgmodelbuilder@v0.2#egg=bgmodelbuilder-0.2',
       ],
 )
