@@ -159,9 +159,14 @@ class ModelDB(object):
             if '__modeldb_meta' in projection:
                 withmeta = projection['__modeldb_meta']
             projection['__modeldb_meta'] = True
-
-        result = self._collection.find_one(query, projection or None)
-        
+        sort = None
+        if '_id' not in query:
+            sort = [('_id', pymongo.DESCENDING)]
+            #if query only by name, don't look at temp models
+            if 'name' in query and 'version' not in query:
+                query['__modeldb_meta.temporary'] = False
+        result = self._collection.find_one(query, projection or None,
+                                           sort=sort)
         if not result:
             return None
 
