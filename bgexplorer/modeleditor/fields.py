@@ -57,10 +57,10 @@ class DictField(TextAreaField):
             for line in valuelist[0].split('\n'):
                 if not line.strip():
                     continue
-                colon = line.find(':')
+                colon = line.find('=')
                 if colon<=0:
                     raise ValidationError("Error at line '%s'; "
-                                          "Required format '<key>: <value>'"
+                                          "Required format '<key> = <value>'"
                                           %line)
                 key = line[:colon].strip()
                 val = line[colon+1:].strip()
@@ -78,7 +78,7 @@ class DictField(TextAreaField):
             for key, val in self.suggested_keys.items():
                 data.setdefault(key, val)
         
-        res = '\n'.join("%s: %s"%(k,v) for k,v in data.items())
+        res = '\n'.join("%s = %s"%(k,v) for k,v in data.items())
         return res
 
     @property
