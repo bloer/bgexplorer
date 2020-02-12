@@ -1,4 +1,22 @@
-{% extends "modelbase.html" %}
+{% extends "dashboardbase.html" %}
+
+{% from "macros.html" import printdataset, showevaluated %}
+
+{% block myscripts %}
+{{ super() }}
+{% if matches %}
+<script>
+var goodids = [{% for match in matches %}"{{ match.id }}", {% endfor %}];
+var db = bgexplorer.dashboard;
+db.prefilterfunc = function(row){
+    return goodids.indexOf(row.ID) != -1;
+};
+</script>
+
+{{ showevaluated() }}
+{% endif %}
+{% endblock %}
+
 {% block title %}Emission Spec {{ spec.name }}{% endblock %}
 
 {% block pageheader %}
@@ -65,13 +83,15 @@
     <div class="col-md-6" >
 	    {% if datasets %}
 		<h3>Associated with simulation datasets:</h3>
-		<ul class="list-group" >{% for dataset in datasets %}
+        {{ printdataset(datasets) }}
+		{# <ul class="list-group" >{% for dataset in datasets %}
 		    <li class="dataset list-group-item">
-			<a href="{{ url_for('.datasetview', dataset=dataset) }}">{{ dataset }}</a>
+			<a href="{{ url_for('.datasetview', dataset=dataset) }}">{{ loop.index }}</a>
 		    </li>
-		{% endfor %}</ul>
+		{% endfor %}</ul> #}
 	    {% endif %}
 	    
 	</div><!-- end column -->
     </div><!-- end row -->
+
 {% endblock %}
