@@ -16,7 +16,7 @@ from .widgets import is_hidden_field
 from ..modeldb import ModelDB
 from bgmodelbuilder.component import Component, Assembly
 from bgmodelbuilder import emissionspec, bgmodel, units
-from ..utils import get_simsdb
+from ..utils import get_simsdb, getmodelordie, getcomponentordie, getspecordie
 
 
 SpecEntry = namedtuple("SpecEntry","cls form")
@@ -145,38 +145,6 @@ class ModelEditor(object):
         """Register global variables available to templates"""
         return dict(spectypes=list(self.specregistry.keys()))
     
-    ###### Utility functions for DB access ##########
-    def getmodelordie(self, modelid, toedit=True, bypasscache=False):
-        """try to get model with modelid from the db, else return 404. 
-        If we're trying to edit this model (toedit=True) and it's not temp,
-        return a 403 forbidden
-        """
-        #todo: enforce that the model is temporary
-        #model = self.modeldb.get_model(modelid, bypasscache=toedit)
-        model = self.modeldb.get_model(modelid, bypasscache=bypasscache)
-        if not model:
-            abort(404, "Model with ID %s not found"%modelid)
-        if toedit and not self.modeldb.is_model_temp(modelid):
-            abort(403, "Can not edit non-temporary model")
-            
-        return model
-
-    def getcomponentordie(self, model, compid):
-        """try to find the component with ID compid in model or return 404"""
-        comp = model.components.get(compid)
-        if not comp:
-            abort(404, "Model %s has no component with ID %s" 
-                  %(model._id, compid))
-        return comp
-
-    def getspecordie(self, model, specid):
-        """try to find the emissionspec with ID specid in model or return 404"""
-        spec = model.specs.get(specid)
-        if not spec:
-            abort(404, "Model %s has no component soec with ID %s" %
-                  (model._id, specid))
-        return spec
-
     def addlinks(self, form, modelid):
         """Replace names in subfield forms with links"""
         for field in form:
@@ -248,7 +216,7 @@ class ModelEditor(object):
     def editmodel(self, modelid):
         """return a page with forms for model editing"""
         bypasscache = request.args.get('bypasscache',False)
-        model = self.getmodelordie(modelid, toedit=True, 
+        model = getmodelordie(modelid, toedit=True, 
                                    bypasscache=bypasscache)
         return render_template('editmodel.html', model=model)
 
@@ -256,7 +224,7 @@ class ModelEditor(object):
         """Save the model to the DB, making sure all edit details fields 
         validated
         """
-        model = self.getmodelordie(modelid, toedit=True)
+        model = getmodelordie(modelid, toedit=True)
         form = forms.SaveModelForm(request.form, obj=model, prefix='savemodel')
         if request.method == 'POST' and form.validate():
             form.populate_obj(model)
@@ -299,17 +267,17 @@ class ModelEditor(object):
     # edit component (metadata, etc)
        
     def newcomponent(self, modelid):
-        model = self.getmodelordie(modelid, toedit=True)
+        model = getmodelordie(modelid, toedit=True)
         clonefrom = request.values.get('clonefrom')
         if clonefrom:
-            oldcomp = self.getcomponentordie(model, clonefrom)
+            oldcomp = getcomponentordie(model, clonefrom)
             newcomp = oldcomp.clone()
         else:
             newcomp = (Assembly() if request.values.get('class') == 'Assembly' 
                        else Component())
         parentid = request.values.get('parent')
         if parentid:
-            parent = self.getcomponentordie(model, parentid)
+            parent = getcomponentordie(model, parentid)
             replace = int(request.values.get('replaceAt',-1))
             if replace >= 0 and replace < len(parent.components):
                 placement = parent.components[replace]
@@ -325,8 +293,8 @@ class ModelEditor(object):
                                 componentid=newcomp.id))
         
     def delcomponent(self, modelid, componentid):
-        model = self.getmodelordie(modelid, toedit=True)
-        component = self.getcomponentordie(model, componentid)
+        model = getmodelordie(modelid, toedit=True)
+        component = getcomponentordie(model, componentid)
         #remove references from parents
         for placement in component.placements:
             if placement.parent:
@@ -337,9 +305,9 @@ class ModelEditor(object):
         return redirect(url_for('.editmodel', modelid=modelid))
 
     def newplacement(self, modelid, parentid, childid):
-        model = self.getmodelordie(modelid, toedit=True)
-        parent = self.getcomponentordie(model, parentid)
-        child = self.getcomponentordie(model, childid)
+        model = getmodelordie(modelid, toedit=True)
+        parent = getcomponentordie(model, parentid)
+        child = getcomponentordie(model, childid)
         #we also call this for rearranging; if we're already a child, remove it
         if child in parent.getcomponents(deep=False, withweights=False):
             parent.delcomponent(child)
@@ -351,19 +319,19 @@ class ModelEditor(object):
                                 componentid=parentid))
         
     def delplacement(self, modelid, parentid, index):
-        model = self.getmodelordie(modelid, toedit=True)
-        parent = self.getcomponentordie(model, parentid)
+        model = getmodelordie(modelid, toedit=True)
+        parent = getcomponentordie(model, parentid)
         parent.delcomponent(index)
         self.modeldb.write_model(model)
         return redirect(url_for('.editcomponent', modelid=modelid, 
                                 componentid=parentid))
 
     def newspec(self, modelid):
-        model = self.getmodelordie(modelid, toedit=True)
+        model = getmodelordie(modelid, toedit=True)
         newspec = None
         clonefrom = request.values.get('clonefrom')
         if clonefrom:
-            prior = self.getspecordie(model, clonefrom)
+            prior = getspecordie(model, clonefrom)
             newspec = prior.clone()
         else:
             spectype = request.values.get('type', 'RadioactiveContam')
@@ -376,8 +344,8 @@ class ModelEditor(object):
         return redirect(url_for('.editspec',modelid=modelid, specid=newspec.id))
 
     def delspec(self, modelid, specid):
-        model = self.getmodelordie(modelid, toedit=True)
-        spec = self.getspecordie(model, specid)
+        model = getmodelordie(modelid, toedit=True)
+        spec = getspecordie(model, specid)
         #remove all references
         for comp in list(spec.appliedto):
             comp.delspec(spec)
@@ -386,9 +354,9 @@ class ModelEditor(object):
         return redirect(url_for('.editmodel', modelid=modelid))
 
     def attachspec(self, modelid, compid, specid):
-        model = self.getmodelordie(modelid, toedit=True)
-        comp = self.getcomponentordie(model, compid)
-        spec = self.getspecordie(model, specid)
+        model = getmodelordie(modelid, toedit=True)
+        comp = getcomponentordie(model, compid)
+        spec = getspecordie(model, specid)
         index = request.values.get('index')
         comp.addspec(spec, index=index)
         self.modeldb.write_model(model)
@@ -396,16 +364,16 @@ class ModelEditor(object):
                                 componentid=compid))
 
     def detachspec(self, modelid, compid, index):
-        model = self.getmodelordie(modelid, toedit=True)
-        comp = self.getcomponentordie(model, compid)
+        model = getmodelordie(modelid, toedit=True)
+        comp = getcomponentordie(model, compid)
         comp.delspec(index)
         self.modeldb.write_model(model)
         return redirect(url_for('.editcomponent', modelid=modelid, 
                                 componentid=compid))
 
     def setquerymod(self, modelid, compid, specid):
-        model = self.getmodelordie(modelid, toedit=True)
-        comp = self.getcomponentordie(model, compid)
+        model = getmodelordie(modelid, toedit=True)
+        comp = getcomponentordie(model, compid)
         querymod = request.values.get('querymod')
         if querymod:
             if isinstance(querymod, str):
@@ -422,8 +390,8 @@ class ModelEditor(object):
     def editcomponent(self, modelid, componentid):
         """return a page with forms for component editing"""
         #todo: do we need to pass different forms for component types here? 
-        model = self.getmodelordie(modelid, toedit=True)
-        comp = self.getcomponentordie(model, componentid)
+        model = getmodelordie(modelid, toedit=True)
+        comp = getcomponentordie(model, componentid)
         form = forms.get_form(request.form, comp)
         if request.method == 'POST':
             if form.validate():
@@ -454,8 +422,8 @@ class ModelEditor(object):
 
     def editspec(self, modelid, specid):
         """return a page with forms for componentspec editing"""
-        model = self.getmodelordie(modelid, toedit=True)
-        spec = self.getspecordie(model, specid)
+        model = getmodelordie(modelid, toedit=True)
+        spec = getspecordie(model, specid)
         #find the correct form
         possibleforms = [entry.form for entry in self.specregistry.values()
                          if entry.cls == type(spec)]
@@ -495,7 +463,7 @@ class ModelEditor(object):
         if not simsdb:
             abort(501, "No registered SimulationsDB")
             
-        model = self.getmodelordie(modelid, toedit=False)
+        model = getmodelordie(modelid, toedit=False)
         try:
             matches = simsdb.updatesimdata(model)
         except units.errors.DimensionalityError as e:

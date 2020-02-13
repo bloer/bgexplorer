@@ -14,11 +14,11 @@ def get_modeldb(app=current_app):
         return None
     return app.extensions.get('ModelDB', None)
 
-def getmodelordie(query, modeldb=None, toedit=False):
+def getmodelordie(query, modeldb=None, toedit=False, bypasscache=False):
     modeldb = modeldb or get_modeldb()
     if not modeldb:
         abort(501, "No registered model database")
-    model = modeldb.get_model(query)
+    model = modeldb.get_model(query, bypasscache=bypasscache)
     if not model:
         abort(404, "Model not found for query %s"%query)
     if toedit and not modeldb.is_model_temp(model.id):
