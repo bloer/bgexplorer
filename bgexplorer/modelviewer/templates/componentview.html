@@ -1,6 +1,6 @@
-{% extends "modelbase.html" %}
+{% extends "dashboardbase.html" %}
 
-{% from "simulationsoverview.html" import printassemblypath %}
+{% from "macros.html" import printassemblypath, showevaluated %}
 
 {% set class = "Component" %}
 {% if component.components is defined %}
@@ -8,14 +8,44 @@
 {% endif %}
 
 {% block mystyles %}
+{{ super() }}
 <style>
  tr.spec { background-color:rgb(245, 245, 245) }
  tr.subspec { background-color:initial }
  tr.subspec td:first-child { padding-left: 2em; }
- tr.simdata td:first-child { padding-left: 4em; }
- 
+ tr.simdata td:first-child { padding-left: 4em; } 
 </style>
 {% endblock %}
+
+{% block myscripts %}
+{{ super() }}
+<script language="javascript">
+    {% set comppaths = g.model.assemblyroot.gethierarchyto(component,placements=True) or [] %}
+    var db = bgexplorer.dashboard;
+    {% if comppaths %}
+    var comptrees = [
+        {% for path in comppaths %}
+        [{% for p in path %}"{{ p.name }}", {% endfor %}],
+        {% endfor %}
+    ];
+    // filter the datatable for this component
+    db.prefilterfunc = function(row){
+        var rowpath = row.groups.Component;
+        return comptrees.some(function(path){
+            return path.every(function(d,i){ return rowpath[i] == d; });
+        });
+    }
+    db.config.defaulttabledepth = {{ 1 + comppaths|map('length')|max }};
+    {% endif %}
+    
+</script>
+
+{% if comppaths or component == g.model.assemblyroot %}
+    {{ showevaluated() }}
+{% endif %}
+
+{% endblock %}
+
 
 {% block title %}Component: {{ component.name }}{% endblock %}
 
@@ -113,6 +143,7 @@
 		<th>Simulated Livetime</th>
 	    </tr>
 	</thead>
+    <tbody>
     {% for boundspec in component.specs %}
 	<tr class="spec" >
 	    {{ speccells(boundspec.spec, link=True) }}
@@ -123,6 +154,8 @@
 	    </tr>
 	{% endfor %}{% endif %}
     {% endfor %}
+    </tbody>
+    </table>
     {% endif %}
     
 {% endblock %}

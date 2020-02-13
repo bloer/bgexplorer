@@ -96,12 +96,19 @@ dashboard.parserow = function(row){
     return out;
 };
     
+// override this to filter the data before building the crossfilter
+dashboard.prefilterfunc = null;
+
 
 //take the list of objects returned from parserows and construct the crossfiler
 // and d3 structures
 dashboard.processtable = function(error,rows){
     if(error){alert(error); throw error;}
-    
+    if(dashboard.prefilterfunc){
+        console.log("using prefilter function, initial size "+rows.length);
+        rows = rows.filter(dashboard.prefilterfunc);
+        console.log("filtered size "+rows.length)
+    }
     dashboard.data = rows
     
     var first = rows[0];
@@ -481,7 +488,7 @@ dashboard.updatetable = function(table){
             })
             .text(function(d){
                 var myval = d.node.valueAll[val];
-                if(myval == 0)
+                if(myval == 0 || d.node.valueAll.count == 0)
                     return "";
 
                 var myprecision = precision;

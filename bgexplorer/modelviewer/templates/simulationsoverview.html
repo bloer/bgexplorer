@@ -14,31 +14,9 @@
 {% endblock %}
 
 
-{% macro printdataset(dataset, name=None) %}
-    {% if dataset is iterable and dataset is not string %}
-	{% for ds in dataset %}
-	    {{ printdataset(ds, loop.index) }}
-	{% endfor %}
-    {% else %}
-	<a href="{{ url_for('simsviewer.detailview', dataset=dataset) }}">{{ name or dataset }}</a>
-    {% endif %}
-{% endmacro %}
+{% from "macros.html" import printdataset, printassemblypath %}
 
-{% macro printassemblypath(assemblyPath) %}
-    <ol class="breadcrumb placementmath">
-	{% for placement in assemblyPath %}
-	    {% if loop.index0 == 0 %}
-		<li class="breadcrumb-item component assembly">
-		    <a href="{{ url_for('.componentview', component=placement.parent) }}">{{ placement.parent.name }}
-		    </a>
-		</li>
-	    {% endif %}
-	    <li class="breadcrumb-item component">
-		<a href="{{ url_for('.componentview', component=placement.component) }}">{{ placement.name }}{% if placement.weight != 1 %} ({{ placement.weight }}){% endif %}</a>
-	    </li>
-	{% endfor %}
-    </ol>
-{% endmacro %}
+
 
 {% block pagecontent %}
     <table class="table" id="simdatatable">

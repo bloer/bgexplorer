@@ -1,7 +1,18 @@
-{% extends "modelbase.html" %}
+{% extends "dashboardbase.html" %}
 
 
-{% from "simulationsoverview.html" import printdataset, printassemblypath %}
+{% from "macros.html" import printdataset, printassemblypath, showevaluated %}
+
+{% block myscripts %}
+{{ super() }}
+<script>
+    var db = bgexplorer.dashboard;
+    db.prefilterfunc = function(row){ return row.ID == "{{ match.id }}"; };
+</script>
+{{ showevaluated() }}
+{% endblock %}
+
+
 
 {% block title %}Sim Data Query{% endblock %}
 
@@ -47,5 +58,6 @@
 	</div><!-- end col-md-6 for database info -->
 
     </div><!-- end row -->
-    
+
+
 {% endblock %}

@@ -26,6 +26,12 @@ class ModelViewer(object):
         goupsort (dict): Sorting function in the form of a list of expected 
                          values. Will be passed to javascript functions
         values (dict): Value functions to evaluate for all simdatamatches
+        values_units (dict): optional  dict of units to render values in the 
+                             cached datatable
+        spectra (dict): Functions to generate spectra for all simdatamatches
+        spectra_units (dict): render spectra in the specified units
+        values_spectra (dict): if an entry in `values` is associated to an
+                               entry in `spectra`, generate a link
     """
     defaultversion='HEAD'
     defaultgroups = {
@@ -40,7 +46,8 @@ class ModelViewer(object):
     def __init__(self, app=None, modeldb=None, simsdb=None,
                  cacher=InMemoryCacher(),
                  url_prefix='/explore', groups=None, groupsort=None,
-                 values=None, values_units=None):
+                 values=None, values_units=None,
+                 spectra=None, spectra_units=None, values_spectra=None):
         self.app = app
         self._modeldb = modeldb
         self._simsdb = simsdb
@@ -62,6 +69,9 @@ class ModelViewer(object):
         self.groupsort = groupsort or {}
         self.values = values or {}
         self.values_units = values_units or {}
+        self.spectra = spectra or {}
+        self.spectra_units = spectra_units or {}
+        self.values_spectra = values_spectra or {}
         self._threads = {}
         self._cacher = cacher
         #### User Overrides ####
@@ -95,6 +105,8 @@ class ModelViewer(object):
         """process model objects into URL strings, and pre-load models 
         into the `flask.g` object before passing to endpoint functions
         """
+        # TODO: add browser cache control
+        
         @self.bp.url_defaults
         def add_model(endpoint, values):
             model = values.pop('model', None) or g.get('model', None)
@@ -178,10 +190,14 @@ class ModelViewer(object):
         def emissionview(specid):
             spec = utils.getspecordie(g.model, specid)
             #find all simulation datasets associated to this spec
-            matches = g.model.getsimdata(spec=spec)
+            matches = []
+            if spec.getrootspec() == spec:
+                matches = g.model.getsimdata(rootspec=spec)
+            else:
+                matches = g.model.getsimdata(spec=spec)
             datasets = sum((m.dataset or [] for m in matches), [])
-            return render_template('emissionview.html', spec=spec, 
-                                   datasets=datasets)
+            return render_template('emissionview.html', spec=spec,
+                                   matches=matches, datasets=datasets)
 
         @self.bp.route('/simulations/')
         def simulationsoverview():
@@ -363,3 +379,40 @@ class ModelViewer(object):
         if 'Component' not in res:
             res['Component'] = self.get_componentsort(g.model.assemblyroot)
         return res
+
+    def eval_matches(self, matches, dovals=True, dospectra=False):
+        """ Evaluate `matches` for all registered values and specs
+        Args:
+            matches: list of SimDataMatch objects to evaluate
+            dovals (bool): include entries from `self.values` ?
+            dospectra (bool): include entries from `self.spectra` ? 
+        Returns:
+            values (dict): dictionary mapping of keys in `self.values` and
+                           `self.spectra` to evaluated results. If a key in
+                           `spectra` conflicts with one in values, it will be
+                           renamed to "spectrum_<key>"
+        """
+        vals = dict(**self.values) if dovals else {}
+        if dospectra:
+            for key, spectrum in self.spectra.items():
+                if key in vals:
+                    key = f'spectrum_{key}'
+                vals[key] = spectrum
+        result =  dict(zip(vals.keys(),
+                           self.simsdb.evaluate(vals.values(), matches)))
+        if dovals:
+            for key, unit in self.values_units.items():
+                try:
+                    result[key].ito(unit)
+                except AttributeError:
+                    pass
+        if dospectra:
+            for key, unit in self.spectra_units.items():
+                if dovals and key in self.values:
+                    key = f'spectrum_{key}'
+                try:
+                    result[key].ito(unit)
+                except AttributeError:
+                    pass
+        return result
+        

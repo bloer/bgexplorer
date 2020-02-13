@@ -66,7 +66,7 @@
 
 {% block pagecontent %}
     <div id="loading" style="opacity:0" >
-        <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }}
+        {# <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }} #}
         <p style="color:red" >Performing map-reduce on simulated data. This may take up to a few minutes</p>
     </div>
 {% endblock %}
