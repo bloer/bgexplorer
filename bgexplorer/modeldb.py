@@ -236,7 +236,7 @@ class ModelDB(object):
         #if we get here, it's not cached
         raw = self.get_raw_model(query, projection)
         model = BgModel.buildfromdict(raw) if raw else None
-        if model:
+        if model and not self.is_model_temp(model.id):
             self._cacher.store(model.id, model)
         return model
 
