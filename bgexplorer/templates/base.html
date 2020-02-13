@@ -65,14 +65,14 @@
 	<nav class="navbar navbar-default" id="navbartop" >
 	    <div class="container-fluid" >
 		<div class="navbar-header">
+            {% block mybrand %} {% include 'mybrand.html' ignore missing %} {% endblock %}
 		    <a class="navbar-left" href="https://bgexplorer.readthedocs.io/en/develop">
 			{% block brand %}
 			<img src="{{ url_for('static', filename="bgexplorer_brand.png") }}" alt="Background Explorer" 
 			class="brand" >
 			{% endblock %}
 		    </a>
-		    <a class="navbar-brand" href="{% block mybrandurl %}{% endblock %}">{% block mybrand %}{% endblock %}</a>
-		</div>
+        </div>
 		<div class="collapse navbar-collapse" id="navbarcontent" >
 		    <ul class="nav navbar-nav" >
 			{{ navbaritem(url_for('index'),"Home") }}
