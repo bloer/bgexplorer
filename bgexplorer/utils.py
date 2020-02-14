@@ -18,6 +18,8 @@ def getmodelordie(query, modeldb=None, toedit=False, bypasscache=False):
     modeldb = modeldb or get_modeldb()
     if not modeldb:
         abort(501, "No registered model database")
+    if toedit:
+        bypasscache=True
     model = modeldb.get_model(query, bypasscache=bypasscache)
     if not model:
         abort(404, "Model not found for query %s"%query)

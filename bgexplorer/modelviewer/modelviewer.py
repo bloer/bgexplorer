@@ -3,7 +3,7 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from itertools import chain
 from flask import (Blueprint, render_template, request, abort, url_for, g, 
-                   Response)
+                   Response, make_response)
 import threading
 import zlib
 import json
@@ -105,7 +105,26 @@ class ModelViewer(object):
         """process model objects into URL strings, and pre-load models 
         into the `flask.g` object before passing to endpoint functions
         """
-        # TODO: add browser cache control
+        def make_etag(model):
+            """ Generate a string to use as an etag """
+            try:
+                return f"{model.id}-{model.editDetails['date']}"
+            except AttributeError:
+                # this should be a dictionary...
+                return f"{model['_id']}-{model['editDetails']['date']}"
+
+        @self.bp.after_request
+        def addpostheaders(response):
+            """ Add cache-control headers to all modelviewer responses """
+            if self.app.config.get('NO_CLIENT_CACHE'):
+                return
+            # todo: add Last-Modified
+            response.headers["Cache-Control"] = "private, max-age=100"
+            try:
+                response.headers['ETag'] = make_etag(g.model)
+            except (AttributeError, KeyError): # model is not loaded in g
+                pass
+            return response
         
         @self.bp.url_defaults
         def add_model(endpoint, values):
@@ -140,6 +159,7 @@ class ModelViewer(object):
 
         @self.bp.url_value_preprocessor
         def find_model(endpoint, values):
+            # URL has different formats that result in different queries
             query = None
             if 'modelid' in values:
                 query = values.pop('modelid')
@@ -152,6 +172,20 @@ class ModelViewer(object):
                     query['version'] = version
             if not query:
                 abort(400, "Incomplete model specification")
+
+            # this function is called before `before_requests`, but we don't
+            # want to extract the model if the client requested a cached
+            # view. So we have to do the cache checking here
+            etagreq = request.headers.get('If-None-Match')
+            if etagreq and not self.app.config.get('NO_CLIENT_CACHE'):
+                # construct the etag from the DB entry
+                projection = {'editDetails.date': True}
+                modeldict = self.modeldb.get_raw_model(query, projection)
+                etag = make_etag(modeldict)
+                if etagreq == etag:
+                    abort(make_response('', '304 Not Modified',{'ETag': etag}))
+
+            # if we get here, it's not in client cache
             g.model = utils.getmodelordie(query,self.modeldb)
             if version == self.defaultversion:
                 g.permalink = url_for(endpoint, permalink=True, 
