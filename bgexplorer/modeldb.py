@@ -338,7 +338,11 @@ class ModelDB(object):
         else:
             #model.pop('version',None)
             model['version'] = editDetails['date']
-                        
+
+        # when a temporary model becomes permanent, we give it a new ID so it
+        # timesorts properly, then delete the original 
+        deloldid = None
+
         if '_id' in model:
             self._cacher.expire(model['_id'])
             #can only overwrite existing models if temporary!
@@ -346,7 +350,14 @@ class ModelDB(object):
                 istemp = self.is_model_temp(model['_id'])
             except KeyError: #expected if model isn't in the DB already
                 istemp = False
-            if istemp:
+            if (not istemp) or (istemp and not temp):
+                if istemp:
+                    deloldid = model['_id']
+                else:
+                    model['derivedFrom'] = model['_id']
+                del model['_id']
+
+            else:
                 try:
                     res = self._collection.replace_one({'_id':model['_id']}, 
                                                        model)
@@ -360,9 +371,6 @@ class ModelDB(object):
                     #try again
                     res = self._collection.replace_one({'_id':model['_id']}, 
                                                        model)
-            else:
-                model['derivedFrom'] = model['_id']
-                del model['_id']
 
         #can't use elif since might have been removed in previous step
         if '_id' not in model: 
@@ -377,6 +385,9 @@ class ModelDB(object):
                 model['__modeldb_meta']['encodedkeys'] = registry
                 #try again
                 res = self._collection.insert_one(model)
+
+        if deloldid:
+            self.del_model(deloldid)
 
         #todo: test the response!
         return model.get('_id')
@@ -450,7 +461,7 @@ class ModelDB(object):
             projection.update({'temporary': '$__modeldb_meta.temporary'})
         pipeline.append({'$sort': 
                          OrderedDict((('name',pymongo.ASCENDING),
-                                      ('version',pymongo.DESCENDING)))
+                                      ('_id',pymongo.DESCENDING)))
                          })
         if mostrecentonly:
             pipeline.extend([
