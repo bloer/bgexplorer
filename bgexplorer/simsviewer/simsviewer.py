@@ -1,10 +1,10 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from flask import (Blueprint, render_template, render_template_string,
-                   request, abort, url_for, g, 
+                   request, abort, url_for, g, json,
                    Response)
 from .. import utils
-import json
+#import json
 
 
 def findsimmatches(dataset, model=None):
@@ -69,7 +69,7 @@ class SimsViewer(object):
                     args = request.args.copy()
                     args['query'] = json.loads(args['query'])
                     request.args = args
-                except (KeyError, json.JSONDecodeError):
+                except (KeyError, json._json.JSONDecodeError):
                     pass
         
         self.register_endpoints()
@@ -103,8 +103,11 @@ class SimsViewer(object):
         @self.bp.route('/')
         def overview():
             query = request.args.get('query',None)
-            sims = list(self.simsdb.runquery(query, 
-                                             projection=self.summarypro))
+            try:
+                sims = list(self.simsdb.runquery(query, 
+                                                projection=self.summarypro))
+            except Exception as e:
+                abort(400, "Invalid query specifier")
             columns = self.summarycolumns or []
             if sims and not columns:
                 #non-underscore keys with string or number values
@@ -128,4 +131,4 @@ class SimsViewer(object):
         def rawview(dataset):
             """Export the dataset as raw JSON"""
             detail = self.simsdb.getdatasetdetails(dataset)
-            return Response(json.dumps(detail), mimetype='application/json')
+            return json.jsonify(detail)

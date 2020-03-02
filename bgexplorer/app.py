@@ -1,10 +1,11 @@
-from flask import Flask, render_template, Blueprint
+from flask import Flask, render_template, Blueprint, json
 from flask_bootstrap import Bootstrap
 from flask_basicauth import BasicAuth
 import itertools
 import inspect
 import os
 import logging
+from bson import ObjectId
 
 from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
@@ -12,6 +13,24 @@ from .simsviewer.simsviewer import SimsViewer
 from .modeldb import ModelDB
 from bgmodelbuilder.common import units as ureg
 from .utils import getobjectid
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return {'__OID__': str(o)}
+        return super().default(o)
+
+def decode_object_hook(obj):
+    try:
+        return ObjectId(obj['__OID__'])
+    except KeyError:
+        return obj
+
+class CustomJSONDecoder(json.JSONDecoder):
+    def __init__(self, **kwargs):
+        kwargs.pop('object_hook', None)
+        super().__init__(object_hook=decode_object_hook, **kwargs)
+
 
 def create_app(config_filename=None, simsdb=None, instance_path=None,
                groups=None, groupsort=None, values=None, values_units=None):
@@ -41,6 +60,10 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
     if config_filename:
         app.config.from_pyfile(config_filename)
     BasicAuth(app)
+
+    # override json encode/decode to handle object IDs
+    app.json_encoder = CustomJSONEncoder
+    app.json_decoder = CustomJSONDecoder
 
     #set up logging
     logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
