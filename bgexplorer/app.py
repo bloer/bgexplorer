@@ -1,10 +1,11 @@
-from flask import Flask, render_template, Blueprint, json
+from flask import Flask, render_template, Blueprint, json, flash, redirect, url_for
 from flask_bootstrap import Bootstrap
 from flask_basicauth import BasicAuth
 import itertools
 import inspect
 import os
 import logging
+import functools
 from bson import ObjectId
 
 from .modeleditor.modeleditor import ModelEditor
@@ -14,42 +15,57 @@ from .modeldb import ModelDB
 from bgmodelbuilder.common import units as ureg
 from .utils import getobjectid
 
+from flask.json.tag import JSONTag
+
+class TagObjectId(JSONTag):
+    key = '__OID__'
+
+    def check(self, value):
+        return isinstance(value, ObjectId)
+
+    def to_json(self, value):
+        return str(value)
+
+    def to_python(self, value):
+        return ObjectId(value)
+
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, ObjectId):
             return {'__OID__': str(o)}
         return super().default(o)
 
-def decode_object_hook(obj):
+def decode_object_hook(obj, base=None):
     try:
         return ObjectId(obj['__OID__'])
     except KeyError:
-        return obj
+        return obj if base is None else base(obj)
 
 class CustomJSONDecoder(json.JSONDecoder):
     def __init__(self, **kwargs):
-        kwargs.pop('object_hook', None)
-        super().__init__(object_hook=decode_object_hook, **kwargs)
+        baseoh = kwargs.pop('object_hook', None)
+        oh = functools.partial(decode_object_hook, base=baseoh)
+        super().__init__(object_hook=oh, **kwargs)
 
 
 def create_app(config_filename=None, simsdb=None, instance_path=None,
                groups=None, groupsort=None, values=None, values_units=None):
-    """Create the Flask application and bind blueprints. 
-    
+    """Create the Flask application and bind blueprints.
+
     Args:
-        config_filename (str): filename to use for configuration. If 
-                               instance_path is None, will be in bgexplorer's 
+        config_filename (str): filename to use for configuration. If
+                               instance_path is None, will be in bgexplorer's
                                local directory
-        simsdb: A SimulationsDB concrete instance. Can be bound to app 
+        simsdb: A SimulationsDB concrete instance. Can be bound to app
                 later by `simsdb.init_app(app)`
-        instance_path (str): location to look for config files. 
+        instance_path (str): location to look for config files.
         groups: dictionary of grouping functions to cache on all simdatamtches
         groupsort: dictionary of lists to sort group values
         values: dictionary of value functions to cache on all simdatamatches
-        values_units: optional dictionary of units to render values in in the 
+        values_units: optional dictionary of units to render values in in the
                       cached datatable
-    
-    TODO: have instance_path default to PWD? 
+
+    TODO: have instance_path default to PWD?
     """
     #if instance_path is not explicitly defined, use the caller's path
     if instance_path is None:
@@ -64,6 +80,7 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
     # override json encode/decode to handle object IDs
     app.json_encoder = CustomJSONEncoder
     app.json_decoder = CustomJSONDecoder
+    app.session_interface.serializer.register(TagObjectId, index=0)
 
     #set up logging
     logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -82,25 +99,25 @@ def create_app(config_filename=None, simsdb=None, instance_path=None,
             formatter = logging.Formatter(format)
             file_handler.setFormatter(formatter)
             app.logger.addHandler(file_handler)
-    
-        
+
+
     Bootstrap(app)
     modeldb = ModelDB(app=app)
     #register custom templates first so they can override
-    app.register_blueprint(Blueprint('custom', instance_path, 
-                                     static_folder='static', 
-                                     template_folder='templates', 
+    app.register_blueprint(Blueprint('custom', instance_path,
+                                     static_folder='static',
+                                     template_folder='templates',
                                      url_prefix='/custom'))
     modeleditor = ModelEditor(app=app, modeldb=modeldb)
     modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb,
-                              groups=groups, groupsort=groupsort,values=values, 
+                              groups=groups, groupsort=groupsort,values=values,
                               values_units=values_units)
     simsviewer = SimsViewer(app=app, simsdb=simsdb)
     if simsdb:
         simsdb.init_app(app)
-        
+
     app.add_template_filter(getobjectid, 'id')
-        
+
     @app.route('/')
     def index():
         models = modeldb.get_models_list(includetemp=True, mostrecentonly=False)
