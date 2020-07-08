@@ -2,20 +2,20 @@
 
 {% macro navbaritem(url, label) %}
     <li {% if request.path|urlencode == url %}class="active"{% endif %}>
-	<a href="{{ url }}">{{ label }} </a>
+    <a href="{{ url }}">{{ label }} </a>
     </li>
 {% endmacro %}
 
 {% macro navbardropdown(label, items) %}
 {# Create a dropdown menu in the navbar.  `items` is a list of url, label pairs
  #}
-{% set active = request.path|urlencode in items|map(attribute=0) %} 
+{% set active = request.path|urlencode in items|map(attribute=0) %}
 <li class="dropdown {% if active %}active{% endif %}" >
     <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-	{{ label }}<span class="caret"></span>
+    {{ label }}<span class="caret"></span>
     </a>
     <ul class="dropdown-menu">{% for url, sublabel in items %}
-	{{ navbaritem(url, sublabel) }}
+    {{ navbaritem(url, sublabel) }}
     {% endfor %}</ul>
 </li>
 {% endmacro %}
@@ -26,93 +26,91 @@
 {%- block html %}
   <head>
     {%- block head %}
-	<title>{% block title %}{{title|default}}{% endblock title %}</title>
+    <title>{% block title %}{{title|default}}{% endblock title %}</title>
 
-	{%- block metas %}
-	    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	    <link rel="icon" href="{{ url_for('static', filename="favicon.ico") }}">
-	{%- endblock metas %}
+    {%- block metas %}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="icon" href="{{ url_for('static', filename="favicon.ico") }}">
+    {%- endblock metas %}
 
-	{%- block styles %}
-	    <!-- Bootstrap -->
+    {%- block styles %}
+        <!-- Bootstrap -->
         <link href="{{ url_for('static',filename='css/bootstrap.min.css') }}" rel="stylesheet">
-	    <style>
-	     html, body {height:100%}
-	     body {background-color: #D9EDF7} 
+        <style>
+         html, body {height:100%}
+         body {background-color: #D9EDF7}
          h1 {margin-top:0px}
          div.page-header {margin: 10px 0 10px ; padding-bottom: 4px }
-	     #content {background-color: white; margin-top:0px; min-height:90%}
-	     nav.navbar { margin-bottom: 0px; background-color: #FCF8E3}
-	     nav img {max-height:50px}
+         #content {background-color: white; margin-top:0px; min-height:90%}
+         nav.navbar { margin-bottom: 0px; background-color: #FCF8E3}
+         nav img {max-height:50px}
          .table-condensed { font-size:small; }
-	     #messages {position:absolute; top:30px; right:2px; width:30%; z-index: 1}
-	    </style>
-	    {% block mystyles %}{% endblock %}
-	{%- endblock styles %}
-	
-	{% block scripts %}
+         #messages {position:absolute; top:30px; right:2px; width:30%; z-index: 1}
+        </style>
+        {% block mystyles %}{% endblock %}
+    {%- endblock styles %}
+
+    {% block scripts %}
         <script src="{{ url_for('static',filename='js/jquery.min.js') }}"></script>
-        <script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>        
-	    {% block myscripts %}{% endblock %}
-	{%- endblock scripts %}	
-    
+        <script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>
+        {% block myscripts %}{% endblock %}
+    {%- endblock scripts %}
+
     {%- endblock head %}
   </head>
   <body{% block body_attribs %}{% endblock body_attribs %}>
     {% block body -%}
 
     {% block navbar %}
-	<nav class="navbar navbar-default" id="navbartop" >
-	    <div class="container-fluid" >
-		<div class="navbar-header">
+    <nav class="navbar navbar-default" id="navbartop" >
+        <div class="container-fluid" >
+        <div class="navbar-header">
             {% block mybrand %} {% include 'mybrand.html' ignore missing %} {% endblock %}
-		    <a class="navbar-left" href="https://bgexplorer.readthedocs.io/en/develop">
-			{% block brand %}
-			<img src="{{ url_for('static', filename="bgexplorer_brand.png") }}" alt="Background Explorer" 
-			class="brand" >
-			{% endblock %}
-		    </a>
+            <a class="navbar-left" href="https://bgexplorer.readthedocs.io/en/develop">
+            {% block brand %}
+            <img src="{{ url_for('static', filename="bgexplorer_brand.png") }}" alt="Background Explorer"
+            class="brand" >
+            {% endblock %}
+            </a>
         </div>
-		<div class="collapse navbar-collapse" id="navbarcontent" >
-		    <ul class="nav navbar-nav" >
-			{{ navbaritem(url_for('index'),"Home") }}
-			{{ navbaritem(url_for('simsviewer.overview'),"Sim Data") }}
-			{# <li><a href="{{ url_for('index') }}">Home</a></li>
-			<li><a href="{{ url_for('simsviewer.overview') }}">Sim Data</a></li>
-			#}
-			{% block navbarlinks %}{% endblock %}
-		    </ul>
-		    {% block navbarextra %}{% endblock %}
-		    {% if g.permalink %}
-			<ul class="nav navbar-nav navbar-right" >
-			    <li><a id="permalink" href="{{ g.permalink }}"><small>permalink to this page</small></a></li>
-			</ul>
-		    {% endif %}
-		</div>
-	    </div>
-	</nav>
+        <div class="collapse navbar-collapse" id="navbarcontent" >
+            <ul class="nav navbar-nav" >
+            {{ navbaritem(url_for('index'),"Home") }}
+            {{ navbaritem(url_for('simsviewer.overview'),"Sim Data") }}
+            {# <li><a href="{{ url_for('index') }}">Home</a></li>
+            <li><a href="{{ url_for('simsviewer.overview') }}">Sim Data</a></li>
+            #}
+            {% block navbarlinks %}{% endblock %}
+            </ul>
+            {% block navbarextra %}{% endblock %}
+            {% if g.permalink %}
+            <ul class="nav navbar-nav navbar-right" >
+                <li><a id="permalink" href="{{ g.permalink }}"><small>permalink to this page</small></a></li>
+            </ul>
+            {% endif %}
+        </div>
+        </div>
+    </nav>
 
     {%- endblock navbar %}
 
     {% block content -%}
-	<div id="content" class="container">
-	    <div id="messages" class="clearfix" >
-		{% for cat,msg in get_flashed_messages(with_categories=true) %}
-		    <div class="alert alert-{{ cat }} alert-dismissable" >
-			{{ msg }}
-			    <a href="#"  class="close" data-dismiss="alert" >
-			    &times;
-			    </a>
-		    </div>
-		{% endfor %}
-	    </div>
-	    <div id="pageheader" class="page-header clearfix" >{% block pageheader %}{% endblock %}</div>
-	    <div id="pagecontent" class="clearfix" >{% block pagecontent %}{% endblock %}</div>
-	    <div id="footer" >
-		{% block pagefooter %}{% endblock %}
-	    </div>
-	</div>
-    {%- endblock content %}    
+    <div id="content" class="container">
+        <div id="messages" class="clearfix" >
+        {% for cat,msg in get_flashed_messages(with_categories=true) %}
+            <div class="alert alert-{{ cat | replace('error','danger') }} alert-dismissable" >
+                {{ msg }}
+                <a href="#"  class="close" data-dismiss="alert" >&times;</a>
+            </div>
+        {% endfor %}
+        </div>
+        <div id="pageheader" class="page-header clearfix" >{% block pageheader %}{% endblock %}</div>
+        <div id="pagecontent" class="clearfix" >{% block pagecontent %}{% endblock %}</div>
+        <div id="footer" >
+        {% block pagefooter %}{% endblock %}
+        </div>
+    </div>
+    {%- endblock content %}
 
     {%- endblock body %}
   </body>
