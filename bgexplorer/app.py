@@ -6,7 +6,7 @@ import inspect
 import os
 import logging
 import functools
-from bson import ObjectId
+from bson import ObjectId, json_util
 
 from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
@@ -18,7 +18,7 @@ from .utils import getobjectid
 from flask.json.tag import JSONTag
 
 class TagObjectId(JSONTag):
-    key = '__OID__'
+    key = '$oid'
 
     def check(self, value):
         return isinstance(value, ObjectId)
@@ -31,15 +31,11 @@ class TagObjectId(JSONTag):
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, ObjectId):
-            return {'__OID__': str(o)}
-        return super().default(o)
+        return json_util.default(o)
 
 def decode_object_hook(obj, base=None):
-    try:
-        return ObjectId(obj['__OID__'])
-    except KeyError:
-        return obj if base is None else base(obj)
+    obj = json_util.object_hook(obj)
+    return obj if base is None else base(obj)
 
 class CustomJSONDecoder(json.JSONDecoder):
     def __init__(self, **kwargs):
