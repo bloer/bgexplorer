@@ -3,21 +3,27 @@
 {% block title %}Simulations Overview{% endblock %}
 
 {% block pageheader %}
-    <h1> Simulation Database </h1>
+    <h1> Simulation Database
+    {% if not temp and getsimsviewer().enable_upload %}
+    <div class="pull-right float-right">
+        <a class="btn btn-success" href="{{ url_for('.upload') }}">Upload new entries</a>
+    </div>
+    {% endif %}
+    </h1>
 {% endblock %}
 
 {% block mystyles %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}"> 
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}">
     <style>
      .modelname {color:blue}
-     
+
      th {border:1px solid black}
      table.dataTable tbody td {white-space: nowrap; padding: 4px 4px}
      table tbody tr.assembly {background-color:#f5f5f5}
      tr.assembly td:nth-child(2)::after {content:"↴"; padding-left:0.15em; color:green;}
      .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
      .truncate:hover {white-space: normal}
-      
+
      div.dt-buttons { float:left;}
      div.dt-buttons a.btn {font-size:small}
      /*#simdata_filter { display:inline-block; float:right}*/
@@ -27,59 +33,106 @@
 
 
 {% block myscripts %}
-    <script type="text/javascript" 
-	    src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}">
+    <script type="text/javascript"
+        src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}">
     </script>
     <script type="text/javascript">
      $(document).ready(function(){
-	 var table = $('#simdata').DataTable({
-	     paging: false,
+       var table = $('#simdata').DataTable({
+         paging: false,
              ordering: true,
              scrollY: $(window).height() - $("#pagecontent").offset().top - 95,
              scrollX: true,
              scrollCollapse: true,
-	     dom: 'flrtip',
+         dom: 'flrtip',
              //dom: 'B<"clear">lfrtip',
-	     //buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv', 
+         //buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv',
              //           {
              //               extend: 'excel',
              //           } ],
          });
+       $(".showdetail").click(function(){
+         var sim = $(this).parents("tr.simdatarow").find("input.simjson").val();
+         sim = JSON.stringify(JSON.parse(sim), null, 2);
+         $("#modalDetailBody").html("<pre>"+sim+"</pre>");
+         $("#modalDetail").modal();
+         });
      });
-	 
+
     </script>
 {% endblock %}
 
 
 {% block pagecontent %}
     {% if query %}
-	<div id="query" > Showing results for query  "{{ query }}"</div>
+    <div id="query" > Showing results for query  "{{ query }}"</div>
     {% endif %}
     {% if sims %}
-	{% if not colnames %}
-	{% set colnames = sims[0].keys() | reject("equalto","id") | list %}
-	{% endif %}
-	<table id="simdata"  class="table table-condensed table-bordered" width="100%">
-	    <thead>
-		<tr><th></th>
-		    {% for col in colnames %}
-		    <th>{{ col }}</th>
-		    {% endfor %}
-		</tr>
-	    </thead>
-	    <tbody>{% for row in sims %}
-		<tr>
-		    <td>{% if row.id is defined %}
-			<a href="{{ url_for('.detailview',dataset=row.id) }}">
-			    <span class="glyphicon glyphicon-zoom-in" ></span></a>
-			{% endif %}
-		    </td>
-		    {% for col in colnames %}
-		    <td>{{ row.get(col,'') }}</td>
-		{% endfor %}</tr>
-	    {% endfor %}</tbody>
-	</table>
+    {% if not colnames %}
+    {% set colnames = sims[0].keys() | reject("equalto","id") | list %}
+    {% endif %}
+    {% if temp %}
+    <form action="{{ url_for('.confirmupload') }}" method="POST">
+    {% endif %}
+    <table id="simdata"  class="table table-condensed table-bordered" width="100%">
+        <thead>
+        <tr><th></th>
+            {% for col in colnames %}
+            <th>{{ col }}</th>
+            {% endfor %}
+            {% if temp %}
+            <th>Save?</th>
+            {% endif %}
+        </tr>
+        </thead>
+        <tbody>{% for row in sims %}
+        <tr class="simdatarow">
+            <td>
+                {% if temp %}
+                    <span class="glyphicon glyphicon-zoom-in showdetail"></span>
+                {% elif row.id is defined %}
+                    <a href="{{ url_for('.detailview',dataset=row.id) }}">
+                        <span class="glyphicon glyphicon-zoom-in" ></span>
+                    </a>
+                {% endif %}
+            </td>
+            {% for col in colnames %}
+            <td>{{ row.get(col,'') }}</td>
+            {% endfor %}
+            {% if temp %}
+            <td class="form-check">
+                <input type="text" hidden="true" class="simjson" name="simdata{{ loop.index0 }}"
+                        value='{{ row|tojson }}'>
+                <input type="checkbox" checked class="form-check-input saveentry" name="confirm{{ loop.index0 }}">
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}</tbody>
+    </table>
+    {% if temp %}
+    <button class="btn btn-primary float-right pull-right" type="submit" >Save</button>
+    </form>
+    {% endif %}
     {% else %}
     <span class="error" >No simulation data found</span>
+    {% endif %}
+
+    {# inline preview for temporary uploads #}
+    {% if temp %}
+    <div class="modal fade" tabindex="-1" role="dialog" id="modalDetail">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Detail View
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+            </h5>
+          </div>
+          <div class="modal-body" id="modalDetailBody">
+          </div>
+        </div>
+      </div>
+    </div>
     {% endif %}
 {% endblock %}

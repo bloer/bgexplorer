@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Sim Data{% endblock %}
+
+{% block pageheader %}
+    <h1> Upload Sim Data </h1>
+{% endblock %}
+
+{% block mystyles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}"> 
+    <style>
+     .modelname {color:blue}
+     
+     th {border:1px solid black}
+     table.dataTable tbody td {white-space: nowrap; padding: 4px 4px}
+     table tbody tr.assembly {background-color:#f5f5f5}
+     tr.assembly td:nth-child(2)::after {content:"↴"; padding-left:0.15em; color:green;}
+     .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
+     .truncate:hover {white-space: normal}
+      
+     div.dt-buttons { float:left;}
+     div.dt-buttons a.btn {font-size:small}
+     /*#simdata_filter { display:inline-block; float:right}*/
+     #simdata_wrapper {font-size:smaller}
+    </style>
+{% endblock %}
+
+
+{% block myscripts %}
+    <script type="text/javascript" 
+	    src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}">
+    </script>
+    <script type="text/javascript">
+     $(document).ready(function(){
+       var table = $('#simdata').DataTable({
+	     paging: false,
+             ordering: true,
+             scrollY: $(window).height() - $("#pagecontent").offset().top - 95,
+             scrollX: true,
+             scrollCollapse: true,
+	     dom: 'flrtip',
+             //dom: 'B<"clear">lfrtip',
+             //buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv', 
+             //           {
+             //               extend: 'excel',
+             //           } ],
+         });
+     });
+	 
+    </script>
+{% endblock %}
+
+
+{% block pagecontent %}
+  <h2>Insert new entries into the simulations database</h2>
+
+  <form action = "{{ url_for('.upload') }}" method = "POST" 
+        enctype = "multipart/form-data">
+    <div class="form-group">
+      <label class="control-label">Select file to upload</label>
+      <input type="file" class="form-control-file" multiple="true" name="fupload"
+              accept=".json, .json.gz, .tgz, .zip, .tar.gz">
+      <small id="filehelp" class="form-text text-muted">Files should be JSON or (g)zipped archives.</small>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
+</div>
+{% endblock %}
+
