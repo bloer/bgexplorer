@@ -1,10 +1,10 @@
 {% extends "modelbase.html" %}
 
-{% from "simulationsoverview.html" import printdataset %}
+{% from "macros.html" import printdataset %}
 
 {% block mystyles %}
     <style>
-	td .breadcrumb { margin:0px; padding:0px }
+    td .breadcrumb { margin:0px; padding:0px }
     </style>
 {% endblock %}
 
@@ -17,17 +17,17 @@
 
 {% block pagecontent %}
     <table class="table" id="querytable">
-	<thead>
-	    <tr><th>Query</th><th>Components<th>Datasets</th><th>Livetime</th></tr>
-	</thead>
-	<tbody>{% for query, matches in queries.items() %}
+    <thead>
+        <tr><th>Query</th><th>Components<th>Datasets</th><th>Livetime</th></tr>
+    </thead>
+    <tbody>{% for query, matches in queries.items() %}
         <tr class="simquery" >
             <td><a href="{{ url_for('simsviewer.overview',query=matches[0].query) }}">{{ query }}</a></td>
 
             <td>{% for match in matches %}
                 {%-  if loop.index0 > 0 %} | {% endif -%}
-                <a href="{{ url_for('.simdatamatchview', match=match) }}"> 
-                    {{ match.component.name }} 
+                <a href="{{ url_for('.simdatamatchview', match=match) }}">
+                    {{ match.component.name }}
                 </a>
             {% endfor %}</td>
 
@@ -35,7 +35,7 @@
 
             <td>{{ matches | sum(attribute='livetime') }}</td>
         </tr>
-        
+
     {% endfor %}</tbody>
     </table>
 {% endblock %}

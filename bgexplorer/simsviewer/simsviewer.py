@@ -45,15 +45,18 @@ class SimsViewer(object):
         summarycolumns (list): list of column names for summary page
         detailtemplate: path to template file for detailed simulation view
         enableupload (bool): if True, allow uploading new entries
+        uploadsummary (func): generate a summary projection from uploaded
+                              (json-generated) documents
     """
     def __init__(self, app=None, simsdb=None, url_prefix='/simulations',
                  summarypro=None, summarycolumns=None, detailtemplate=None,
-                 enableupload=True):
+                 enableupload=True, uploadsummary=None):
         self.app = app
         self._simsdb = simsdb
         self.summarypro = summarypro
         self.summarycolumns = summarycolumns
         self.enable_upload = enableupload
+        self.uploadsummary = uploadsummary
 
         self.bp = Blueprint('simsviewer', __name__,
                             static_folder='static',
@@ -157,9 +160,13 @@ class SimsViewer(object):
                 flist = request.files.getlist('fupload')
                 newentries = sum((self.parseupload(f) for f in flist), [])
                 if newentries:
-                    colnames = self.getcolnames(newentries)
-                    return render_template('simoverview.html', sims=newentries,
-                                           colnames=colnames, temp=True)
+                    sims = newentries
+                    if self.uploadsummary:
+                        sims = list(map(self.uploadsummary, newentries))
+                    colnames = self.getcolnames(sims)
+                    return render_template('simoverview.html', sims=sims,
+                                           colnames=colnames, temp=True,
+                                           fullentries=newentries)
                 else:
                     flash("No valid entries in uploaded files",'error')
             return render_template('uploadsimdata.html')
@@ -181,7 +188,8 @@ class SimsViewer(object):
                     numinserted += 1
                 except Exception as e:
                     flash("Database error occurred: %s"%e, 'error')
-            flash("%d sim data entries successfully added"%numinserted, 'info')
+            flash("%d sim data entries successfully added"%numinserted,
+                  'success' if numinserted > 0 else 'error')
             return redirect(url_for('.overview'))
 
     def parseupload(self, afile):
@@ -197,7 +205,7 @@ class SimsViewer(object):
             pass
         try:
             zf = zipfile.ZipFile(afile)
-            files = [zf.open(name) for name in zf.namelist()]
+            files = [_ZipExtSeekable(zf, name) for name in zf.namelist()]
         except zipfile.BadZipFile:
             afile.seek(0)
             pass
@@ -219,3 +227,20 @@ class SimsViewer(object):
             return result
         return list(filter(lambda x: x is not None, map(_load, files)))
 
+
+class _ZipExtSeekable(object):
+    """ Wrap a 3.6 ZipExtFile to emulate seek(0) """
+    def __init__(self, zipfile, name):
+        self.zipfile = zipfile
+        self.name = name
+        self.seek(0)
+
+    def seek(self, to, whence=None):
+        # only seek(0) is sensible
+        self.ext = self.zipfile.open(self.name)
+
+    def seekable(self):
+        return True
+
+    def __getattr__(self, attr):
+        return getattr(self.ext, attr)

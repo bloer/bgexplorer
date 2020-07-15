@@ -23,7 +23,7 @@ def is_hidden_field(field):
     return (is_hidden_field_filter(field)
             or isinstance(field.widget, HiddenInput)
             or getattr(field.widget,'input_type', None) == 'hidden')
- 
+
 
 class TableRow(object):
     """Render a FormField as a row in a table"""
@@ -50,10 +50,10 @@ class TableRow(object):
 
 class SortableTable(object):
     """
-    Create a table with sortable rows that returns the data as 
+    Create a table with sortable rows that returns the data as
     a JSON string
     """
-            
+
     def __call__(self, field, **kwargs):
         html = []
         id = kwargs.setdefault('id', field.id)
@@ -64,7 +64,7 @@ class SortableTable(object):
             name=field.short_name,
             id=field.id+'-template')
         boundform.process(None, unset_value)
-        
+
         #now make the table
         #Flask_Bootstrap wants to give this form-control class...
         kwargs['class'] = kwargs.get('class','').replace('form-control','')
@@ -83,7 +83,7 @@ class SortableTable(object):
         html.append('<tbody class="sortable">')
         for entry in field:
             html.append(TableRow()(entry, **{'data-prefix':field.short_name}))
-            
+
         #make a fake hidden form for cloning
         html.append(TableRow()(boundform, render_kw={'disabled':'disabled'},
                                **{'class':'hide template',
@@ -147,13 +147,13 @@ class SortableTable(object):
                     obj.children('tbody').append(row);
             }
             function sortIndices(container){
-                 $(container).children().not('.template').each(setindex); 
+                 $(container).children().not('.template').each(setindex);
             }
         </script>
         """)
         return HTMLString(''.join(html))
-        
-        
+
+
 class InputChoices(TextInput):
     def __init__(self, choices=None):
         self.choices = choices or []
@@ -199,6 +199,5 @@ class StaticIfExists(object):
                 field._value = types.MethodType(lambda self: self.data, field)
             if hasattr(field,'link'):
                 value = '<a href="%s">%s</a>'%(field.link, value)
-            return HTMLString(HiddenInput()(field, **kwargs)+
-                              '<p class="form-control-static">'+value
-                              +'</p')
+            return HiddenInput()(field, **kwargs)+\
+                   HTMLString('<p class="form-control-static">'+value+'</p')

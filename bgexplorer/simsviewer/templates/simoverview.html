@@ -6,7 +6,7 @@
     <h1> Simulation Database
     {% if not temp and getsimsviewer().enable_upload %}
     <div class="pull-right float-right">
-        <a class="btn btn-success" href="{{ url_for('.upload') }}">Upload new entries</a>
+        <a class="btn btn-primary" href="{{ url_for('.upload') }}">Upload new entries</a>
     </div>
     {% endif %}
     </h1>
@@ -14,6 +14,7 @@
 
 {% block mystyles %}
     <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/jquery.json-viewer.css') }}">
     <style>
      .modelname {color:blue}
 
@@ -36,6 +37,9 @@
     <script type="text/javascript"
         src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}">
     </script>
+    <script type="text/javascript"
+        src="{{ url_for('static', filename='js/jquery.json-viewer.js') }}">
+    </script>
     <script type="text/javascript">
      $(document).ready(function(){
        var table = $('#simdata').DataTable({
@@ -53,10 +57,9 @@
          });
        $(".showdetail").click(function(){
          var sim = $(this).parents("tr.simdatarow").find("input.simjson").val();
-         sim = JSON.stringify(JSON.parse(sim), null, 2);
-         $("#modalDetailBody").html("<pre>"+sim+"</pre>");
          $("#modalDetail").modal();
-         });
+         $("#jsonviewer").jsonViewer(JSON.parse(sim));
+       });
      });
 
     </script>
@@ -102,7 +105,7 @@
             {% if temp %}
             <td class="form-check">
                 <input type="text" hidden="true" class="simjson" name="simdata{{ loop.index0 }}"
-                        value='{{ row|tojson }}'>
+                        value='{{ fullentries[loop.index0]|tojson }}'>
                 <input type="checkbox" checked class="form-check-input saveentry" name="confirm{{ loop.index0 }}">
             </td>
             {% endif %}
@@ -110,6 +113,7 @@
         {% endfor %}</tbody>
     </table>
     {% if temp %}
+    <a class="btn btn-warning float-right pull-right" href="{{ url_for('.overview') }}">Cancel</a>
     <button class="btn btn-primary float-right pull-right" type="submit" >Save</button>
     </form>
     {% endif %}
@@ -130,6 +134,7 @@
             </h5>
           </div>
           <div class="modal-body" id="modalDetailBody">
+              <pre id="jsonviewer"></pre>
           </div>
         </div>
       </div>

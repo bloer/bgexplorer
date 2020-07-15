@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Help - modeleditor{% endblock %}
+{% block pageheader %}
+  <h1>Help: Editing Models</h1>
+{% endblock %}
+
+{% block pagecontent %}
+<h2>Overview</h2>
+A model in bgexplorer consists of three parts:
+<ul>
+  <li>The assembly tree, which describes the physical system building blocks (material, mass, etc.)</li>
+  <li>Emission specs, which describe sources of radioactive emissions</li>
+  <li>The simulation database, which maps different radioactive emissions onto detector responses</li>
+</ul>
+
+<p>Emission specs are associated to individual components in the assembly tree. Information from each pair of (component x emissionspec) is used to generate a query to retrieve entries from the simulation database, and the results are normalized using those same entities. E.g., if an emission spec is defined as bulk distribution of uranium-238 at 1 mBq/kg, the mass of the component is used to calculate the total decay rate.</p>
+
+<h2>The Assembly Tree</h2>
+<p>To create a new component, click on the "Components" tab in the edit model interface, and click the button to create a new Component or Assembly.  A Component represents a physical object, such as a screw, a resistor, a shield section, or a detector element.  Components have physical properties like mass, material, and surface area, and can have Emission Specs associated to them. Multiple Components can be grouped together into Assemblies (which can in turn be grouped into higher-order assemblies). A brand-new model starts with a single root assembly with the same name as the model.</p>
+
+<p>Creating a new Component will open the Edit Component pane, where physical attributes and additional metadata like a simple description can be added.  When the component is saved, the assembly tree view on the left will be updated accordingly. Whenever you are editing a component, all instances of that component in the assembly tree will be highlighted in blue, all parent assemblies of that component highlighted in green, and all children in yellow.</p>
+
+<h3>Placing components</h3>
+<p>When a new component is created, it is not yet part of the assembly tree. Instead, it will show up under the "Unplaced components" heading on the left pane.  To be tallied in results, it must be attached to an assembly descending from the root assembly of the model.  To attach a component, click on the assembly you wish to attach it to. This will load that assembly in the Edit Component tab. Additionally, a small arrow will be visible for all placeable components and assemblies.  Click one of these arrows to add an instance of that component to the active assembly. This will add a row to the "Subcomponents" table on the right, where the total number of the new subcomponent can be modified. (E.g., for a circuit board assembly, one might have 10 copies of a specific resistor.) After the assembly is saved, the new subcomponent can also be renamed. Any given component or assembly can be placed multiple times in the assembly hierarchy (just as in GEANT4, multiple copies of the same logical volume may be placed in different mother volumes). </p>
+
+<p>It is also possible to create a component directly belonging to an existing assembly. Click the parent assembly to load it into the Edit Component pane, and click the "+Add" button below the Subcomponents table. Enter a name and whether to add a new component or a subassembly, and hit save. Then the new component will appear in the assembly tree and may be edited as normal. </p>
+
+<h2>Emission Specs</h2>
+<p>To create a new emission spec, click the "Specifications" tab in the Edit Model page, and select what type of spec to add from the dropdown. Available choices are:</p>
+<dl>
+  <dt>RadioactiveContam</dt><dd>The most common, this represents a source where the rate is specified directly (e.g. Bq/kg for bulk distribution or cm<sup>-2</sup>s<sup>-1</sup> for fluxes</dd>
+  <dt>RadonExposure</dt><dd>A surface exposed for a known time to a air with a known radon level</dd>
+  <dt>CosmogenicActivation</dt><dd>Generation of radioactive isotopes with specified lifetimes and production rate by specified exposure to cosmic rays </dd>
+</dl>
+<p>The new spec will be loaded in the "Edit Specification" pane on the right.  For RadioactiveContamination and CosmogenicActivation, you must specify a list of isotopes. For example, one would usually specify at least U-238, Th-232, and K-40 for most materials. Each type starts with one empty isotope that must be filled in to avoid errors.  Additional isotopes can be added by clicking the "+Add" button below the Isotopes table. </p>
+
+<h3>Placing Emission specs</h3>
+<p>To be used in the model, emission specs must be associated to one or more components. To do this, switch to the "Components" tab, and click the component to which you want to attach a specification, which will load it into the "Edit Component" pane on the right.  Then on the left, switch back to the "Specifications" tab.  Each placeable spec will have a small blue arrow; click on the arrow to associate that specification with the active component. Emission specs may also be created directly attached to existing components. In the "Edit Component" pane, click the "+Add" button below the "Emission specs" table, name it and select a category from the dropdown, and hit save. </p>
+
+<h2>Simulation database</h2>
+<p>Each model has a separate list of components and emission specs; editing one model will not change any other model.  By contrast, there is only a single simulation database per instance of Background Explorer.  The database backend, and how to generate basic queries, are defined in the instance main application.  For example, the <a href="https://github.com/bloer/bgexploer-demo">demo application</a> uses a MongoDB backend, and among others looks for entries with a key 'volume' equal to each component's name. </p>
+<p>The default associations can be overridden using the "Query Modifier" fields. Each component, each emission spec, and each placement/attachment of a component or spec can take a modifier, allowing manipution of the query at very fine-grained level. How the querymod entries are parsed by the simulation backend is also specified in each acpplication. For a basic example, consider a component named "WidgetA", but for which the simulated volume is named "_PWgt_A1". Using the default MongoDB backend, we could override this association by setting the querymod to <pre>{"volume": "_PWgt_A1"}</pre>.</p>
+
+<p>To see the queries that are being generated for a version of your model, click on the "Bind simulation data" button in the model editor. This will generate a table of all queries, as well as report any hits the queries matched against the database.  New queries are highlighted in green.  If you're happy with the results, you can save the results of the queries, or go back and modify the model until the queries produce the correct results.  There is a plan to design an interface to allow editing queries and/or manually selecting simulation data entries, but no estimate of completion time.</p>
+
+<p>When you save a model, there is a check box (checked by default) to again generate new database queries and look for new hits.  This can lead to very surprising results if disabled.  It is also possible to update simulation data bindings in a "fixed" model, which will generate a new minor revision (e.g. from 1.0 to 1.1).  This may be useful if new data is added to the database, or the application query generator is modified, but you don't want to change the model geometry. </p>
+
+
+
+{% endblock %}

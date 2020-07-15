@@ -6,13 +6,13 @@ from collections import namedtuple,OrderedDict
 import bson
 import json
 
-from flask import (Blueprint, render_template, request, redirect, 
+from flask import (Blueprint, render_template, request, redirect,
                    abort, flash, url_for)
 from flask_bootstrap import Bootstrap
-import wtforms.widgets 
+import wtforms.widgets
 
 from . import forms
-from .widgets import is_hidden_field 
+from .widgets import is_hidden_field
 from ..modeldb import ModelDB
 from bgmodelbuilder.component import Component, Assembly
 from bgmodelbuilder import emissionspec, bgmodel, units
@@ -20,7 +20,7 @@ from ..utils import get_simsdb, getmodelordie, getcomponentordie, getspecordie
 
 
 SpecEntry = namedtuple("SpecEntry","cls form")
-    
+
 
 
 class ModelEditor(object):
@@ -28,8 +28,8 @@ class ModelEditor(object):
     TODO: write documentation
     """
     def __init__(self, app=None, modeldb=None):
-        self.bp = Blueprint('modeleditor', __name__, 
-                            static_folder='static', 
+        self.bp = Blueprint('modeleditor', __name__,
+                            static_folder='static',
                             template_folder='templates')
         self.bp.record(self.onregister)
         self.bp.context_processor(self.context_processor)
@@ -38,42 +38,42 @@ class ModelEditor(object):
         def before_request():
             if not request.form:
                 request.form = None
-        
+
 
         @self.bp.app_template_global()
         def savemodelform(model):
             return forms.SaveModelForm(obj=model, prefix='savemodel')
 
         self.modeldb = modeldb or ModelDB()
-        
+
         #set up the spec registry and add the defaults
         self.specregistry = OrderedDict()
-        self.registerspectype(emissionspec.CombinedSpec, 
+        self.registerspectype(emissionspec.CombinedSpec,
                               forms.RadioactiveContamForm,
                               "RadioactiveContam")
-        self.registerspectype(emissionspec.RadonExposure, 
+        self.registerspectype(emissionspec.RadonExposure,
                               forms.RadonExposureForm)
-        self.registerspectype(emissionspec.CosmogenicActivation, 
+        self.registerspectype(emissionspec.CosmogenicActivation,
                               forms.CosmogenicActivationForm)
         #dust is not well developed yet...
-        #self.registerspectype(emissionspec.DustAccumulation, 
+        #self.registerspectype(emissionspec.DustAccumulation,
         #forms.DustAccumulationForm)
 
         #apply all our routes
         baseroute = '/edit/<modelid>'
-        self.bp.add_url_rule('/new', view_func=self.newmodel, 
+        self.bp.add_url_rule('/new', view_func=self.newmodel,
                              methods=('POST',))
-        self.bp.add_url_rule('/del', view_func=self.delmodel, 
+        self.bp.add_url_rule('/del', view_func=self.delmodel,
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/', view_func=self.editmodel,
                              methods=('GET', 'POST'))
-        self.bp.add_url_rule(baseroute+'/save', 
+        self.bp.add_url_rule(baseroute+'/save',
                              view_func=self.savemodel,
                              methods=('POST',))
-        self.bp.add_url_rule(baseroute+'/newcomponent', 
+        self.bp.add_url_rule(baseroute+'/newcomponent',
                              view_func=self.newcomponent,
                              methods=('POST',))
-        self.bp.add_url_rule(baseroute+'/delcomponent/<componentid>', 
+        self.bp.add_url_rule(baseroute+'/delcomponent/<componentid>',
                              view_func=self.delcomponent,
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/newplacement/<parentid>/<childid>',
@@ -84,48 +84,51 @@ class ModelEditor(object):
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/newspec', view_func=self.newspec,
                              methods=('POST',))
-        self.bp.add_url_rule(baseroute+'/delspec/<specid>', 
+        self.bp.add_url_rule(baseroute+'/delspec/<specid>',
                              view_func=self.delspec,
                              methods=('POST',))
-        self.bp.add_url_rule(baseroute+'/attachspec/<compid>/<specid>', 
+        self.bp.add_url_rule(baseroute+'/attachspec/<compid>/<specid>',
                              view_func=self.attachspec,
                              methods=('POST',))
         self.bp.add_url_rule(baseroute+'/detachspec/<compid>/<int:index>',
                              view_func=self.detachspec,
                              methods=('POSt',))
-        self.bp.add_url_rule(baseroute+'/setquerymod/<compid>/<specid>', 
+        self.bp.add_url_rule(baseroute+'/setquerymod/<compid>/<specid>',
                              view_func=self.setquerymod,
                              methods=('POST',))
-        self.bp.add_url_rule(baseroute+'/editcomponent/<componentid>', 
+        self.bp.add_url_rule(baseroute+'/editcomponent/<componentid>',
                              view_func=self.editcomponent,
                              methods=('GET', 'POST'))
-        self.bp.add_url_rule(baseroute+'/editspec/<specid>', 
+        self.bp.add_url_rule(baseroute+'/editspec/<specid>',
                              view_func=self.editspec,
                              methods=('GET', 'POST'))
         self.bp.add_url_rule(baseroute+'/bindsimdata',
                              view_func=self.bindsimdata,
                              methods=('GET', 'POST'))
-        
+        @self.bp.route('/help')
+        def help():
+            return render_template('help.html')
+
         if app:
             self.init_app(app)
-            
-    
+
+
     def onregister(self, setupstate):
         #make sure bootstrap is registered
         if not 'bootstrap' in setupstate.app.blueprints:
             Bootstrap(setupstate.app)
         setupstate.app.jinja_env.globals['bootstrap_is_hidden_field'] = \
             is_hidden_field
-        
+
         #initialize the modeldb
         #todo: make sure this only gets done once
         self.modeldb.init_app(setupstate.app)
-        
+
         #update the spec form choices
         forms.BoundSpecForm.category.choices = [
             (val.cls,name) for name, val in self.specregistry.items()
         ]
-        
+
 
     def init_app(self, app, url_prefix='/models'):
         app.register_blueprint(self.bp, url_prefix=url_prefix)
@@ -139,12 +142,12 @@ class ModelEditor(object):
         """
         name = name or cls.__name__
         self.specregistry[name] = SpecEntry(cls, form)
-        
-    
+
+
     def context_processor(self):
         """Register global variables available to templates"""
         return dict(spectypes=list(self.specregistry.keys()))
-    
+
     def addlinks(self, form, modelid):
         """Replace names in subfield forms with links"""
         for field in form:
@@ -165,7 +168,7 @@ class ModelEditor(object):
                         #entry[field].data = ("<a href='%s'>%s</a>"
                         #                      %(href, entry[field].data))
 
-                                              
+
 
     ##### modeleditor API #######
     #todo: implement some caching here!
@@ -177,7 +180,7 @@ class ModelEditor(object):
         importfile = None
         if request.files:
             importfile = request.files.get('import',importfile)
-        
+
         if importfile:
             #try to convert file data
             try:
@@ -205,23 +208,23 @@ class ModelEditor(object):
             abort(404, e)
         except ValueError as e:
             abort(403, e)
-        
+
         if ndeleted == 1:
             flash("Successfully deleted model %s"%modelid,'success')
         else:
             flash("An error occurred trying to delete this model",'warning')
         return redirect(url_for('index'))
 
-    #all endpoints build on the same route from here out    
+    #all endpoints build on the same route from here out
     def editmodel(self, modelid):
         """return a page with forms for model editing"""
         bypasscache = request.args.get('bypasscache',False)
-        model = getmodelordie(modelid, toedit=True, 
+        model = getmodelordie(modelid, toedit=True,
                                    bypasscache=bypasscache)
         return render_template('editmodel.html', model=model)
 
     def savemodel(self, modelid):
-        """Save the model to the DB, making sure all edit details fields 
+        """Save the model to the DB, making sure all edit details fields
         validated
         """
         model = getmodelordie(modelid, toedit=True)
@@ -235,7 +238,7 @@ class ModelEditor(object):
                 error += " No registered SimulationsDB"
             try:
                 update = form.updatesimdata
-                simsdb.updatesimdata(model, attach=True, 
+                simsdb.updatesimdata(model, attach=True,
                                      findnewmatches=update, findnewdata=update)
             except units.errors.DimensionalityError as e:
                 error += " Invalid unit settings: '%s'"%e
@@ -257,7 +260,7 @@ class ModelEditor(object):
     ###Actions are:
     # new component (child of X)
     # delete component
-    # new placement 
+    # new placement
     # delete placement
     # new spec
     # delete spec
@@ -265,7 +268,7 @@ class ModelEditor(object):
     # remove spec
     # edit query modifier
     # edit component (metadata, etc)
-       
+
     def newcomponent(self, modelid):
         model = getmodelordie(modelid, toedit=True)
         clonefrom = request.values.get('clonefrom')
@@ -273,7 +276,7 @@ class ModelEditor(object):
             oldcomp = getcomponentordie(model, clonefrom)
             newcomp = oldcomp.clone()
         else:
-            newcomp = (Assembly() if request.values.get('class') == 'Assembly' 
+            newcomp = (Assembly() if request.values.get('class') == 'Assembly'
                        else Component())
         parentid = request.values.get('parent')
         if parentid:
@@ -286,12 +289,12 @@ class ModelEditor(object):
                 newcomp.placements.add(placement)
             else:
                 parent.addcomponent(newcomp)
-        
+
         model.components[newcomp.id] = newcomp
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', modelid=modelid, 
+        return redirect(url_for('.editcomponent', modelid=modelid,
                                 componentid=newcomp.id))
-        
+
     def delcomponent(self, modelid, componentid):
         model = getmodelordie(modelid, toedit=True)
         component = getcomponentordie(model, componentid)
@@ -315,15 +318,15 @@ class ModelEditor(object):
         index = request.values.get('index')
         parent.addcomponent((child,number), index)
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', modelid=modelid, 
+        return redirect(url_for('.editcomponent', modelid=modelid,
                                 componentid=parentid))
-        
+
     def delplacement(self, modelid, parentid, index):
         model = getmodelordie(modelid, toedit=True)
         parent = getcomponentordie(model, parentid)
         parent.delcomponent(index)
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', modelid=modelid, 
+        return redirect(url_for('.editcomponent', modelid=modelid,
                                 componentid=parentid))
 
     def newspec(self, modelid):
@@ -360,7 +363,7 @@ class ModelEditor(object):
         index = request.values.get('index')
         comp.addspec(spec, index=index)
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', modelid=modelid, 
+        return redirect(url_for('.editcomponent', modelid=modelid,
                                 componentid=compid))
 
     def detachspec(self, modelid, compid, index):
@@ -368,7 +371,7 @@ class ModelEditor(object):
         comp = getcomponentordie(model, compid)
         comp.delspec(index)
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', modelid=modelid, 
+        return redirect(url_for('.editcomponent', modelid=modelid,
                                 componentid=compid))
 
     def setquerymod(self, modelid, compid, specid):
@@ -384,12 +387,12 @@ class ModelEditor(object):
             del comp.querymods[specid]
 
         self.modeldb.write_model(model)
-        return redirect(url_for('.editcomponent', 
+        return redirect(url_for('.editcomponent',
                                 modelid=modelid, componentid=compid))
 
     def editcomponent(self, modelid, componentid):
         """return a page with forms for component editing"""
-        #todo: do we need to pass different forms for component types here? 
+        #todo: do we need to pass different forms for component types here?
         model = getmodelordie(modelid, toedit=True)
         comp = getcomponentordie(model, componentid)
         form = forms.get_form(request.form, comp)
@@ -406,7 +409,7 @@ class ModelEditor(object):
                     flash("Changes to component '%s' successfully saved"%
                           comp.name, 'success')
                     return redirect(url_for('.editcomponent',
-                                            modelid=modelid, 
+                                            modelid=modelid,
                                             componentid=componentid))
                 else:
                     flash("Form validation failed. Correct errors and resubmit",
@@ -415,9 +418,9 @@ class ModelEditor(object):
             else:
                 flash("Form validation failed. Correct errors and resubmit",
                       "danger")
-        
+
         self.addlinks(form, modelid)
-        return render_template('editmodel.html', model=model, 
+        return render_template('editmodel.html', model=model,
                                editcomponent=comp, form=form)
 
     def editspec(self, modelid, specid):
@@ -440,7 +443,7 @@ class ModelEditor(object):
                     self.modeldb.write_model(model)
                     flash("Changes to spec '%s' successfully saved"%spec.name,
                           'success')
-                    return redirect(url_for('.editspec', 
+                    return redirect(url_for('.editspec',
                                             modelid=modelid, specid=specid))
                 else:
                     flash("Form validation failed. Correct errors and resubmit",
@@ -450,19 +453,19 @@ class ModelEditor(object):
                 flash("Form validation failed. Correct errors and resubmit",
                       "danger")
         self.addlinks(form, modelid)
-        return render_template('editmodel.html', model=model, editspec=spec, 
+        return render_template('editmodel.html', model=model, editspec=spec,
                                form=form)
 
     def bindsimdata(self, modelid):
         """Look for updated simulation data and return a highlight view
-        Confirm whether to save new bindings or cancel. 
+        Confirm whether to save new bindings or cancel.
 
         TODO: This seems like the place to implement manual binding
         """
         simsdb = get_simsdb()
         if not simsdb:
             abort(501, "No registered SimulationsDB")
-            
+
         model = getmodelordie(modelid, toedit=False)
         try:
             matches = simsdb.updatesimdata(model)
@@ -474,8 +477,8 @@ class ModelEditor(object):
             istemp = self.modeldb.is_model_temp(modelid)
             model.simdata = {m.id : m for m in matches}
             try:
-                newid = str(self.modeldb.write_model(model, 
-                                                     bumpversion="minor", 
+                newid = str(self.modeldb.write_model(model,
+                                                     bumpversion="minor",
                                                      temp=istemp))
             except Exception as e:
                 abort(501, 'Error saving model: %s'%e)
@@ -485,8 +488,8 @@ class ModelEditor(object):
                 #TODO: add a url for viewmodel here
                 return redirect(url_for('modelviewer.overview',modelid=newid))
                 #sort the requests by spec and assembly
-        
+
         return render_template('bindsimdata.html', model=model,
                                matches=matches)
-        
-        
+
+
