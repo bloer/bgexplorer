@@ -25,6 +25,6 @@ setup(name='bgexplorer',
           'pint==0.9',
           'numpy',
           'uncertainties',
-          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@v0.3#egg=bgmodelbuilder-0.3.1',
+          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@v0.3.1#egg=bgmodelbuilder-0.3.1',
       ],
 )
