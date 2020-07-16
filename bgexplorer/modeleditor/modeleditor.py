@@ -237,7 +237,7 @@ class ModelEditor(object):
             if not simsdb:
                 error += " No registered SimulationsDB"
             try:
-                update = form.updatesimdata
+                update = form.updatesimdata.data
                 simsdb.updatesimdata(model, attach=True,
                                      findnewmatches=update, findnewdata=update)
             except units.errors.DimensionalityError as e:
