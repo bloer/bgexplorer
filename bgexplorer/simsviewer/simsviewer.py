@@ -2,7 +2,7 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from flask import (Blueprint, render_template, render_template_string,
                    request, abort, url_for, g, json, flash, redirect,
-                   Response, get_flashed_messages)
+                   Response, get_flashed_messages, current_app)
 
 from .. import utils
 import gzip
@@ -39,22 +39,16 @@ class SimsViewer(object):
     """Blueprint for searching and inspecting simulation data
     Args:
         app: the bgexplorer Flask object
-        simsdb: a SimulationsDB object. If None, will get from the Flask object
         url_prefix (str): Where to mount this blueprint relative to root
-        summarypro: a projection operator to generate flat summary tables
-        summarycolumns (list): list of column names for summary page
         detailtemplate: path to template file for detailed simulation view
         enableupload (bool): if True, allow uploading new entries
         uploadsummary (func): generate a summary projection from uploaded
                               (json-generated) documents
     """
-    def __init__(self, app=None, simsdb=None, url_prefix='/simulations',
-                 summarypro=None, summarycolumns=None, detailtemplate=None,
+    def __init__(self, app=None, url_prefix='/simulations',
+                 detailtemplate=None,
                  enableupload=True, uploadsummary=None):
         self.app = app
-        self._simsdb = simsdb
-        self.summarypro = summarypro
-        self.summarycolumns = summarycolumns
         self.enable_upload = enableupload
         self.uploadsummary = uploadsummary
 
@@ -91,21 +85,21 @@ class SimsViewer(object):
         app.register_blueprint(self.bp,
                                url_prefix=url_prefix)
         app.extensions['SimulationsViewer'] = self
-        key = 'SIMULATIONSVIEWER_SUMMARY_PROJECTION'
-        self.summarypro = app.config.setdefault(key, self.summarypro)
-        key = 'SIMULATIONSVIEWER_SUMMARY_COLUMNS'
-        self.summarycolumns = app.config.setdefault(key, self.summarycolumns)
         key = "ENABLE_SIMULATION_UPLOADS"
         self.enable_upload = app.config.setdefault(key, self.enable_upload)
 
 
     @property
     def simsdb(self):
-        return self._simsdb or utils.get_simsdb()
+        return g.simsdbview.simsdb
 
     def getcolnames(self, sims):
         """ Get the column names to display in summary table """
-        columns = self.summarycolumns or []
+        columns = []
+        try:
+            columns = g.simsdbview.summarycolumns
+        except AttributeError:
+            pass
         if sims and not columns:
             #non-underscore keys with string or number values
             for key, val in sims[0].items():
@@ -121,22 +115,48 @@ class SimsViewer(object):
         def find_model(endpoint, values):
             if 'modelid' in request.args:
                 g.model = utils.getmodelordie(request.args['modelid'])
+                values.setdefault('dbname', g.model.simsdb)
+            if 'dbname' in values:
+                g.simsdbview = utils.get_simsdbview(name=values.pop('dbname'))
+
+        """ make sure we have a simsdb """
+        @self.bp.url_defaults
+        def addsimsdbview(endpoint, values):
+            model = values.pop('model', None) or g.get('model', None)
+            if model:
+                values['modelid'] = model.id
+                dbname = model.simsdb
+                if not dbname:
+                    dbname = current_app.getdefaultsimviewname()
+                values.setdefault('dbname', dbname)
+
+            simsdbview = values.pop('simsdbview', None) or g.get('simsdbview', None)
+            if simsdbview:
+                values['dbname'] = current_app.getsimviewname(simsdbview)
+
 
 
         """Define the view functions here"""
         @self.bp.route('/')
+        def index():
+            dbnames = list(current_app.simviews.keys())
+            if len(dbnames) == 1:
+                return redirect(url_for('.overview', dbname=dbnames[0]))
+            return render_template('listdbs.html', dbnames=dbnames)
+
+        @self.bp.route('/<dbname>/')
         def overview():
             query = request.args.get('query',None)
             try:
-                sims = list(self.simsdb.runquery(query,
-                                                projection=self.summarypro))
+                projection = g.simsdbview.summarypro
+                sims = list(self.simsdb.runquery(query, projection=projection))
             except Exception as e:
                 abort(400, "Invalid query specifier")
             columns = self.getcolnames(sims)
             return render_template('simoverview.html', sims=sims, query=query,
                                    colnames=columns)
 
-        @self.bp.route('/dataset/<dataset>')
+        @self.bp.route('/<dbname>/dataset/<dataset>')
         def detailview(dataset):
             detail = self.simsdb.getdatasetdetails(dataset)
             matches = findsimmatches(dataset)
@@ -144,7 +164,7 @@ class SimsViewer(object):
                                    detail=detail)
 
 
-        @self.bp.route('/dataset/<dataset>/raw')
+        @self.bp.route('/<dbname>/dataset/<dataset>/raw')
         def rawview(dataset):
             """Export the dataset as raw JSON"""
             detail = self.simsdb.getdatasetdetails(dataset)
@@ -153,7 +173,7 @@ class SimsViewer(object):
         if not self.enable_upload:
             return
 
-        @self.bp.route('/upload', methods=('GET','POST'))
+        @self.bp.route('/<dbname>/upload', methods=('GET','POST'))
         def upload():
             """ Upload new JSON-formatted entries """
             if request.method == 'POST':
@@ -171,7 +191,7 @@ class SimsViewer(object):
                     flash("No valid entries in uploaded files",'error')
             return render_template('uploadsimdata.html')
 
-        @self.bp.route('/confirmupload', methods=('POST',))
+        @self.bp.route('/<dbname>/confirmupload', methods=('POST',))
         def confirmupload():
             """ Confirm uploads with form """
             confirmed = []

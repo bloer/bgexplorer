@@ -13,7 +13,7 @@
             <input type="hidden" name="derivedFrom" value="{{ g.model.id }}">
             <button class="btn btn-warning" type="submit" >Edit (New Version)</button>
         </form>
-        
+
 
     </div>
 {% endblock %}
@@ -23,23 +23,24 @@
     <div class="col-md-6" >
         <h3>Description</h3>
         <p>{{ g.model.description }}</p>
-        
+        <h4>Database Backend</h4>
+        <p>{{ g.model.simsdb |default("default")}}</p>
         <h3>Additional Details</h3>
         <dl class="dl-horizontal" >
-	    {% for key, val in g.model.editDetails.items() %}
-	    {% if key not in ("date", "user", "derivedFrom") %} 
-		    <dt class="" >{{ key }}</dt>
-		    <dd class="" >{{ val }}</dd>
-	    {% endif %}
-	    {% endfor %}
+        {% for key, val in g.model.editDetails.items() %}
+        {% if key not in ("date", "user", "derivedFrom") %}
+            <dt class="" >{{ key }}</dt>
+            <dd class="" >{{ val }}</dd>
+        {% endif %}
+        {% endfor %}
         </dl>
     </div><!-- end col -->
-    
+
     <div class="col-md-6" >
         <dl class="dl-horizontal" >
             <dt>Total <a href="{{ url_for('.componentview') }}">components</a>: </dt>
             <dd>{{ g.model.components | length }}</dd>
-            
+
             <dt>Total <a href="{{ url_for('.emissionsoverview') }}">emission specs</a>:</dt>
             <dd>{{ g.model.specs | length }}</dd>
         </dl>
@@ -49,21 +50,21 @@
     <div class="row" >
     <div class="col-md-12" >
         {% if history %}
-	    <h3>History</h3>
-	    <table id="historytable" class="table table-compact">
-	        <thead>
-		        <tr><th>Name</th><th>Comment</th><th>Saved</th></tr>
-	        </thead>
-	        <tbody>
-		    {% for oldmodel in history %}<tr>
-		        <td><a href="{{ url_for('.overview', model=oldmodel, permalink=True) }}">
-			        {{ oldmodel['name'] }} v{{ oldmodel['version'] }}</a>{%- if loop.index0==0 %} (this version){%- endif -%}</td>
-		        <td>{{ oldmodel['editDetails']['comment'] }}</td>
-		        <td>{{ oldmodel['editDetails']['date'] }} by {{ oldmodel['editDetails']['user'] }}</td>
-		    {% endfor %}</tr>
-		    
-	        </tbody>
-	    </table>
+        <h3>History</h3>
+        <table id="historytable" class="table table-compact">
+            <thead>
+                <tr><th>Name</th><th>Comment</th><th>Saved</th></tr>
+            </thead>
+            <tbody>
+            {% for oldmodel in history %}<tr>
+                <td><a href="{{ url_for('.overview', model=oldmodel, permalink=True) }}">
+                    {{ oldmodel['name'] }} v{{ oldmodel['version'] }}</a>{%- if loop.index0==0 %} (this version){%- endif -%}</td>
+                <td>{{ oldmodel['editDetails']['comment'] }}</td>
+                <td>{{ oldmodel['editDetails']['date'] }} by {{ oldmodel['editDetails']['user'] }}</td>
+            {% endfor %}</tr>
+
+            </tbody>
+        </table>
         {% endif %}
     </div><!-- end col -->
     </div> <!-- end row -->

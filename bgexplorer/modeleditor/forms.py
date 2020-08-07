@@ -2,7 +2,7 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from copy import copy
 from textwrap import dedent
-from wtforms import (validators, StringField, SubmitField,
+from wtforms import (validators, StringField, SubmitField, FileField,
                      IntegerField, SelectField, FieldList, FormField,
                      HiddenField, FloatField)
 
@@ -16,10 +16,11 @@ from flask_wtf import FlaskForm
 from bgmodelbuilder import component, emissionspec
 
 from .fields import (DictField, JSONField, StaticField, validate_units,
-                     NoValSelectField, NumericField)
+                     NoValSelectField, NumericField, SimsDbField)
 from .widgets import SortableTable, InputChoices, StaticIfExists
 from collections import OrderedDict
-
+from flask import current_app
+from .. import utils
 
 
 
@@ -41,7 +42,17 @@ class SaveModelForm(FlaskForm):
         obj.editDetails.update(dict(user=self.user.data,
                                     comment=self.comment.data))
 
+class BackendForm(FlaskForm):
+    """ Form to update simsdb database and view backend """
+    simsdb = SimsDbField()
 
+class NewModelForm(FlaskForm):
+    name = StringField('Model Name', [validators.required()], render_kw={'class':'form-control'})
+    description = StringField("Description", render_kw={'class':'form-control'})
+    simsdb = SimsDbField()
+    importmodel = FileField("Optional: Import JSON file",
+                            render_kw={'accept': '.json,.txt'})
+    submit = SubmitField("Submit", render_kw={'class':'btn btn-primary pull-right'})
 
 
 ############ Shared stuff ####################3

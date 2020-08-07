@@ -223,9 +223,19 @@
     </div>
     <div class="col-sm-5" >
         <button class="btn btn-success" data-toggle="modal" data-target="#savemodeldialog" >Save</button>
-        {# <button class="btn btn-danger btn-sm"> Discard Changes</button> #}
-        <a class="btn btn-default" href="{{ url_for('.bindsimdata',modelid=model.id) }}" > Bind simulation data</a>
+        <div class="btn-group">
+            <a class="btn btn-default" href="{{ url_for('.bindsimdata',modelid=model.id) }}" > Bind simulation data</a>
+            <button type="button" class="btn btn-default dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <span class="sr-only">Toggle Dropdown</span><span class="caret" ></span>
+            </button>
+            <ul class="dropdown-menu">
+                <li><button class="btn btn-danger" data-toggle="modal" data-target="#changebackenddialog">Change Backend</button></li>
+            </ul>
+        </div>
         <a class="btn btn-info" href="{{ url_for('.help') }}" target="_blank">Help</a>
+        {# <button class="btn btn-danger btn-sm"> Discard Changes</button> #}
+
+
     </div>
     </div>
 {% endblock %}
@@ -246,6 +256,31 @@
         <div class="modal-footer">
             <button type="submit" class="btn btn-primary" form="savemodelform" onclick="$('#savemodelform').submit()" >
             Save new version </button>
+            <button type="button" class="btn btn-default"  data-dismiss="modal">Cancel</button>
+        </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Change backend dialog -->
+    <div id="changebackenddialog" class="modal fade" role="dialog" >
+    <div class="modal-dialog" >
+        <div class="modal-content" >
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+            <h4 class="modal-title">Change Backend</h4>
+        </div>
+        <div class="modal-body">
+            <div class="text-warning">Warning: changing the backend may
+            invalidate existing simulation data bindings</div>
+            {{ wtf.quick_form(forms.BackendForm(obj=model),
+                              method="POST", id="backendform",
+                              action=url_for('.bindsimdata', modelid=model.id))
+            }}
+        </div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary" form="savemodelform" onclick="$('#backendform').submit()" >
+            Test Change </button>
             <button type="button" class="btn btn-default"  data-dismiss="modal">Cancel</button>
         </div>
         </div>

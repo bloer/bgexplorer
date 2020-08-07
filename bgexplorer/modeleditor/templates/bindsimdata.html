@@ -8,7 +8,7 @@
      h1 {margin-top: 0px; margin-bottom:0px }
      tr.simdatamatch.nodata { background-color: #ffdddd }
      tr.simdatamatch.newmatch { background-color: #ddffdd }
-     
+
     </style>
 {% endblock %}
 
@@ -18,18 +18,18 @@
 
 {% macro printAssemblyPath(match, links=true) %}
     {% for placement in match.assemblyPath %}
-	{%- if loop.index0 > 0 %} / {% endif -%}
-	{%- if links -%}
-	    <a href="{{ url_for('modelviewer.componentview',modelid=model.id, component=placement.component) }}">
-	{%- endif -%}
-	{{ placement.component.name }}
-	{%- if links -%}</a>{%- endif -%}
+    {%- if loop.index0 > 0 %} / {% endif -%}
+    {%- if links -%}
+        <a href="{{ url_for('modelviewer.componentview',modelid=model.id, component=placement.component) }}">
+    {%- endif -%}
+    {{ placement.component.name }}
+    {%- if links -%}</a>{%- endif -%}
     {% endfor %}
 {% endmacro %}
 
 {% macro printSpec(spec, links=true) %}
     {% if links %}
-	<a href="{{ url_for('modelviewer.emissionview', modelid=model.id, spec=spec.getrootspec()) }}">
+    <a href="{{ url_for('modelviewer.emissionview', modelid=model.id, spec=spec.getrootspec()) }}">
     {% endif %}
     {{ spec.name }} {{ spec.distribution }}
     {% if links %} </a> {% endif %}
@@ -37,7 +37,7 @@
 
 {% macro printOneDataset(dataset, label=None, links=true) %}
     {% if links %}
-	<a href="{{ url_for('simsviewer.detailview',dataset=dataset, modelid=model.id) }}">
+    <a href="{{ url_for('simsviewer.detailview',dataset=dataset, model=model) }}">
     {% endif %}
     <span title="{{ dataset }}">{{ label if label else dataset }}</span>
     {% if links %}</a>{% endif %}
@@ -45,57 +45,60 @@
 
 {% macro printDataset(dataset, links=true) %}
     {% if dataset is iterable and dataset is not string %}
-	{% for ds in dataset %}
-	    {% if loop.index0>0 %}, {% endif %}
-	    {{ printOneDataset(ds, loop.index, links) }}
-	{% endfor %}
+    {% for ds in dataset %}
+        {% if loop.index0>0 %}, {% endif %}
+        {{ printOneDataset(ds, loop.index, links) }}
+    {% endfor %}
     {% else %}
-	{{ printOneDataset(dataset, '1', links) }}
+    {{ printOneDataset(dataset, '1', links) }}
     {% endif %}
 {% endmacro %}
 
 
 {% block pageheader %}
     <div class="row">
-	<div class="col-sm-9">
-	    <h1>Bind Simdata for model <small>{{ model.name }} v{{ model.version }}</small></h1>
-	</div>
-	<div class="col-sm-3" >
-	    <form id="confirmform" method="POST" >
-		<input type="submit" class="btn btn-success" name="confirm" value="Save bindings" >
-		<a class="btn btn-danger" href="javascript:history.back()">Cancel</a>
-	    </form>
-	</div>
+    <div class="col-sm-9">
+        <h1>Bind Simdata for model <small>{{ model.name }} v{{ model.version }}</small></h1>
+    </div>
+    <div class="col-sm-3" >
+        <form id="confirmform" method="POST" >
+        {% if model.simsdb %}
+        <input type="hidden" name="simsdb" value="{{ model.simsdb }}">
+        {% endif %}
+        <input type="submit" class="btn btn-success" name="confirm" value="Save bindings" >
+        <a class="btn btn-danger" href="javascript:history.back()">Cancel</a>
+        </form>
+    </div>
     </div>
 {% endblock %}
 
-{% block pagecontent %}	
+{% block pagecontent %}
     <form name="savesimdata" id="savesimdata" method="POST">
     <table class="table table-condensed" id="matchtable" width="99%">
-	<thead>
-	    <tr> 
-		{# <th>Save?</th> #}
-		<th>Path</th> 
-		<th>Spec</th> 
-		<th>Rate per day</th> 
-		<th>DB query</th> 
-		<th>DB hits</th> 
-		<th>Livetime (days)</th>
-	    </tr>
-	</thead>
-	<tbody>{% for match in matches %}
-	    <tr class="simdatamatch {{ match.status }}">
-		{# <td class="save"><input name="match[]" type="checkbox" checked="true" value="{{ match.id }}"></td> #}
-		<td class="assemblyPath">{{ printAssemblyPath(match) }}</td>
-		<td class="spec" title="{{ match.spec.comment }}">{{ printSpec(match.spec) }}</td>
-		<td class="emissionrate">{{ "< " if match.spec.islimit else "" }}
-		    {{ "{:.2e}".format(match.emissionrate.to('1/day').m) }}
-		</td>
-		<td class="query"><a href="{{ url_for('simsviewer.overview',**match.query) }}">{{ match.query }}</a></td>
-		<td class="dataset">{{ printDataset(match.dataset) }}</td>
-		<td class="livetime">{{ "{:.2e}".format(match.livetime.to('day').m) }} </td>
-	    </tr>
-	{% endfor %}</tbody>
+    <thead>
+        <tr>
+        {# <th>Save?</th> #}
+        <th>Path</th>
+        <th>Spec</th>
+        <th>Rate per day</th>
+        <th>DB query</th>
+        <th>DB hits</th>
+        <th>Livetime (days)</th>
+        </tr>
+    </thead>
+    <tbody>{% for match in matches %}
+        <tr class="simdatamatch {{ match.status }}">
+        {# <td class="save"><input name="match[]" type="checkbox" checked="true" value="{{ match.id }}"></td> #}
+        <td class="assemblyPath">{{ printAssemblyPath(match) }}</td>
+        <td class="spec" title="{{ match.spec.comment }}">{{ printSpec(match.spec) }}</td>
+        <td class="emissionrate">{{ "< " if match.spec.islimit else "" }}
+            {{ "{:.2e}".format(match.emissionrate.to('1/day').m) }}
+        </td>
+        <td class="query"><a href="{{ url_for('simsviewer.overview',model=model, query=match.query) }}">{{ match.query }}</a></td>
+        <td class="dataset">{{ printDataset(match.dataset) }}</td>
+        <td class="livetime">{{ "{:.2e}".format(match.livetime.to('day').m) }} </td>
+        </tr>
+    {% endfor %}</tbody>
     </table>
     </form>
 {% endblock %}

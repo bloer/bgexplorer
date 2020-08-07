@@ -1,12 +1,27 @@
 from flask import current_app, abort
 
 
-#todo: should we raise aborts on failure? 
-def get_simsdb(app=current_app):
-    """Get the simulations database object"""
+#todo: should we raise aborts on failure?
+def get_simsdbview(app=current_app, name=None, model=None):
+    """ Get the named SimDbView or default
+    Args:
+        app (BgExplorer): current application
+        name (str): name of simsdbview to load from app
+        model (str): if name is None, try to get name from the model
+    """
     if not app:
         return None
-    return app.extensions.get('SimulationsDB', None)
+    if not name and model is not None:
+        name = model.simsdb
+    return app.getsimview(name)
+
+def get_simsdb(app=current_app, name=None, model=None):
+    """Get the simulations database object"""
+    try:
+        return get_simsdbview(app, name, model).simsdb
+    except AttributeError:
+        return None
+
 
 def get_modeldb(app=current_app):
     """Get the model database object"""
@@ -26,12 +41,12 @@ def getmodelordie(query, modeldb=None, toedit=False, bypasscache=False):
     if toedit and not modeldb.is_model_temp(model.id):
         abort(403, "Can not edit non-temporary model")
     return model
-    
+
 def getcomponentordie(model, compid):
     """try to find the component with ID compid in model or return 404"""
     comp = model.components.get(compid)
     if not comp:
-        abort(404, "Model %s has no component with ID %s" 
+        abort(404, "Model %s has no component with ID %s"
               %(model._id, compid))
     return comp
 

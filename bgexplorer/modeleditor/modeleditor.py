@@ -146,7 +146,8 @@ class ModelEditor(object):
 
     def context_processor(self):
         """Register global variables available to templates"""
-        return dict(spectypes=list(self.specregistry.keys()))
+        return dict(spectypes=list(self.specregistry.keys()),
+                    forms=forms)
 
     def addlinks(self, form, modelid):
         """Replace names in subfield forms with links"""
@@ -175,11 +176,13 @@ class ModelEditor(object):
     def newmodel(self):
         """Create a new bare model or clone an existing one for editing"""
         name = ""
+        simsdbview = None
         if request.form:
             name = request.form.get('name',name)
+            simsdbview = request.form.get('backend', simsdbview)
         importfile = None
         if request.files:
-            importfile = request.files.get('import',importfile)
+            importfile = request.files.get('importfile',importfile)
 
         if importfile:
             #try to convert file data
@@ -192,6 +195,8 @@ class ModelEditor(object):
                 return redirect(url_for('index'))
             if name:
                 newmodel.name = name
+            if simsdbview:
+                newmodel.simsdb = simsdbview
             newid = self.modeldb.write_model(newmodel,temp=True)
         else:
             derivedFrom = request.values.get('derivedFrom', None)
@@ -232,7 +237,7 @@ class ModelEditor(object):
         if request.method == 'POST' and form.validate():
             form.populate_obj(model)
             # make sure the simulation data is updated
-            simsdb = get_simsdb()
+            simsdb = get_simsdb(model=model)
             error = ""
             if not simsdb:
                 error += " No registered SimulationsDB"
@@ -462,17 +467,21 @@ class ModelEditor(object):
 
         TODO: This seems like the place to implement manual binding
         """
-        simsdb = get_simsdb()
+        model = getmodelordie(modelid, toedit=False)
+        if request.method == 'POST' and request.form:
+            dbname = request.form.get('simsdb')
+            if dbname:
+                model.simsdb = dbname
+        simsdb = get_simsdb(model=model)
         if not simsdb:
             abort(501, "No registered SimulationsDB")
 
-        model = getmodelordie(modelid, toedit=False)
         try:
             matches = simsdb.updatesimdata(model)
         except units.errors.DimensionalityError as e:
             abort(400,"Invalid unit settings: '%s'"%e)
         #form = forms.BindSimDataForm(request.form)
-        if request.method == 'POST': # and form.validate():
+        if request.method == 'POST' and request.form.get('confirm'): # and form.validate():
             self.modeldb.removecache(model.id)
             istemp = self.modeldb.is_model_temp(modelid)
             model.simdata = {m.id : m for m in matches}

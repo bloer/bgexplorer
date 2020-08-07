@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Simulation Databases{% endblock %}
+
+{% block pageheader %}
+    <h1> Simulation Databases </h1>
+{% endblock %}
+
+{% block pagecontent %}
+<p>The following database backends are defined in this application:</p>
+<ul>
+  {% for dbname in dbnames %}
+  <li><a href="{{ url_for('.overview', dbname=dbname) }}">{{ dbname }}</a></li>
+  {% endfor %}
+</ul>
+{% endblock %}

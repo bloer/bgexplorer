@@ -5,14 +5,15 @@ from builtins import super
 
 import json
 
-from wtforms.fields import (Field, TextAreaField, StringField, HiddenField, 
+from wtforms.fields import (Field, TextAreaField, StringField, HiddenField,
                             SelectField)
 from wtforms.compat import text_type
 from wtforms import widgets
-from wtforms.validators import ValidationError
+from wtforms.validators import ValidationError, required
 from collections import OrderedDict
 from bgmodelbuilder import units
 from bgmodelbuilder.common import to_primitive
+from flask import current_app
 
 class DictField(TextAreaField):
     """Render a dictionary as a textarea
@@ -33,7 +34,7 @@ class DictField(TextAreaField):
             self.required_keys[key] = self.paramize(val+" (REQUIRED)")
         for key, val in self.suggested_keys.items():
             self.suggested_keys[key] = self.paramize(val)
-        
+
     @staticmethod
     def paramize(val):
         if not val.startswith('<'):
@@ -41,7 +42,7 @@ class DictField(TextAreaField):
         if not val.endswith('>'):
             val = val+'>'
         return val
-            
+
     def pre_validate(self, form):
         """Make sure required keys have all been filled"""
         for key, val in self.required_keys.items():
@@ -65,7 +66,7 @@ class DictField(TextAreaField):
                 key = line[:colon].strip()
                 val = line[colon+1:].strip()
                 self.data[key] = val
-       
+
     def _value(self):
         if not self.data:
             self.data = OrderedDict()
@@ -77,7 +78,7 @@ class DictField(TextAreaField):
         if self.suggested_keys:
             for key, val in self.suggested_keys.items():
                 data.setdefault(key, val)
-        
+
         res = '\n'.join("%s = %s"%(k,v) for k,v in data.items())
         return res
 
@@ -91,7 +92,7 @@ class DictField(TextAreaField):
     @render_kw.setter
     def render_kw(self, render_kw):
         self._render_kw = render_kw
-            
+
 class StaticField(Field):
     """Render field value as text and never set"""
     def __call__(self, **kwargs):
@@ -110,7 +111,7 @@ class JSONField(StringField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('default',dict)
         super().__init__(*args, **kwargs)
-    
+
     def _value(self):
         #if not getattr(self,'data'): #this should be already set...
         #    self.data = self.default()
@@ -121,7 +122,7 @@ class JSONField(StringField):
         #this is probably redundant, but that should be OK
         self.data = to_primitive(self.data)
         return json.dumps(self.data)
-    
+
     def process_formdata(self, valuelist):
         if valuelist:
             if valuelist[0] == '':
@@ -135,20 +136,20 @@ class JSONField(StringField):
                                        "(keys require double quotes)"))
         #else:
         #    self.data = self.default()
-    
+
     def process_data(self, value):
         """try to convert everything to json-serializable values"""
         self.data = to_primitive(value)
-        
+
 
 class NoValSelectField(SelectField):
     """Select field that doesn't validate against choices"""
     def pre_validate(self, form):
         pass
-    
-        
 
-""" Apply this validator to a rendered text field that should be a 
+
+
+""" Apply this validator to a rendered text field that should be a
 pint unit with fixed dimensions"""
 def validate_units(unittype=None):
     if isinstance(unittype,str):
@@ -162,7 +163,7 @@ def validate_units(unittype=None):
         except units.errors.UndefinedUnitError as e:
             raise ValidationError(e)
 
-        if (unittype is not None and 
+        if (unittype is not None and
             getattr(val,'dimensionality',None) != unittype):
             raise ValidationError("Requires unit type %s"%unittype)
         field.data = val
@@ -172,7 +173,7 @@ def validate_units(unittype=None):
 class NumericField(Field):
     """try to reconstruct data as an integer field first, then float"""
     widget = widgets.TextInput()
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -195,4 +196,15 @@ class NumericField(Field):
                     self.data = None
                     raise ValueError(self.gettext("Not a valid numeric value"))
 
-    
+class SimsDbField(SelectField):
+    def __init__(self, label='Backend', validators=[required],
+                 description="Backend to load simulation data and generate views",
+                 render_kw={'class':'form-control'}, **kwargs):
+        kwargs.pop('choices', None)
+        super().__init__(label=label, validators=validators, description=description,
+                         render_kw=render_kw, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        self.choices = [(d,d) for d in current_app.simviews]
+        return super().__call__(*args, **kwargs)
+

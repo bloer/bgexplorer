@@ -6,14 +6,17 @@ import inspect
 import os
 import logging
 import functools
+import copy
 from bson import ObjectId, json_util
 
+from .dbview import SimsDbView
 from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
 from .simsviewer.simsviewer import SimsViewer
 from .modeldb import ModelDB
 from bgmodelbuilder.common import units as ureg
 from .utils import getobjectid
+from .modeleditor.forms import NewModelForm
 
 from flask.json.tag import JSONTag
 
@@ -44,81 +47,126 @@ class CustomJSONDecoder(json.JSONDecoder):
         super().__init__(object_hook=oh, **kwargs)
 
 
-def create_app(config_filename=None, simsdb=None, instance_path=None,
-               groups=None, groupsort=None, values=None, values_units=None):
-    """Create the Flask application and bind blueprints.
 
-    Args:
-        config_filename (str): filename to use for configuration. If
-                               instance_path is None, will be in bgexplorer's
-                               local directory
-        simsdb: A SimulationsDB concrete instance. Can be bound to app
-                later by `simsdb.init_app(app)`
-        instance_path (str): location to look for config files.
-        groups: dictionary of grouping functions to cache on all simdatamtches
-        groupsort: dictionary of lists to sort group values
-        values: dictionary of value functions to cache on all simdatamatches
-        values_units: optional dictionary of units to render values in in the
-                      cached datatable
-
-    TODO: have instance_path default to PWD?
+class BgExplorer(Flask):
+    """ Shallow wrapper around Flask application, providing mechanism
+    to register multiple simulation databases.
     """
-    #if instance_path is not explicitly defined, use the caller's path
-    if instance_path is None:
-        instance_path = os.path.dirname(os.path.abspath(inspect.stack()[1][1]))
 
-    app = Flask('bgexplorer', instance_path=instance_path,
-                instance_relative_config=bool(instance_path))
-    if config_filename:
-        app.config.from_pyfile(config_filename)
-    BasicAuth(app)
+    def __init__(self, config_filename=None, instance_path=None, simviews=None):
+        """ Constructor
+        Args:
+            config_filename (str): filename to use for configuration. If
+                                   instance_path is None, will be in
+                                   bgexplorer's local directory
+            instance_path (str): location to look for config files
+            simviews (dict): optional dictionary of 'name':SimDbView to define
+                             all the simulation views
 
-    # override json encode/decode to handle object IDs
-    app.json_encoder = CustomJSONEncoder
-    app.json_decoder = CustomJSONDecoder
-    app.session_interface.serializer.register(TagObjectId, index=0)
+        BgExplorer uses some special keys in configuration:
+            SIMDBVIEWS_DEFAULT (str): the default SimDbView to use if not specified.
+                If not provided, it will be set to the first registered view
+        """
+        if instance_path is None:
+            caller = inspect.stack()[1][1]
+            instance_path = os.path.dirname(os.path.abspath(caller))
 
-    #set up logging
-    logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    if app.debug:
-        logging.basicConfig(format=logformat, level=logging.DEBUG)
-    else:
-        logfile = app.config.get('LOGFILE')
-        if logfile:
-            from logging.handlers import RotatingFileHandler
-            level = app.config.get('LOGLEVEL',logging.WARNING)
-            logging.basicConfig(filename=logfile, format=logformat, level=level)
+        super().__init__('bgexplorer', instance_path=instance_path,
+                         instance_relative_config=bool(instance_path))
 
-            file_handler = RotatingFileHandler(logfile, maxBytes=1024*1024*100,
-                                               backupCount=20)
-            file_handler.setLevel(app.config.get('LOGLEVEL',logging.DEBUG))
-            formatter = logging.Formatter(format)
-            file_handler.setFormatter(formatter)
-            app.logger.addHandler(file_handler)
+        self.simviews = simviews or {}
+
+        app = self
+
+        if config_filename:
+            app.config.from_pyfile(config_filename)
+
+        # override json encode/decode to handle object IDs
+        app.json_encoder = CustomJSONEncoder
+        app.json_decoder = CustomJSONDecoder
+        app.session_interface.serializer.register(TagObjectId, index=0)
+
+        #set up logging
+        logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        if app.debug:
+            logging.basicConfig(format=logformat, level=logging.DEBUG)
+        else:
+            logfile = app.config.get('LOGFILE')
+            if logfile:
+                from logging.handlers import RotatingFileHandler
+                level = app.config.get('LOGLEVEL',logging.WARNING)
+                logging.basicConfig(filename=logfile, format=logformat, level=level)
+
+                file_handler = RotatingFileHandler(logfile, maxBytes=1024*1024*100,
+                                                   backupCount=20)
+                file_handler.setLevel(app.config.get('LOGLEVEL',logging.DEBUG))
+                formatter = logging.Formatter(format)
+                file_handler.setFormatter(formatter)
+                app.logger.addHandler(file_handler)
+
+        #set up extensions
+        BasicAuth(app)
+        Bootstrap(app)
+        self.modeldb = ModelDB(app=app)
+        #register custom templates first so they can override
+        app.register_blueprint(Blueprint('custom', instance_path,
+                                         static_folder='static',
+                                         template_folder='templates',
+                                         url_prefix='/custom'))
+        self.modeleditor = ModelEditor(app=app, modeldb=self.modeldb)
+        self.modelviewer = ModelViewer(app=app, modeldb=self.modeldb)
+        self.simsviewer = SimsViewer(app=app)
+
+        # set up some views
+        app.add_template_filter(getobjectid, 'id')
+
+        @app.route('/')
+        def index():
+            models = app.modeldb.get_models_list(includetemp=True,
+                                                 mostrecentonly=False)
+            return render_template("listmodels.html", models=models,
+                                   newmodelform=NewModelForm())
 
 
-    Bootstrap(app)
-    modeldb = ModelDB(app=app)
-    #register custom templates first so they can override
-    app.register_blueprint(Blueprint('custom', instance_path,
-                                     static_folder='static',
-                                     template_folder='templates',
-                                     url_prefix='/custom'))
-    modeleditor = ModelEditor(app=app, modeldb=modeldb)
-    modelviewer = ModelViewer(app=app, modeldb=modeldb, simsdb=simsdb,
-                              groups=groups, groupsort=groupsort,values=values,
-                              values_units=values_units)
-    simsviewer = SimsViewer(app=app, simsdb=simsdb)
-    if simsdb:
-        simsdb.init_app(app)
+    def addsimview(self, name, simview):
+        """ Register a new simulation database view interface
+        Args:
+            name (str): unique name for this database interface
+            simview (SimDbView): Object specifying the interface
 
-    app.add_template_filter(getobjectid, 'id')
+        This should be called AFTER application configuration is set to enable
+        cloning
+        """
+        # dont' overrite previously registered view
+        if name in self.simviews:
+            raise KeyError(f"SimDbView {name} is already registered")
+        self.simviews[name] = simview
 
-    @app.route('/')
-    def index():
-        models = modeldb.get_models_list(includetemp=True, mostrecentonly=False)
-        return render_template("listmodels.html", models=models)
+        # if we don't have a default view yet, make it this one
+        self.config.setdefault('SIMDBVIEW_DEFAULT', name)
 
-    return app
+    def getsimview(self, name=None):
+        if not name:
+            try:
+                name = self.config['SIMDBVIEW_DEFAULT']
+            except KeyError:
+                abort(404, 'SimDbView name not provided and no default set')
+        if name not in self.simviews:
+            abort(404, f"No SimsDbView backend with name {name}")
+        return self.simviews[name]
 
+    def getsimviewname(self, simsdbview):
+        """ Find the name associated with this view """
+        for name, view in self.simviews.items():
+            if view is simsdbview:
+                return name
+        return None
+
+    def getdefaultsimviewname(self):
+        return self.config.get('SIMDBVIEW_DEFAULT')
+
+
+def create_app(*args, **kwargs):
+    """ Simple wrapper to make app easier to find for wsgi server testing """
+    return BgExplorer(*args, **kwargs)
 

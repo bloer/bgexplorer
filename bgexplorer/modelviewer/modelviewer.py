@@ -3,7 +3,7 @@ from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from itertools import chain
 from flask import (Blueprint, render_template, request, abort, url_for, g,
-                   Response, make_response)
+                   Response, make_response, current_app)
 import threading
 import zlib
 import json
@@ -11,6 +11,7 @@ import json
 from bson import ObjectId
 
 from .. import utils
+from ..dbview import SimsDbView
 
 from . import billofmaterials as bomfuncs
 from ..modeldb import InMemoryCacher
@@ -20,38 +21,15 @@ class ModelViewer(object):
     Args:
         app:  The bgexplorer Flask object
         modeldb: a ModelDB object. If None, will get from the Flask object
-        simsdb:  a SimulationsDB object. If None, will get from the Flask object
         url_prefix (str): Where to mount this blueprint relative to root
-        groups (dict): Grouping functions to evaluate for all simdatamatches
-        goupsort (dict): Sorting function in the form of a list of expected
-                         values. Will be passed to javascript functions
-        values (dict): Value functions to evaluate for all simdatamatches
-        values_units (dict): optional  dict of units to render values in the
-                             cached datatable
-        spectra (dict): Functions to generate spectra for all simdatamatches
-        spectra_units (dict): render spectra in the specified units
-        values_spectra (dict): if an entry in `values` is associated to an
-                               entry in `spectra`, generate a link
     """
     defaultversion='HEAD'
-    defaultgroups = {
-        "Component": lambda match: [c.name for c in match.assemblyPath],
-        "Material": lambda match: match.component.material,
-        #"Source": lambda match: match.spec.name,
-        #"Source Category": lambda match: match.spec.category,
-        "Source": lambda match: [match.spec.category, match.spec.name],
-    }
+    joinkey='___'
 
-    joinkey = '___'
-
-    def __init__(self, app=None, modeldb=None, simsdb=None,
-                 cacher=InMemoryCacher(),
-                 url_prefix='/explore', groups=None, groupsort=None,
-                 values=None, values_units=None,
-                 spectra=None, spectra_units=None, values_spectra=None):
+    def __init__(self, app=None, modeldb=None,
+                 cacher=InMemoryCacher(), url_prefix='/explore'):
         self.app = app
         self._modeldb = modeldb
-        self._simsdb = simsdb
 
         self.bp = Blueprint('modelviewer', __name__,
                             static_folder='static',
@@ -65,25 +43,11 @@ class ModelViewer(object):
         if self.app:
             self.init_app(app, url_prefix)
 
-
-        self.groups = groups or self.defaultgroups
-        self.groupsort = groupsort or {}
-        self.values = values or {}
-        self.values_units = values_units or {}
-        self.spectra = spectra or {}
-        self.spectra_units = spectra_units or {}
-        self.values_spectra = values_spectra or {}
         self._threads = {}
         self._cacher = cacher
         #### User Overrides ####
         self.bomcols = bomfuncs.getdefaultcols()
 
-        #replace groupsort nested lists with joined strings
-        for key,val in list(self.groupsort.items()):
-            if isinstance(val,(list, tuple)):
-                val = [self.joinkey.join(i) if isinstance(i,(list,tuple)) else i
-                       for i in val]
-                self.groupsort[key] = val
 
     def init_app(self, app, url_prefix=''):
         """Register ourselves with the app"""
@@ -99,7 +63,7 @@ class ModelViewer(object):
 
     @property
     def simsdb(self):
-        return self._simsdb or utils.get_simsdb()
+        return g.simsdbview.simsdb
 
 
     def set_url_processing(self):
@@ -191,6 +155,7 @@ class ModelViewer(object):
             if version == self.defaultversion:
                 g.permalink = url_for(endpoint, permalink=True,
                                       **values)
+            g.simsdbview = utils.get_simsdbview(model=g.model)
             #construct the cached datatable in the background
             if self._cacher:
                 self.build_datatable(g.model)
@@ -297,34 +262,36 @@ class ModelViewer(object):
             return Response(json.dumps(d), mimetype="application/json")
 
     #need to pass simsdb because it goes out of context
-    def streamdatatable(self, model, simsdb):
+    def streamdatatable(self, model):
         """Stream exported data table so it doesn't all go into mem at once
         """
         #can't evaluate values if we don't have a simsdb
-        values = self.values if simsdb else {}
-        valitems = list(values.values())
+        simsdbview = utils.get_simsdbview(model=model) or SimsDbView()
+        simsdb = simsdbview.simsdb
+        valitems = list(simsdbview.values.values())
         matches = model.simdata.values()
         #send the header
-        valheads = ['V_'+v+(' [%s]'%self.values_units[v]
-                            if v in self.values_units else '')
-                    for v in values]
+        valheads = ['V_'+v+(' [%s]'%simsdbview.values_units[v]
+                            if v in simsdbview.values_units else '')
+                    for v in simsdbview.values]
         yield('\t'.join(chain(['ID'],
-                              ('G_'+g for g in self.groups),
+                              ('G_'+g for g in simsdbview.groups),
                               valheads))
               +'\n')
         #loop through matches
         for match in matches:
+            evals = []
             if valitems:
                 evals = simsdb.evaluate(valitems, match)
-                for index, vlabel in enumerate(values):
-                    unit = self.values_units.get(vlabel,None)
+                for index, vlabel in enumerate(simsdbview.values):
+                    unit = simsdbview.values_units.get(vlabel,None)
                     if unit:
                         try:
                             evals[index] = evals[index].to(unit).m
                         except AttributeError: #not a Quantity...
                             pass
-            groupvals = (g(match) for g in self.groups.values())
-            groupvals = (self.joinkey.join(g)
+            groupvals = (g(match) for g in simsdbview.groups.values())
+            groupvals = (simsdbview.groupjoinkey.join(g)
                          if isinstance(g,(list,tuple)) else g
                          for g in groupvals)
             yield('\t'.join(chain([match.id],
@@ -362,16 +329,16 @@ class ModelViewer(object):
             return 0
 
         #if we get here, we need to generate it
-        simsdb = self.simsdb
-        def cachedatatable():
+        def cachedatatable(app):
             compressor = zlib.compressobj()
-            res = b''.join(compressor.compress(s.encode('utf-8'))
-                           for s in self.streamdatatable(model,simsdb))
+            with app.app_context():
+                res = b''.join(compressor.compress(s.encode('utf-8'))
+                               for s in self.streamdatatable(model))
             res += compressor.flush()
             self._cacher.store(key, res)
             self._threads.pop(key) #is this a bad idea???
-
-        thread = threading.Thread(target=cachedatatable,name=key)
+        thread = threading.Thread(target=cachedatatable,name=key,
+                                  args=(current_app._get_current_object(),))
         self._threads[key] = thread
         thread.start()
         return thread
@@ -382,8 +349,7 @@ class ModelViewer(object):
         if not self._cacher or self.modeldb.is_model_temp(model.id):
             #no cache, so stream it directly, don't bother to zip it
             #should really be text/csv, but then browsersr won't let you see it
-            return Response(self.streamdatatable(model,self.simsdb),
-                            mimetype='text/plain')
+            return Response(self.streamdatatable(model), mimetype='text/plain')
 
         if not self._cacher.test(key):
             thread = self.build_datatable(model)
@@ -409,7 +375,7 @@ class ModelViewer(object):
 
 
     def get_groupsort(self):
-        res = dict(**self.groupsort)
+        res = dict(**g.simsdbview.groupsort)
         #todo: set up provided lists
         if 'Component' not in res:
             res['Component'] = self.get_componentsort(g.model.assemblyroot)
@@ -427,6 +393,9 @@ class ModelViewer(object):
                            `spectra` conflicts with one in values, it will be
                            renamed to "spectrum_<key>"
         """
+        # this no longer works, but wasn't used. Keep around for now...
+        raise NotImplementedError()
+
         vals = dict(**self.values) if dovals else {}
         if dospectra:
             for key, spectrum in self.spectra.items():

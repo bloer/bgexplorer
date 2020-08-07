@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% import "bootstrap/wtf.html" as wtf %}
+
 {% block title %}List Models{% endblock %}
 
 {% block mystyles %}
@@ -15,10 +17,10 @@
 {% block myscripts %}
     <script>
      function confirmdelete(source){
-	 $("#delmodelname").text($(source).data('modelname'));
-	 $("#delmodelversion").text($(source).data('modelversion'));
-	 $("#delmodelid").val($(source).data('modelid'));
-	 //$("#confirmdelete").show();
+     $("#delmodelname").text($(source).data('modelname'));
+     $("#delmodelversion").text($(source).data('modelversion'));
+     $("#delmodelid").val($(source).data('modelid'));
+     //$("#confirmdelete").show();
      }
     </script>
 {% endblock %}
@@ -26,152 +28,141 @@
 
 {% macro editmodelbutton(model=none, label="Edit", class="") -%}
     {% if model and model['temporary'] %}
-	<a class="btn btn-primary btn-sm {{ class }}"
-	href="{{ url_for('modeleditor.editmodel',modelid=model|id) }}">
-	    {{ label }}
-	</a>
+    <a class="btn btn-primary btn-sm {{ class }}"
+    href="{{ url_for('modeleditor.editmodel',modelid=model|id) }}">
+        {{ label }}
+    </a>
     {% else %}
-	<form action="{{ url_for('modeleditor.newmodel') }}" 
-	      class="form-inline" method="POST">
-	    {% if model -%}
-		<input type="hidden" name="derivedFrom" 
-		       value="{{ model|id }}">
-	    {%- endif -%}
-	    <button type="submit" class="btn btn-primary btn-sm {{ class }}">
-		{{ label }}
-	    </button>
+    <form action="{{ url_for('modeleditor.newmodel') }}"
+          class="form-inline" method="POST">
+        {% if model -%}
+        <input type="hidden" name="derivedFrom"
+               value="{{ model|id }}">
+        {%- endif -%}
+        <button type="submit" class="btn btn-primary btn-sm {{ class }}">
+        {{ label }}
+        </button>
     </form>
     {% endif %}
 {%- endmacro %}
 
 {% macro delmodelbutton(model) %}
-    <button class="btn btn-danger btn-sm delmodel" 
-	    data-modelid="{{ model|id|string }}" data-modelname="{{ model.name }}" data-modelversion="{{ model.version }}"
+    <button class="btn btn-danger btn-sm delmodel"
+        data-modelid="{{ model|id|string }}" data-modelname="{{ model.name }}" data-modelversion="{{ model.version }}"
             onclick="confirmdelete(this);"
-	    data-toggle="modal" data-target="#confirmdelete">
-	<span class="glyphicon glyphicon-trash" ></span>
+        data-toggle="modal" data-target="#confirmdelete">
+    <span class="glyphicon glyphicon-trash" ></span>
     </button>
 {% endmacro %}
 
 {% macro printmodel(model, expandtarget, class="", permalink=true) %}
     <tr class="model {{ class }}">
-	{% if model['temporary'] %}
-	    {% set url=url_for('modelviewer.overview',modelid=model|id,
-	        permalink=true) %}
-	{% else %}
-	    {% set url=url_for('modelviewer.overview',model=model,
-	        permalink=permalink) %}    
-	{% endif %}
-	<td><a href="{{ url }}">{{ model['name'] }}</a></td>
-	<td>{{ model.get('version') }}
-	    {%- if expandtarget %} 
-		<button class="btn btn-default btn-xs collapsed" data-toggle="collapse" data-target="#{{ expandtarget }}" ></button>
-	    {%- endif -%}
-	</td>
-	<td>{{ model['description'] }}</td>
-	<td>{{ model['editDetails']['date'] }} by {{ model['editDetails']['user'] }}</td>
-	<td>{{ model['editDetails']['comment'] }}</td>
-	<td>{{ editmodelbutton(model) }} {{ delmodelbutton(model) }}</td>
+    {% if model['temporary'] %}
+        {% set url=url_for('modelviewer.overview',modelid=model|id,
+            permalink=true) %}
+    {% else %}
+        {% set url=url_for('modelviewer.overview',model=model,
+            permalink=permalink) %}
+    {% endif %}
+    <td><a href="{{ url }}">{{ model['name'] }}</a></td>
+    <td>{{ model.get('version') }}
+        {%- if expandtarget %}
+        <button class="btn btn-default btn-xs collapsed" data-toggle="collapse" data-target="#{{ expandtarget }}" ></button>
+        {%- endif -%}
+    </td>
+    <td>{{ model['description'] }}</td>
+    <td>{{ model['editDetails']['date'] }} by {{ model['editDetails']['user'] }}</td>
+    <td>{{ model['editDetails']['comment'] }}</td>
+    <td>{{ editmodelbutton(model) }} {{ delmodelbutton(model) }}</td>
     </tr>
 {% endmacro %}
 
 
 {% block pageheader %}
-    <h1>List of Models</h1> 
+    <h1>List of Models</h1>
     <button class="btn btn-primary" data-toggle="modal" data-target="#newmodeldialog" >Create New</button>
 {% endblock %}
 
 {% macro printmodelslist(models) %}
 {% for names, models in models|groupby('name') %}
     {% if models | length > 1 %}
-	{% set target="modelgroup-"+models[0]['_id']|string %}
+    {% set target="modelgroup-"+models[0]['_id']|string %}
     {% else %}
-	{% set target=none %}
+    {% set target=none %}
     {% endif %}
     {% for model in models %}
-	{% if loop.index0 == 0 %}
-	    <tbody> 
-		{{ printmodel(model, target, permalink=false) }} 
-	    </tbody>
-	{% else %}
-	    {% if loop.index0 == 1 %}
-		<tbody id="{{ target }}" class="collapse oldversions" >
-	    {% endif %}
-	    {{ printmodel(model) }}
-	    {% if loop.revindex0 == 0 %}
-		</tbody>
-	    {% endif %}    
-	{% endif %}
+    {% if loop.index0 == 0 %}
+        <tbody>
+        {{ printmodel(model, target, permalink=false) }}
+        </tbody>
+    {% else %}
+        {% if loop.index0 == 1 %}
+        <tbody id="{{ target }}" class="collapse oldversions" >
+        {% endif %}
+        {{ printmodel(model) }}
+        {% if loop.revindex0 == 0 %}
+        </tbody>
+        {% endif %}
+    {% endif %}
     {% endfor %}
 {% endfor %}
 {% endmacro %}
-    
+
 
 {% block pagecontent %}
     <div id="newmodeldialog" class="modal fade" ><div class="modal-dialog" ><div class="modal-content" >
         <div class="modal-header" >
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-		    <h4 class="modal-title">New Model</h4>
-		</div>
-        <div class="modal-body clearfix">
-            <form id="newmodelform" class="" action="{{ url_for('modeleditor.newmodel') }}" method="POST" 
-                  enctype="multipart/form-data">
-                <div class="form-group" >
-                    <label for="newmodelname" class="control-label" >Name</label>
-                    <input type="text" name="name" id="newmodelname" class="form-control" >
-                </div>
-                <div class="form-group" >
-                    <label for="import" class="control-label" ><small>Optional:</small> Import JSON file</label>
-                    <input type="file" name="import" id="import" accept=".json,.txt" >
-                </div>
-                <button class="btn btn-success pull-right" type="submit">Submit</button>
-            </form>
+            <h4 class="modal-title">New Model</h4>
         </div>
-        
-        <!-- 
+        <div class="modal-body clearfix">
+            {{ wtf.quick_form(newmodelform, id='newmodelform', action=url_for('modeleditor.newmodel'), button_map={'submit':'primary pull-right'}) }}
+        </div>
+
+        <!--
         <div class="modal-footer" >
-            <button class="btn btn-default" data-dismiss="modal" >Cancel</button> 
+            <button class="btn btn-default" data-dismiss="modal" >Cancel</button>
         </div>
         -->
-        
+
     </div></div></div>
-    
+
     <div id="confirmdelete" class="modal fade" >
-	<div class="modal-dialog" >
-	    <div class="modal-content" >
-		<div class="modal-header">
-		    <button type="button" class="close" data-dismiss="modal" >&times;</button>
-		    <h4 class="modal-title" >Confirm delete</h4>
-		</div>
-		<div class="modal-body clearfix" >
-		    Are you sure you want to delete model <span id="delmodelname">--</span> 
-		    version <span id="delmodelversion" >--</span>? This action cannot be undone. 
-		</div>
-		<div class="modal-footer">
-		    <form id="deletemodelform" action="{{ url_for('modeleditor.delmodel') }}" method="POST">
-			<input type="hidden" id="delmodelid" name="modelid" />
-			<button type="submit"  class="btn btn-danger pull-right">Confirm</button>
-			<button class="btn btn-default pull-right" data-dismiss="modal">Cancel</button>
-		    </form>
-		</div>
-	    </div>
-	</div>
+    <div class="modal-dialog" >
+        <div class="modal-content" >
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" >&times;</button>
+            <h4 class="modal-title" >Confirm delete</h4>
+        </div>
+        <div class="modal-body clearfix" >
+            Are you sure you want to delete model <span id="delmodelname">--</span>
+            version <span id="delmodelversion" >--</span>? This action cannot be undone.
+        </div>
+        <div class="modal-footer">
+            <form id="deletemodelform" action="{{ url_for('modeleditor.delmodel') }}" method="POST">
+            <input type="hidden" id="delmodelid" name="modelid" />
+            <button type="submit"  class="btn btn-danger pull-right">Confirm</button>
+            <button class="btn btn-default pull-right" data-dismiss="modal">Cancel</button>
+            </form>
+        </div>
+        </div>
     </div>
-    
+    </div>
+
     <table id="modelist" class="table" >
-	<thead>
-	    <tr>
-		<th>Name</th><th>Version</th><th>Description</th>
-		<th>Last Edited</th><th>Comment</th>
-		<th><!-- Edit --></th>
-	    </tr>
-	</thead>
-	{{ printmodelslist(models|rejectattr('temporary')) }}
-	{% set templist = models|selectattr('temporary')|list %}
-	{% if templist %}
-	    <tr><td colspan="10" class="h2" >Editing in process</td></tr>
-	    {{ printmodelslist(templist) }}
-	{% endif %}
+    <thead>
+        <tr>
+        <th>Name</th><th>Version</th><th>Description</th>
+        <th>Last Edited</th><th>Comment</th>
+        <th><!-- Edit --></th>
+        </tr>
+    </thead>
+    {{ printmodelslist(models|rejectattr('temporary')) }}
+    {% set templist = models|selectattr('temporary')|list %}
+    {% if templist %}
+        <tr><td colspan="10" class="h2" >Editing in process</td></tr>
+        {{ printmodelslist(templist) }}
+    {% endif %}
     </table>
-    
+
 {% endblock %}
