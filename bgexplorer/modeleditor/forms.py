@@ -191,12 +191,12 @@ dist_choices = ('bulk', 'surface_in', 'surface_out', 'flux')
 
 class EmissionspecForm(FlaskForm):
     name = StringField("Name", [validators.required()])
+    comment = StringField("Comment",
+                          description="Comment about current implementation")
     distribution = StringField("Distribution",[validators.required()],
                                description=("Choices are suggestions; "
                                             "any value is valid"),
                                widget=InputChoices(choices=dist_choices))
-    comment = StringField("Comment",
-                          description="Comment about current implementation")
     category = StringField("Category", description=("A description category "
                                                     "for grouping sources "
                                                     "(usually leave default)"))
@@ -216,7 +216,7 @@ class RadioactiveIsotopeForm(Form):
     id = HiddenField("ID")
     name = StringField("Isotope", [validators.required()],
                           render_kw={'size':7,'class':'form-control'})
-    rate = StringField("Decay rate",[validate_units(),
+    rate = StringField("Decay rate",[validate_units(nonzero=True),
                                      validators.input_required()],
                        render_kw={'size':20,'class':'form-control'})
     err  = StringField("Uncertainty",
@@ -247,7 +247,7 @@ class RadonExposureForm(EmissionspecForm):
                              [validate_units(defradexp.radonlevel),
                               validators.required()])
     exposure = StringField("Exposure Time",
-                           [validate_units(defradexp.exposure),
+                           [validate_units(defradexp.exposure, nonzero=True),
                             validators.required()])
     column_height = StringField("Plateout Column Height",
                                 [validate_units(defradexp.column_height)])
@@ -259,9 +259,10 @@ class CosmogenicIsotopeForm(Form):
     id = HiddenField("ID")
     name = StringField("Isotope",[validators.required()])
     halflife = StringField("Half-life",
-                           [validate_units('second'), validators.required()])
+                           [validate_units('second', nonzero=True),
+                            validators.required()])
     activationrate = StringField("Activation Rate",
-                                 [validate_units('1/kg/day'),
+                                 [validate_units('1/kg/day', nonzero=True),
                                   validators.required()],
                                  description=("Sea level activation "
                                               "atoms/mass/time"))
