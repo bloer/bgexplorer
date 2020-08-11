@@ -87,11 +87,12 @@
            onclick="toggleControls();">
   </td>
   <td>{{ entry.name }}</td>
-  <td>{{ entry.comment }}</td>
+  <td>{{ entry.sampleinfo.description | default('') }}</td>
   <td>
-    {% if entry.moreinfo.url %}<a href="{{ entry.moreinfo.url }}">{% endif %}
-    {{ entry.moreinfo.reference | default('') }}
-    {% if entry.moreinfo.url %}</a>{% endif %}
+    {% set refurl = entry.dataentry.url %}
+    {% if refurl %}<a href="{{ refurl }}">{% endif %}
+    {{ entry.dataentry.reference | default('') }}
+    {% if refurl %}</a>{% endif %}
   </td>
   {% for iso in isocols %}
   <td>{{ getsubspec(entry, iso) }}</td>
@@ -126,6 +127,12 @@
 
 
 {% block pagecontent %}
+<p class="hidden"> This area is for material assay references that are not associated to a single
+background model.  It can be used as a primary location to store assay info
+and/or include external references. When imported into a model, the model entry retains a link to the entry in
+this database, but the information is copied.  I.e., if you import an entry into
+your model and then change the entry in this database, the model's entry will
+still have the old version.</p>
 
 <form id="assayform" method="POST">
 <table id="assays"  class="table table-bordered" width="100%">
@@ -134,7 +141,7 @@
       <th data-orderable="false">
         <input type="checkbox" id="checkall" onclick="setAllChecks();">
       </th>
-      <th>Name</th><th>Comment</th><th>Ref</th>
+      <th>Name</th><th>Description</th><th>Ref</th>
       {% for iso in isocols %}
       <th>{{ iso }}</th>
       {% endfor %}

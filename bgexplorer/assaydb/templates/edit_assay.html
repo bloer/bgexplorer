@@ -3,7 +3,6 @@
 {% import "bootstrap/wtf.html" as wtf %}
 
 {% block title %}Edit Assay{% endblock %}
-{% block pageheader %}<h1>Edit Assay Reference</h1>{% endblock %}
 
 {% block myscripts %}
 <script type="text/javascript">
@@ -15,22 +14,22 @@
 </script>
 {% endblock %}
 
-{% block pagecontent %}
-{% if assayid %}
-  <form id="deleteform" action="{{ url_for('.delete') }}" method="POST">
-    <input type="hidden" name="id" value="{{ assayid }}">
-  </form>
-{% endif %}
+{% macro renderform(form) %}
+{%- for field in form  %}
+  {% if not bootstrap_is_hidden_field(field) -%}
+    {{ wtf.form_field(field) }}
+  {% endif %}
+{% endfor %}
+{% endmacro %}
 
-<form action="{{ url_for('.edit', assayid=assayid) }}" method="POST" >
-<div class="row">
-  <div class="col-md-8" >
-    {{ wtf.quick_form(form) }}
-  </div>
+{% block pageheader %}
+  <h1>Edit Assay Reference
 
-  <div class="col-md-4">
-  <span class="btn-group pull-right">
-      <button type="submit" class="btn btn-primary" >Save</button>
+    <span class="btn-group pull-right">
+      <button class="btn btn-primary"
+              onclick="document.getElementById('editform').submit();">
+        Save
+      </button>
       <button class="btn btn-toolbar dropdown-toggle" type="button" data-toggle="dropdown">
         Other actions<span class="caret" ></span>
       </button>
@@ -48,10 +47,24 @@
         </li>
         {% endif %}
       </ul>
-  </span>
-  </div>
-</div>
+    </span>
+  </h1>
+{% endblock %}
 
-</form>
 
+{% block pagecontent %}
+
+
+{{ wtf.quick_form(form, id="editform",
+                  action=url_for('.edit', assayid=assayid),
+                  form_type='horizontal',
+                  button_map={'save':'primary'},)
+                  }}
+
+
+{% if assayid %}
+  <form id="deleteform" action="{{ url_for('.delete') }}" method="POST">
+    <input type="hidden" name="id" value="{{ assayid }}">
+  </form>
+{% endif %}
 {% endblock %}

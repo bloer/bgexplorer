@@ -4,6 +4,8 @@ import pymongo
 from bgmodelbuilder.emissionspec import RadioactiveContam, CombinedSpec, buildspecfromdict
 from ..modeleditor.forms import RadioactiveContamForm
 from wtforms.fields import HiddenField
+
+from .forms import AssayEntry, AssayForm
 import logging
 log = logging.getLogger(__name__)
 
@@ -14,14 +16,6 @@ association, but do not automatically update if the original entry changes.
 The AssaysDB object is both a blueprint and a database to be accessed by
 other blueprints.
 """
-
-#class AssayEntry(CombinedSpec):
-#    def __init__(self, name='', subspecs=[], created=None, modified=None,
-
-
-class AssayForm(RadioactiveContamForm):
-    querymod = HiddenField('Querymod', default={})
-    normfunc = HiddenField(default='')
 
 class AssayDB(object):
     def __init__(self, dburi=None, collection='assays', app=None):
@@ -66,20 +60,22 @@ class AssayDB(object):
         app.register_blueprint(self.bp, url_prefix=url_prefix)
         app.extensions['AssayDB'] = self
 
+    _defpro = {'attachments.blob': False}
+
     def get(self, assayid, doabort=True):
-        result = self._collection.find_one(assayid)
+        result = self._collection.find_one(assayid, projection=self._defpro)
         if result is None:
             msg = f"No assay entry with id {assayid}"
             if doabort:
                 abort(404, msg)
             else:
                 raise KeyError(msg)
-        return buildspecfromdict(result)
+        return AssayEntry(**result)
 
     def find(self, query=None, raw=False):
-        result = self._collection.find(query)
+        result = self._collection.find(query, projection=self._defpro)
         if not raw:
-            result = (buildspecfromdict(r) for r in result)
+            result = (AssayEntry(**r) for r in result)
         return result
 
     def save(self, entry):
@@ -88,7 +84,7 @@ class AssayDB(object):
             entry = entry.todict()
         except AttributeError:
             pass
-        print(entry)
+        entry.pop('__class__', None)
         if entry.get('_id') is None:
             entry.pop('_id', None)
             self._collection.insert_one(entry)
@@ -115,7 +111,7 @@ class AssayDB(object):
                 entry = self.get(assayid)
             else:
                 subspecs = [RadioactiveContam(iso) for iso in ('U238', 'Th232', 'K40')]
-                entry = CombinedSpec(name='', subspecs=subspecs)
+                entry = AssayEntry(name='', subspecs=subspecs)
             form = AssayForm(request.form, obj=entry)
             if request.method == 'POST' and form.validate():
                 form.populate_obj(entry)
