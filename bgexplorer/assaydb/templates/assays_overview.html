@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Material Assays{% endblock %}
+
+
+{% block mystyles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}">
+    <style>
+     th {border:1px solid black}
+     table.dataTable tbody td {white-space: nowrap; padding: 4px 4px}
+     .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
+     .truncate:hover {white-space: normal}
+
+     div.dt-buttons { float:left;}
+     div.dt-buttons a.btn {font-size:small}
+    </style>
+{% endblock %}
+
+
+{% block myscripts %}
+    <script type="text/javascript"
+        src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}">
+    </script>
+    <script type="text/javascript"
+        src="{{ url_for('static', filename='js/jquery.json-viewer.js') }}">
+    </script>
+    <script type="text/javascript">
+      function toggleControls(){
+        var checked = $("input.entrycheckbox").is(":checked");
+        $(".toggleIfChecked").toggleClass('hidden', !checked).toggle(checked);
+      }
+
+      function setAllChecks(){
+        var checked = document.getElementById("checkall").checked;
+        $("input.entrycheckbox").prop('checked', checked);
+        toggleControls();
+      }
+
+      function doExport(){
+        $("#assayform").attr("action", "{{ url_for('.exportentries') }}").submit();
+      }
+
+      function confirmDelete(){
+        if(confirm("Are you sure you want to permanently delete these items?")){
+          $("#assayform").attr("action", "{{ url_for('.delete') }}").submit();
+        }
+      }
+
+      $(document).ready(function(){
+       var table = $('#assays').DataTable({
+         paging: false,
+         ordering: true,
+         order: [[1, 'asc']],
+         scrollY: $(window).height() - $("#pagecontent").offset().top - 95,
+         scrollX: true,
+         scrollCollapse: true,
+         dom: 'flrtip',
+             //dom: 'B<"clear">lfrtip',
+         //buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv',
+             //           {
+             //               extend: 'excel',
+             //           } ],
+         });
+      });
+
+    </script>
+{% endblock %}
+
+{% set isocols = ['U238', 'Th232', 'K40'] %}
+
+{% macro getsubspec(parent, name) %}
+{% for spec in parent.subspecs if spec.name == name %}
+{{ spec.getratestr() }}
+{% endfor %}
+{% endmacro %}
+
+{% macro getothersubspecs(parent, ignore) %}
+{% for spec in parent.subspecs if spec.name not in ignore -%}
+{%- if loop.index0>0 -%}; {% endif -%}{{spec.name}}: {{ spec.getratestr() }}
+{%- endfor %}
+{% endmacro %}
+
+{% macro printentryrow(entry) %}
+<tr>
+  <td>
+    <input type="checkbox" class="entrycheckbox" name="id" value="{{entry.id}}"
+           onclick="toggleControls();">
+  </td>
+  <td>{{ entry.name }}</td>
+  <td>{{ entry.comment }}</td>
+  <td>
+    {% if entry.moreinfo.url %}<a href="{{ entry.moreinfo.url }}">{% endif %}
+    {{ entry.moreinfo.reference | default('') }}
+    {% if entry.moreinfo.url %}</a>{% endif %}
+  </td>
+  {% for iso in isocols %}
+  <td>{{ getsubspec(entry, iso) }}</td>
+  {% endfor %}
+  <td class="truncate">{{ getothersubspecs(entry, isocols) }}</td>
+  <td>
+    <a class="" href="{{ url_for('.edit', assayid=entry.id) }}">
+      <span class="glyphicon glyphicon-edit"></span>
+    </a>
+  </td>
+</tr>
+{% endmacro %}
+
+{% block pageheader %}
+    <h1> Assay Database
+      <div class="btn-group pull-right">
+        <a class="btn btn-success" href="{{ url_for('.edit') }}">New</a>
+        <button class="btn btn-success dropdown-toggle" data-toggle="dropdown">
+          <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="" href="{{ url_for('.importentries') }}">Import</a></li>
+        </ul>
+        <button class="btn btn-secondary hidden toggleIfChecked"
+                onclick="doExport();">Export</button>
+        <button class="btn btn-danger hidden toggleIfChecked"
+                onclick="confirmDelete();">Delete</button>
+      </div>
+    </h1>
+{% endblock %}
+
+
+
+{% block pagecontent %}
+
+<form id="assayform" method="POST">
+<table id="assays"  class="table table-bordered" width="100%">
+  <thead>
+    <tr>
+      <th data-orderable="false">
+        <input type="checkbox" id="checkall" onclick="setAllChecks();">
+      </th>
+      <th>Name</th><th>Comment</th><th>Ref</th>
+      {% for iso in isocols %}
+      <th>{{ iso }}</th>
+      {% endfor %}
+      <th>Other</th>
+      <th data-orderable="false"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in assays %}
+    {{ printentryrow(entry) }}
+    {% endfor %}
+  </tbody>
+</table>
+</form>
+{% endblock %}
