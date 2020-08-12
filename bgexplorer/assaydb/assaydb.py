@@ -6,6 +6,7 @@ from ..modeleditor.forms import RadioactiveContamForm
 from wtforms.fields import HiddenField
 
 from .forms import AssayEntry, AssayForm
+from ..utils import getmodelordie, get_modeldb
 import logging
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class AssayDB(object):
 
     _defpro = {'attachments.blob': False}
 
-    def get(self, assayid, doabort=True):
+    def get(self, assayid, doabort=True, raw=False):
         result = self._collection.find_one(assayid, projection=self._defpro)
         if result is None:
             msg = f"No assay entry with id {assayid}"
@@ -70,7 +71,9 @@ class AssayDB(object):
                 abort(404, msg)
             else:
                 raise KeyError(msg)
-        return AssayEntry(**result)
+        if not raw:
+            result = AssayEntry(**result)
+        return result
 
     def find(self, query=None, raw=False):
         result = self._collection.find(query, projection=self._defpro)
@@ -92,16 +95,39 @@ class AssayDB(object):
             self._collection.replace_one({'_id': entry['_id']}, entry, upsert=True)
         return entry['_id']
 
-
-
     def addendpoints(self):
         @self.bp.route('/')
         def index():
             return render_template('assays_overview.html', assays=self.find())
 
+        @self.bp.route('/tomodel/<modelid>', methods=('GET', 'POST'))
+        def tomodel(modelid):
+            if request.method == 'POST':
+                query = {'_id': {'$in': request.form.getlist('id')}}
+                entries = list(self.find(query))
+                if entries:
+                    model = getmodelordie(modelid, toedit=True)
+                    specid = None
+                    for entry in entries:
+                        ref = entry.tospec()
+                        model.specs[ref.id] = ref
+                        if not specid:
+                            specid = ref.id
+                    get_modeldb().write_model(model)
+                    flash(f"{len(entries)} entries successfully imported", 'success')
+                    return redirect(url_for('modeleditor.editspec',
+                                    modelid=modelid, specid=specid))
+                else:
+                    flash("No entries selected!", 'error')
+            return render_template('assays_overview.html', assays=self.find(),
+                                   tomodel=modelid)
+
+
         @self.bp.route('/<assayid>')
         def detail(assayid):
-            return render_template('assaydetail.html', entry=self.get(assayid))
+            # placeholder until we get a better view page
+            return jsonify(self.get(assayid, raw=True))
+            #return render_template('assaydetail.html', entry=self.get(assayid))
 
         @self.bp.route('/new', methods=('GET', 'POST'))
         @self.bp.route('/edit/<assayid>', methods=('GET', 'POST'))

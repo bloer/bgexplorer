@@ -27,7 +27,11 @@
     <script type="text/javascript">
       function toggleControls(){
         var checked = $("input.entrycheckbox").is(":checked");
+        {% if tomodel %}
+        $(".toggleIfChecked").attr('disabled', !checked);
+        {% else %}
         $(".toggleIfChecked").toggleClass('hidden', !checked).toggle(checked);
+        {% endif %}
       }
 
       function setAllChecks(){
@@ -37,7 +41,12 @@
       }
 
       function doExport(){
-        $("#assayform").attr("action", "{{ url_for('.exportentries') }}").submit();
+        {% if tomodel %}
+        var action = "{{ url_for('.tomodel', modelid=tomodel) }}";
+        {% else %}
+        var action = "{{ url_for('.exportentries') }}";
+        {% endif %}
+        $("#assayform").attr("action", action).submit();
       }
 
       function confirmDelete(){
@@ -86,7 +95,7 @@
     <input type="checkbox" class="entrycheckbox" name="id" value="{{entry.id}}"
            onclick="toggleControls();">
   </td>
-  <td>{{ entry.name }}</td>
+  <td><a href="{{ url_for('.detail', assayid=entry.id) }}">{{ entry.name }}</a></td>
   <td>{{ entry.sampleinfo.description | default('') }}</td>
   <td>
     {% set refurl = entry.dataentry.url %}
@@ -98,17 +107,23 @@
   <td>{{ getsubspec(entry, iso) }}</td>
   {% endfor %}
   <td class="truncate">{{ getothersubspecs(entry, isocols) }}</td>
+  {% if not tomodel %}
   <td>
     <a class="" href="{{ url_for('.edit', assayid=entry.id) }}">
       <span class="glyphicon glyphicon-edit"></span>
     </a>
   </td>
+  {% endif %}
 </tr>
 {% endmacro %}
 
 {% block pageheader %}
     <h1> Assay Database
       <div class="btn-group pull-right">
+      {% if tomodel %}
+        <button class="btn btn-primary toggleIfChecked" disabled onclick="doExport();">Export</button>
+        <button class="btn btn-warning" onclick="history.back();">Cancel</button>
+      {% else %}
         <a class="btn btn-success" href="{{ url_for('.edit') }}">New</a>
         <button class="btn btn-success dropdown-toggle" data-toggle="dropdown">
           <span class="caret"></span>
@@ -120,6 +135,7 @@
                 onclick="doExport();">Export</button>
         <button class="btn btn-danger hidden toggleIfChecked"
                 onclick="confirmDelete();">Delete</button>
+      {% endif %}
       </div>
     </h1>
 {% endblock %}
@@ -127,6 +143,10 @@
 
 
 {% block pagecontent %}
+{% if tomodel %}
+<p style="font-weight:bold">Select entries to import into your model:</p>
+{% endif %}
+
 <p class="hidden"> This area is for material assay references that are not associated to a single
 background model.  It can be used as a primary location to store assay info
 and/or include external references. When imported into a model, the model entry retains a link to the entry in
@@ -146,7 +166,9 @@ still have the old version.</p>
       <th>{{ iso }}</th>
       {% endfor %}
       <th>Other</th>
+      {% if not tomodel %}
       <th data-orderable="false"></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>

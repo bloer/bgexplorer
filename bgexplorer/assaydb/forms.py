@@ -8,7 +8,7 @@ from wtforms.widgets import HiddenInput, Select
 from wtforms import Form
 #FlaskForm needed for wtf.simple_form in flask
 from flask_wtf import FlaskForm
-
+from flask import url_for
 from datetime import datetime
 from ..modeleditor.forms import RadioactiveContamForm
 from bgmodelbuilder.emissionspec import CombinedSpec
@@ -23,7 +23,6 @@ class AssayEntry(CombinedSpec):
                  measurementinfo=None, dataentry=None, attachments=None,
                  **kwargs):
         kwargs.pop('__class__', None)
-        kwargs.pop('save', None)
         print(kwargs)
         super().__init__(name, subspecs, **kwargs)
         self.owner = owner
@@ -31,6 +30,37 @@ class AssayEntry(CombinedSpec):
         self.measurementinfo = measurementinfo or {}
         self.dataentry = dataentry or {}
         self.attachments = attachments or []
+
+    def tospec(self):
+        """ Convert to a CombinedSpec for import to a model """
+        out = CombinedSpec()
+        for key in out.__dict__:
+            if key != '_id':
+                setattr(out, key, getattr(self, key, None))
+
+        out.comment = '(Imported from assaydb)'
+        out.moreinfo = {'assaydb_id' : self.id,
+                        'assaydb_import':  _strnow()}
+        def _setifset(val, key):
+            if val:
+                out.moreinfo[key] = val
+        try:
+            myurl = url_for('.detail', assayid=self.id)
+        except RuntimeError:
+            myurl = None
+        _setifset(self.dataentry.get('reference', 'assaydb'), 'reference')
+        _setifset(self.dataentry.get('url',  myurl), 'url')
+        _setifset(self.sampleinfo.get('vendor'), 'vendor')
+        _setifset(self.sampleinfo.get('batch'), 'batch')
+        detail = ''
+        if self.sampleinfo.get('sampleid'):
+            detail = ' SampleID %s ' % self.sampleinfo['sampleid']
+        if self.sampleinfo.get('description'):
+            detail += ' ' + self.sampleinfo['description']
+        out.comment += detail
+
+        return out
+
 
 class DictFormField(FormField):
     """ Form that populates dict keys rather than attributes """
