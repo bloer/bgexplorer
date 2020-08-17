@@ -17,16 +17,15 @@
     ]) }}
     {{ navbaritem(url_for('.emissionsoverview'),"Emissions") }}
     {{ navbardropdown("Simulations",[
-	(url_for('.simulationsoverview'),"by Placement path, spec"),
-	(url_for('.queriesoverview'),"by Database Query"),
+        (url_for('.simulationsoverview'),"by Placement path, spec"),
+        (url_for('.queriesoverview'),"by Database Query"),
     ]) }}
     {{ navbardropdown("Results",[
-	(url_for('.tablesdefault'),"Tables"),
-	(url_for('.chartsdefault'),"Charts"),
-	(url_for('.datatable'),"Export Raw Data"),
+        (url_for('.tablesdefault'),"Tables"),
+        (url_for('.chartsdefault'),"Charts"),
+        (url_for('.datatable'),"Export Raw Data"),
     ]) }}
     {% include ['navbarcustom.html','customlinks.html'] ignore missing %}
 {% endblock %}
-    
-    
+
 
