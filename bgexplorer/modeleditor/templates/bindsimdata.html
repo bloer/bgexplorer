@@ -6,8 +6,12 @@
 {% block mystyles %}
     <style>
      h1 {margin-top: 0px; margin-bottom:0px }
-     tr.simdatamatch.nodata { background-color: #ffdddd }
      tr.simdatamatch.newmatch { background-color: #ddffdd }
+     #tr.simdatamatch.livetimeremoved td.livetime { background-color: #F8B741}
+     #tr.simdatamatch.livetimeadded td.livetime { background-color: #ddffdd}
+     tr.simdatamatch.nodata td.dataset,
+     tr.simdatamatch.nodata td.livetime { background-color: #ffdddd }
+
 
     </style>
 {% endblock %}

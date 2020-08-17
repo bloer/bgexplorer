@@ -46,6 +46,18 @@
          nav img {max-height:50px}
          .table-condensed { font-size:small; }
          #messages {position:absolute; top:30px; right:2px; width:30%; z-index: 1}
+         input[type=checkbox]
+          {
+            {% set checkboxsize = 1.5 %}
+            /* Double-sized Checkboxes */
+            -ms-transform: scale({{ checkboxsize }}); /* IE */
+            -moz-transform: scale({{ checkboxsize }}); /* FF */
+            -webkit-transform: scale({{ checkboxsize }}); /* Safari and Chrome */
+            -o-transform: scale({{ checkboxsize }}); /* Opera */
+            transform: scale({{ checkboxsize }});
+            padding: 10px;
+            #margin:auto;
+          }
         </style>
         {% block mystyles %}{% endblock %}
     {%- endblock styles %}
@@ -66,7 +78,7 @@
         <div class="container-fluid" >
         <div class="navbar-header">
             {% block mybrand %} {% include 'mybrand.html' ignore missing %} {% endblock %}
-            <a class="navbar-left" href="https://bgexplorer.readthedocs.io/en/develop">
+            <a class="navbar-left" href="https://github.com/bloer/bgexplorer">
             {% block brand %}
             <img src="{{ url_for('static', filename="bgexplorer_brand.png") }}" alt="Background Explorer"
             class="brand" >
@@ -77,9 +89,7 @@
             <ul class="nav navbar-nav" >
             {{ navbaritem(url_for('index'),"Home") }}
             {{ navbaritem(url_for('simsviewer.index'),"Sim Data") }}
-            {# <li><a href="{{ url_for('index') }}">Home</a></li>
-            <li><a href="{{ url_for('simsviewer.overview') }}">Sim Data</a></li>
-            #}
+            {{ navbaritem(url_for('assaydb.index'), "Assay DB") }}
             {% block navbarlinks %}{% endblock %}
             </ul>
             {% block navbarextra %}{% endblock %}

@@ -151,7 +151,7 @@ class NoValSelectField(SelectField):
 
 """ Apply this validator to a rendered text field that should be a
 pint unit with fixed dimensions"""
-def validate_units(unittype=None):
+def validate_units(unittype=None, nonzero=False):
     if isinstance(unittype,str):
         unittype = units(unittype).dimensionality
     if isinstance(unittype,(units.Quantity, units.Unit)):
@@ -166,6 +166,8 @@ def validate_units(unittype=None):
         if (unittype is not None and
             getattr(val,'dimensionality',None) != unittype):
             raise ValidationError("Requires unit type %s"%unittype)
+        if nonzero and val == 0:
+            raise ValidationError("Entry must be non-zero")
         field.data = val
     return _validate
 

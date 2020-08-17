@@ -301,7 +301,7 @@
         <li>
             <div class="input-group pull-right navbar-form" >
             <input type="text" class="form-control" id="filtercomponents" placeholder="Search"
-                   oninput="filtercomponents()" size="30" >
+                   oninput="filtercomponents()" size="22" >
             <div class="input-group-btn">
                 <button class="btn btn-default"
                        onclick="$('#filtercomponents').val('');filtercomponents()" >
@@ -350,6 +350,7 @@
                     {% for spectype in spectypes %}
                     <option value="{{ spectype }}">{{ spectype }}</option>
                     {% endfor %}
+                    <option value="" onclick="location.href='{{ url_for('assaydb.tomodel', modelid=model.id) }}';">Import from assay DB...</option>
                 </select>
                 </div>
             </form>

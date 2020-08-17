@@ -131,9 +131,8 @@ class SimsViewer(object):
                 values.setdefault('dbname', dbname)
 
             simsdbview = values.pop('simsdbview', None) or g.get('simsdbview', None)
-            if simsdbview:
+            if simsdbview and 'dbname' not in values:
                 values['dbname'] = current_app.getsimviewname(simsdbview)
-
 
 
         """Define the view functions here"""

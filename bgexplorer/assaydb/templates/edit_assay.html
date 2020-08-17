@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}Edit Assay{% endblock %}
+
+{% block myscripts %}
+<script type="text/javascript">
+  function confirmdelete(){
+    if(confirm("Are you sure you want to delete this entry?")){
+      document.getElementById("deleteform").submit();
+    }
+  }
+</script>
+{% endblock %}
+
+{% macro renderform(form) %}
+{%- for field in form  %}
+  {% if not bootstrap_is_hidden_field(field) -%}
+    {{ wtf.form_field(field) }}
+  {% endif %}
+{% endfor %}
+{% endmacro %}
+
+{% block pageheader %}
+  <h1>Edit Assay Reference
+
+    <span class="btn-group pull-right">
+      <button class="btn btn-primary"
+              onclick="document.getElementById('editform').submit();">
+        Save
+      </button>
+      <button class="btn btn-toolbar dropdown-toggle" type="button" data-toggle="dropdown">
+        Other actions<span class="caret" ></span>
+      </button>
+      <ul class="dropdown-menu">
+        <li class="list-group-item-warning" >
+        <a href="{{ url_for('.edit', assayid=assayid) }}"
+           class="" >Reload (discard changes)</a>
+        </li>
+        {% if assayid %}
+        <li class="list-group-item-default">
+          <a href="{{ url_for('.exportentries', id=assayid) }}">Export</a>
+        </li>
+        <li  class="list-group-item-danger" >
+        <a href="#" onclick="confirmdelete();">Delete</a>
+        </li>
+        {% endif %}
+      </ul>
+    </span>
+  </h1>
+{% endblock %}
+
+
+{% block pagecontent %}
+
+
+{{ wtf.quick_form(form, id="editform",
+                  action=url_for('.edit', assayid=assayid),
+                  form_type='horizontal',
+                  button_map={'save':'primary'},)
+                  }}
+
+
+{% if assayid %}
+  <form id="deleteform" action="{{ url_for('.delete') }}" method="POST">
+    <input type="hidden" name="id" value="{{ assayid }}">
+  </form>
+{% endif %}
+{% endblock %}

@@ -13,6 +13,7 @@ from .dbview import SimsDbView
 from .modeleditor.modeleditor import ModelEditor
 from .modelviewer.modelviewer import ModelViewer
 from .simsviewer.simsviewer import SimsViewer
+from .assaydb.assaydb import AssayDB
 from .modeldb import ModelDB
 from bgmodelbuilder.common import units as ureg
 from .utils import getobjectid
@@ -116,6 +117,7 @@ class BgExplorer(Flask):
         self.modeleditor = ModelEditor(app=app, modeldb=self.modeldb)
         self.modelviewer = ModelViewer(app=app, modeldb=self.modeldb)
         self.simsviewer = SimsViewer(app=app)
+        self.assaydb = AssayDB(app=app)
 
         # set up some views
         app.add_template_filter(getobjectid, 'id')

@@ -13,7 +13,7 @@
  tr.spec { background-color:rgb(245, 245, 245) }
  tr.subspec { background-color:initial }
  tr.subspec td:first-child { padding-left: 2em; }
- tr.simdata td:first-child { padding-left: 4em; } 
+ tr.simdata td:first-child { padding-left: 4em; }
 </style>
 {% endblock %}
 
@@ -37,7 +37,7 @@
     }
     db.config.defaulttabledepth = {{ 1 + comppaths|map('length')|max }};
     {% endif %}
-    
+
 </script>
 
 {% if comppaths or component == g.model.assemblyroot %}
@@ -57,105 +57,105 @@
 
 {% macro speccells(spec, link=true) %}
     <td {% if spec.querymod %} title="querymod: {{ spec.querymod }}" {% endif %}>
-	{% if link %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif %}
-	    {{ spec.name }}
-	    {% if link %}</a>{% endif %}
+    {% if link %}<a href="{{ url_for('.emissionview', spec=spec) }}">{% endif %}
+        {{ spec.name }}
+        {% if link %}</a>{% endif %}
     </td>
     <td>{{ spec.category }}</td>
     <td>{{ spec.distribution }}</td>
     <td>{{ spec.getratestr(2) }}</td>
-    
+
     {% set simdata = g.model.getsimdata(component=component, spec=spec) %}
     <td>{% for match in simdata %}
-	{% if loop.index0 %}<br>{% endif %}
-	<a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
-	    {{ "{:.2g}".format(match.emissionrate.to('1/day').m) }} /day </a>
-	{% endfor %}
+    {% if loop.index0 %}<br>{% endif %}
+    <a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
+        {{ "{:.2g}".format(match.emissionrate.to('1/day').m) }} /day </a>
+    {% endfor %}
     </td>
     <td>{% for match in simdata %}
-	{% if loop.index0 %}<br>{% endif %}
-	<a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
-	    {{"{:.2g}".format( match.livetime.to('day').m) }} day </a>
-	{% endfor %}
-    </td>    
+    {% if loop.index0 %}<br>{% endif %}
+    <a href="{{ url_for('.simdatamatchview', matchid=match.id) }}">
+        {{"{:.2g}".format( match.livetime.to('day').m) }} day </a>
+    {% endfor %}
+    </td>
 {% endmacro %}
 
 {% block pagecontent %}
     <div class="row">
-	<div class="col-md-6">
-	    <h2> General Info </h2>
-	    <dl class="dl-horizontal" >
-		<dt>Description</dt><dd>{{ component.description or 'None'}}</dd>
-		{% if component.comment %}<dt>Comment</dt><dd>{{ component.comment }}</dd>{% endif %}
-		{% if component.querymod %}<dt>Query modifier</dt><dd>{{ component.querymod }}</dd>{% endif %}
-		{% for key, val in component.moreinfo.items() %}
-		    <dt>{{ key }}</dt> <dd>{{ val | urlize }}</dd>
-		{% endfor %}
-	    </dl>
-	    
-	    <h2>Physical Characteristics</h2>
-	    <dl class="dl-horizontal"">
-		{% for val in ['material','mass','surface_in','surface_out', 'surface_interior', 'volume'] %}
-		    <dt>{{ val }}</dt><dd>{{ component | attr(val) }}</dd>
-		{% endfor %}
-	    </dl>
-	</div> <!-- end first column -->
-	
-	<div class="col-md-6">
+    <div class="col-md-6">
+        <h2> General Info </h2>
+        <dl class="dl-horizontal" >
+        <dt>Description</dt><dd>{{ component.description or 'None'}}</dd>
+        {% if component.comment %}<dt>Comment</dt><dd>{{ component.comment }}</dd>{% endif %}
+        {% if component.querymod %}<dt>Query modifier</dt><dd>{{ component.querymod }}</dd>{% endif %}
+        {% for key, val in component.moreinfo.items() %}
+            <dt>{{ key }}</dt> <dd>{{ val | urlize }}</dd>
+        {% endfor %}
+        </dl>
 
-	    <h2>Placements <small>Total weight: {{ component.gettotalweight(g.model.assemblyroot) }}</small></h2>
-	    {% for path in g.model.assemblyroot.gethierarchyto(component,placements=True) or [] %}
-		{{ printassemblypath(path) }}
-	    {% endfor %}
-	    
-	    {% if component.components %}
-		<h2>Subcomponents</h2>
-		<table id="subcomponents" class="table table-compact">
-		    <thead>
-			<tr><th>Name</th><th>Weight</th><th>Query Modifier</th></tr>
-		    </thead>
-		    <tbody>{% for placement in component.components %}
-			<tr class="placement" >
-			    <td><a href="{{ url_for('.componentview',component=placement.component) }}">
-				{{ placement.name }}</a></td>
-			    <td>{{ placement.weight }}</td>
-			    <td>{{ placement.querymod | default('',true) }}</td>
-			</tr>
-		    {% endfor %}</tbody>
-		</table>
-	    {% endif %}
-	    
-	    
-	</div> <!-- end second column -->
-    
+        <h2>Physical Characteristics</h2>
+        <dl class="dl-horizontal">
+        {% for val in ['material','mass','surface_in','surface_out', 'surface_interior', 'volume'] %}
+            <dt>{{ val }}</dt><dd>{{ component | attr(val) }}</dd>
+        {% endfor %}
+        </dl>
+    </div> <!-- end first column -->
+
+    <div class="col-md-6">
+
+        <h2>Placements <small>Total weight: {{ component.gettotalweight(g.model.assemblyroot) }}</small></h2>
+        {% for path in g.model.assemblyroot.gethierarchyto(component,placements=True) or [] %}
+        {{ printassemblypath(path) }}
+        {% endfor %}
+
+        {% if component.components %}
+        <h2>Subcomponents</h2>
+        <table id="subcomponents" class="table table-compact">
+            <thead>
+            <tr><th>Name</th><th>Weight</th><th>Query Modifier</th></tr>
+            </thead>
+            <tbody>{% for placement in component.components %}
+            <tr class="placement" >
+                <td><a href="{{ url_for('.componentview',component=placement.component) }}">
+                {{ placement.name }}</a></td>
+                <td>{{ placement.weight }}</td>
+                <td>{{ placement.querymod | default('',true) }}</td>
+            </tr>
+            {% endfor %}</tbody>
+        </table>
+        {% endif %}
+
+
+    </div> <!-- end second column -->
+
     </div><!-- end 'row' -->
 
     {% if component.specs %}
     <h2>Emission specs</h2>
     <table id="specstable" class="table table-compact">
-	<thead>
-	    <tr>
-		<th>Name</th>
-		<th>Type</th>
-		<th>Dist.</th>
-		<th>Rate spec</th>
-		<th>Total Rate</th>
-		<th>Simulated Livetime</th>
-	    </tr>
-	</thead>
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Dist.</th>
+        <th>Rate spec</th>
+        <th>Total Rate</th>
+        <th>Simulated Livetime</th>
+        </tr>
+    </thead>
     <tbody>
     {% for boundspec in component.specs %}
-	<tr class="spec" >
-	    {{ speccells(boundspec.spec, link=True) }}
-	</tr>
-	{% if boundspec.spec.subspecs %}{% for subspec in boundspec.spec.subspecs %}
-	    <tr class="spec subspec">
-		{{ speccells(subspec, link=False) }}
-	    </tr>
-	{% endfor %}{% endif %}
+    <tr class="spec" >
+        {{ speccells(boundspec.spec, link=True) }}
+    </tr>
+    {% if boundspec.spec.subspecs %}{% for subspec in boundspec.spec.subspecs %}
+        <tr class="spec subspec">
+        {{ speccells(subspec, link=False) }}
+        </tr>
+    {% endfor %}{% endif %}
     {% endfor %}
     </tbody>
     </table>
     {% endif %}
-    
+
 {% endblock %}
