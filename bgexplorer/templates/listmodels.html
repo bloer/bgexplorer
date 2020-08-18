@@ -27,10 +27,11 @@
 
 
 {% macro editmodelbutton(model=none, label="Edit", class="") -%}
+    {% set btn = '<span class="glyphicon glyphicon-pencil"></span>' %}
     {% if model and model['temporary'] %}
     <a class="btn btn-primary btn-sm {{ class }}"
     href="{{ url_for('modeleditor.editmodel',modelid=model|id) }}">
-        {{ label }}
+        <span class="glyphicon glyphicon-pencil"></span>
     </a>
     {% else %}
     <form action="{{ url_for('modeleditor.newmodel') }}"
@@ -40,7 +41,7 @@
                value="{{ model|id }}">
         {%- endif -%}
         <button type="submit" class="btn btn-primary btn-sm {{ class }}">
-        {{ label }}
+            <span class="glyphicon glyphicon-pencil"></span>
         </button>
     </form>
     {% endif %}
@@ -72,7 +73,7 @@
     </td>
     <td>{{ model['description'] }}</td>
     <td>{{ model['editDetails']['date'] }} by {{ model['editDetails']['user'] }}</td>
-    <td>{{ model['editDetails']['comment'] }}</td>
+    {# <td>{{ model['editDetails']['comment'] }}</td> #}
     <td>{{ editmodelbutton(model) }} {{ delmodelbutton(model) }}</td>
     </tr>
 {% endmacro %}
@@ -153,7 +154,8 @@
     <thead>
         <tr>
         <th>Name</th><th>Version</th><th>Description</th>
-        <th>Last Edited</th><th>Comment</th>
+        <th>Last Edited</th>
+        {# <th>Comment</th> #}
         <th><!-- Edit --></th>
         </tr>
     </thead>
