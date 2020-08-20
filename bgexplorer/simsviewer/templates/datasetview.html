@@ -3,7 +3,9 @@
 {% block title %}Simulations Overview{% endblock %}
 
 {% block pageheader %}
-    <h1> Simulation Dataset {{ dataset }} </h1>
+    <h1> Simulation Dataset {{ dataset }}
+    <small>in <a href="{{ url_for('.overview') }}">{{ g.dbname }}</a></small>
+    </h1>
 {% endblock %}
 
 {% block pagecontent %}

@@ -5,11 +5,7 @@ from flask import (Blueprint, render_template, render_template_string,
                    Response, get_flashed_messages, current_app)
 
 from .. import utils
-import gzip
-import zipfile
-import tarfile
-#import json
-
+import io
 
 def findsimmatches(dataset, model=None):
     """find all simdatamatch objects associated with the given dataset"""
@@ -117,7 +113,8 @@ class SimsViewer(object):
                 g.model = utils.getmodelordie(request.args['modelid'])
                 values.setdefault('dbname', g.model.simsdb)
             if 'dbname' in values:
-                g.simsdbview = utils.get_simsdbview(name=values.pop('dbname'))
+                g.dbname = values.pop('dbname')
+                g.simsdbview = utils.get_simsdbview(name=g.dbname)
 
         """ make sure we have a simsdb """
         @self.bp.url_defaults
@@ -172,94 +169,30 @@ class SimsViewer(object):
         if not self.enable_upload:
             return
 
+        @self.bp.route('/<dbname>/api/upload', methods=('POST',))
+        def api_upload():
+            """ Upload files to be inserted, return JSON response """
+            files = request.files.getlist('fupload')
+            if request.is_json:
+                print(request.data, request.json)
+                fakefile = io.BytesIO(request.data)
+                fakefile.filename = 'JSON'
+                files = [fakefile]
+            try:
+                result = g.simsdbview.handle_uploads(files)
+            except NotImplementedError:
+                abort(501, "Uploads are not implemented for this database")
+            except BaseException as e:
+                err = f"{type(e).__name__}: {str(e)}"
+                result = dict(entries={}, errors = {None: err})
+            return result
+
         @self.bp.route('/<dbname>/upload', methods=('GET','POST'))
         def upload():
             """ Upload new JSON-formatted entries """
+            result = None
             if request.method == 'POST':
-                flist = request.files.getlist('fupload')
-                newentries = sum((self.parseupload(f) for f in flist), [])
-                if newentries:
-                    sims = newentries
-                    if self.uploadsummary:
-                        sims = list(map(self.uploadsummary, newentries))
-                    colnames = self.getcolnames(sims)
-                    return render_template('simoverview.html', sims=sims,
-                                           colnames=colnames, temp=True,
-                                           fullentries=newentries)
-                else:
-                    flash("No valid entries in uploaded files",'error')
-            return render_template('uploadsimdata.html')
-
-        @self.bp.route('/<dbname>/confirmupload', methods=('POST',))
-        def confirmupload():
-            """ Confirm uploads with form """
-            confirmed = []
-            for key, val in request.form.items():
-                if key.startswith('simdata'):
-                    num = key[7:]
-                    confirm = request.form.get('confirm'+num,'off') == 'on'
-                    if confirm:
-                        confirmed.append(val)
-            numinserted = 0
-            for entry in confirmed:
-                try:
-                    self.simsdb.addentry(entry, fmt='json')
-                    numinserted += 1
-                except Exception as e:
-                    flash("Database error occurred: %s"%e, 'error')
-            flash("%d sim data entries successfully added"%numinserted,
-                  'success' if numinserted > 0 else 'error')
-            return redirect(url_for('.overview'))
-
-    def parseupload(self, afile):
-        files = [afile]
-        # see if it's a zip or gzip archive
-        try:
-            tf = tarfile.open(fileobj=afile)
-            files = [tf.extractfile(name) for name in tf.getnames()]
-            for f,name in zip(files, tf.getnames()):
-                f.filename = name
-        except tarfile.TarError:
-            afile.seek(0)
-            pass
-        try:
-            zf = zipfile.ZipFile(afile)
-            files = [_ZipExtSeekable(zf, name) for name in zf.namelist()]
-        except zipfile.BadZipFile:
-            afile.seek(0)
-            pass
-
-        def _load(jfile):
-            with gzip.open(jfile) as decomp:
-                result = None
-                try:
-                    result = json.load(decomp)
-                except OSError:
-                    jfile.seek(0)
-                    result = json.load(jfile)
-                except (json._json.JSONDecodeError) as e:
-                    flash("Error decoding JSON: %s"%e, 'error')
-            try:
-                result['_filename'] = getattr(jfile, 'filename', jfile.name)
-            except (AttributeError, TypeError):
-                pass
-            return result
-        return list(filter(lambda x: x is not None, map(_load, files)))
+                result = api_upload()
+            return render_template('uploadsimdata.html', result=result)
 
 
-class _ZipExtSeekable(object):
-    """ Wrap a 3.6 ZipExtFile to emulate seek(0) """
-    def __init__(self, zipfile, name):
-        self.zipfile = zipfile
-        self.name = name
-        self.seek(0)
-
-    def seek(self, to, whence=None):
-        # only seek(0) is sensible
-        self.ext = self.zipfile.open(self.name)
-
-    def seekable(self):
-        return True
-
-    def __getattr__(self, attr):
-        return getattr(self.ext, attr)

@@ -3,7 +3,7 @@
 {% block title %}Simulations Overview{% endblock %}
 
 {% block pageheader %}
-    <h1> Simulation Database
+    <h1> Simulation Database '{{ g.dbname }}'
     {% if not temp and getsimsviewer().enable_upload %}
     <div class="pull-right float-right">
         <a class="btn btn-primary" href="{{ url_for('.upload') }}">Upload new entries</a>
