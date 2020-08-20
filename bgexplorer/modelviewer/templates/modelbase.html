@@ -11,6 +11,14 @@
 
 {% block navbarlinks %}
     {{ navbaritem(url_for('.overview'),"Overview") }}
+    {{ navbardropdown("Inputs", [
+        (url_for('.componentview'),"Components"),
+        (url_for('.emissionsoverview'),"Emissions"),
+        (url_for('.billofmaterials'),"Bill of materials"),
+        (url_for('.simulationsoverview'),"Sim data requests"),
+        (url_for('.queriesoverview'),"Sim data queries"),
+        ]) }}
+    {#
     {{ navbardropdown("Components",[
       (url_for('.componentview'),"Quick List"),
       (url_for('.billofmaterials'),"Bill of materials"),
@@ -20,6 +28,7 @@
         (url_for('.simulationsoverview'),"by Placement path, spec"),
         (url_for('.queriesoverview'),"by Database Query"),
     ]) }}
+    #}
     {{ navbardropdown("Results",[
         (url_for('.tablesdefault'),"Tables"),
         (url_for('.chartsdefault'),"Charts"),

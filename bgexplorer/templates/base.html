@@ -87,9 +87,14 @@
         </div>
         <div class="collapse navbar-collapse" id="navbarcontent" >
             <ul class="nav navbar-nav" >
+            {{ navbardropdown('Home', [(url_for('index'), "Models"),
+                                       (url_for('simsviewer.index'), "Sim Data"),
+                                       (url_for('assaydb.index'), "Assay DB")]) }}
+            {#
             {{ navbaritem(url_for('index'),"Home") }}
             {{ navbaritem(url_for('simsviewer.index'),"Sim Data") }}
             {{ navbaritem(url_for('assaydb.index'), "Assay DB") }}
+            #}
             {% block navbarlinks %}{% endblock %}
             </ul>
             {% block navbarextra %}{% endblock %}
