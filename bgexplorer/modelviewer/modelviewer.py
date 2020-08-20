@@ -174,8 +174,10 @@ class ModelViewer(object):
         def componentview(componentid=None):
             if componentid:
                 component = utils.getcomponentordie(g.model, componentid)
+                matches = g.model.getsimdata(component=component)
+                datasets = sum((m.dataset or [] for m in matches), [])
                 return render_template("componentview.html",
-                                       component=component)
+                                       component=component, datasets=datasets)
             else:
                 return render_template("componentsoverview.html")
 

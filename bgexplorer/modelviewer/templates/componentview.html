@@ -1,6 +1,6 @@
 {% extends "dashboardbase.html" %}
 
-{% from "macros.html" import printassemblypath, showevaluated %}
+{% from "macros.html" import printdataset, printassemblypath, showevaluated %}
 
 {% set class = "Component" %}
 {% if component.components is defined %}
@@ -125,6 +125,10 @@
         </table>
         {% endif %}
 
+        {% if datasets %}
+        <h3>Associated with simulation datasets:</h3>
+        {{ printdataset(datasets) }}
+        {% endif %}
 
     </div> <!-- end second column -->
 
