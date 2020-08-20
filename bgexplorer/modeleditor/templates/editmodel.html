@@ -315,7 +315,7 @@
         <div class="tab-content" >
 
         <div id="componentsdiv" class="tab-pane fade {% if editspec is not defined %}in active{% endif %}" >
-            <h2>Components <small>
+            <h2 class="clearfix">Components <small>
             <form action="{{ url_for('.newcomponent',modelid=model.id) }}"
                   method="POST" class="pull-right form-inline" >
                 <label>Create new:</label>
@@ -339,7 +339,7 @@
 
 
         <div id="specsdiv" class="tab-pane fade {% if editspec is defined %}in active{% endif %}" >
-            <h2>Specifications <small>
+            <h2 class="clearfix">Specifications <small>
             <form class="form-inline pull-right" action="{{ url_for('.newspec',modelid=model.id) }}"
                   method="POST">
                 <div class="form-group push-right" >

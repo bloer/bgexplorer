@@ -2,7 +2,7 @@
 
 {% block mystyles %}
     <style>
-	td .breadcrumb { margin:0px; padding:0px }
+    td .breadcrumb { margin:0px; padding:0px }
     </style>
 {% endblock %}
 
@@ -20,23 +20,23 @@
 
 {% block pagecontent %}
     <table class="table" id="simdatatable">
-	<thead>
-	    <tr><th>Placement</th><th>Emission Spec<th>Emission Rate (/day)</th>
-		<th>Query</th><th>Dataset</th><th>Livetime</th></tr>
-	</thead>
-	<tbody>{% for match in g.model.getsimdata() %}
-	    <tr class="simdata">
-		<td>{{ printassemblypath(match.assemblyPath) }}</td>
-		<td class="spec"><a href="{{ url_for('.emissionview', specid=match.spec.getrootspec().id) }}">{{ match.spec.name }} </a></td>
-		<td>{{ "{:.3e}".format(match.emissionrate.to('1/day').m) }}</td>
-		<td class="query" >
-		    <a href="{{ url_for('.simdatamatchview', match=match) }}">{{ match.query }}</a>
-		</td>
-		<td class="dataset" >{% if match.dataset -%} {{ printdataset(match.dataset) }}{% endif %}</td>
-		<td class="livetime" data-livetime="{{ match.livetime.to('day').m }}">
-		    {{ match.livetime.to('day') }}
-		</td>
-	    </tr>
-	{% endfor %}</tbody>
+    <thead>
+        <tr><th>Placement</th><th>Emission Spec<th>Emission Rate (/day)</th>
+        <th>Query</th><th>Dataset</th><th>Livetime (day)</th></tr>
+    </thead>
+    <tbody>{% for match in g.model.getsimdata() %}
+        <tr class="simdata">
+        <td>{{ printassemblypath(match.assemblyPath) }}</td>
+        <td class="spec"><a href="{{ url_for('.emissionview', specid=match.spec.getrootspec().id) }}">{{ match.spec.name }} </a></td>
+        <td>{{ "{:.3g}".format(match.emissionrate.to('1/day').m) }}</td>
+        <td class="query" >
+            <a href="{{ url_for('.simdatamatchview', match=match) }}">{{ match.query }}</a>
+        </td>
+        <td class="dataset" >{% if match.dataset -%} {{ printdataset(match.dataset) }}{% endif %}</td>
+        <td class="livetime" data-livetime="{{ match.livetime.to('day').m }}">
+            {{ "{:.3g}".format(match.livetime.to('day').m) }}
+        </td>
+        </tr>
+    {% endfor %}</tbody>
     </table>
 {% endblock %}
