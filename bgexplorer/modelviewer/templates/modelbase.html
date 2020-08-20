@@ -4,13 +4,17 @@
 
 {% block title %}bgexplorer: {{ g.model.name }}{% endblock %}
 
+
 {% block navbarextra %}
+<!--
     <p class="navbar-right navbar-text">Exploring <span style="color:blue"> {{ longname }}</span></p>
+-->
 {% endblock %}
 
 
 {% block navbarlinks %}
-    {{ navbaritem(url_for('.overview'),"Overview") }}
+    {% set modellabel = 'Model <span style="color:blue">'+longname+'</span>' %}
+    {{ navbaritem(url_for('.overview'),modellabel | safe) }}
     {{ navbardropdown("Inputs", [
         (url_for('.componentview'),"Components"),
         (url_for('.emissionsoverview'),"Emissions"),
