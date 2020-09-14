@@ -90,6 +90,61 @@ class SimsDbView(object):
     def __str__(self):
         return self.__repr__()
 
+    def flatten_gval(self, gval):
+        """ Group evaluation functions can produce a list or tuple. This
+        function converts to a string by joining each value with the join key
+        Args:
+            gval: the output of a grouping function
+        """
+        if isinstance(gval, (list, tuple)):
+            gval = self.groupjoinkey.join(str(v) for v in gval)
+        return gval
+
+    def unflatten_gval(self, gval, force=False):
+        """ convert a flattened value back to a list
+        Args:
+            gval (str): a flattened group
+            force (bool): if True, always convert to a single-length list
+        Returns:
+            list: if `gval` can be split or `force` is True, otherwise
+                  return `gval`
+        """
+        if not isinstance(gval, (str, bytes)):
+            return gval
+        if force or (self.groupjoinkey in gval):
+            gval = gval.split(self.groupjoinkey)
+        return gval
+
+    def evalgroup(self, match, groupname, flatten=True):
+        """ Evaluate the group `groupname` for the given match
+        Args:
+            match (SimDataMatch): The sim request to evaluate
+            groupname (str): name of group in `self.groups` to evaluate
+            flatten (bool): if True (default) call `flatten_gval`
+        Returns:
+            the result of the group function on match`
+        """
+        gval = self.groups[groupname](match)
+        if flatten:
+            gval = self.flatten_gval(gval)
+        return gval
+
+    def evalgroups(self, match, flatten=True):
+        """ Evaluate all group functions for `match`
+        Args:
+            match (SimDataMatch): request to evaluate
+            flatten (bool): If True (default), call `flatten_gval`
+        Returns:
+            dict: of groupname: evaluated function
+        """
+        return {key: self.evalgroup(match, key, flatten) for key in self.groups}
+
+    def is_subgroup(self, g1, g2):
+        """ Test whether g1 is a subgroup of g2 (or equal) """
+        g1 = self.unflatten_gval(g1, force=True)
+        g2 = self.unflatten_gval(g2, force=True)
+        return len(g1) >= len(g2) and all(a==b for a, b in zip(g1, g2))
+
 
 # utilities to handle file uploads:
 
