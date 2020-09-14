@@ -17,6 +17,8 @@
 </style>
 {% endblock %}
 
+{%- block basespecurl -%}{{ url_for('.getspectrum', component=component) }}{%- endblock -%}
+
 {% block myscripts %}
 {{ super() }}
 <script language="javascript">
@@ -161,5 +163,21 @@
     </tbody>
     </table>
     {% endif %}
+
+    <div id="spectra">
+    <h2>Evaluated Spectra</h2>
+    {% for specname in g.simsdbview.spectra.keys() %}
+        {% set url = url_for('.getspectrum', specname=specname, component=component) %}
+        <div class="col-xs-6 col-md-4">
+            <a href="{{ url }}" class="thumbnail">
+                <img class="img-responsive" src="{{ url }}"
+                     alt="spectrum {{ specname }}">
+            </a>
+        </div>
+    {% endfor %}
+    </div>
+    <div class="clearfix"></div>
+
+
 
 {% endblock %}

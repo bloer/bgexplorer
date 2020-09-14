@@ -46,6 +46,9 @@ dashboard.displays = {
     'charts': [],
 };
 
+// base url for generating spectra
+dashboard.basespecurl = null;
+
 //register a function to be called when data finishes loading
 var onload = []
 dashboard.onLoad = function(callback){
@@ -198,26 +201,13 @@ dashboard.processtable = function(error,rows){
             return;
         }
         var root = dashboard.hierarchies[g];
-        //sort them based on user provided values or else by value
-        var sortlist = dashboard.groupsort[g];
-        if(sortlist){
-            root.sort(function(a,b){
-                return sortlist.indexOf(a.id) - sortlist.indexOf(b.id);
-            });
-        }
-        else{
-            //sort by the sum over all values
-            root.sum(function(node){
-                return node.value ? Object.values(node.value).reduce(function(a,b){ return a+b; }) : 0;
-            }).sort(function(a,b){ return b.value - a.value; });
-
-        }
         //add some additional useful info
         root.each(function(node){
             node.name = node.data.key[node.data.key.length-1];
             if(node.name == "" || node.name == splitkey) node.name = "Total";
-            node.id = (g+splitkey+node.id).replace(/[^A-z0-9_-]/g,'_');
             node.group = g;
+            node.groupval = node.data.key.join(splitkey);
+            node.id = (g+splitkey+node.id).replace(/[^A-z0-9_-]/g,'_');
             node.dimension = dashboard.cfdimensions[g];
             node.filter = dashboard.cffilters[g];
             node.filterdimension = dashboard.cfdimensions['filter_'+g]
@@ -240,6 +230,21 @@ dashboard.processtable = function(error,rows){
                 node.color = null;
             }
         });
+
+        //sort them based on user provided values or else by value
+        var sortlist = dashboard.groupsort[g];
+        if(sortlist){
+            root.sort(function(a,b){
+                return sortlist.indexOf(a.groupval) - sortlist.indexOf(b.groupval);
+            });
+        }
+        else{
+            //sort by the sum over all values
+            root.sum(function(node){
+                return node.value ? Object.values(node.value).reduce(function(a,b){ return a+b; }) : 0;
+            }).sort(function(a,b){ return b.value - a.value; });
+
+        }
 
         //add a function to sum all of the data
         root.sumAll = function(){
@@ -463,6 +468,9 @@ dashboard.buildtable = function(parent, group, cols, id){
 
 //update the values in the given table
 dashboard.updatetable = function(table){
+    var baseurl = dashboard.basespecurl;
+    if(baseurl && baseurl.indexOf('?') == -1)
+        baseurl += '?';
     var grouproot = table.selectAll("tbody").datum();
     table.selectAll("thead tr th.valhead").each(function(val){
 
@@ -477,16 +485,25 @@ dashboard.updatetable = function(table){
         var exponent = 2-totalpower;
         var multiplier = 10**(exponent);
 
-
-        table.select("tbody").selectAll("tr td.valcell")
+        var cells = table.select("tbody").selectAll("tr td.valcell")
             .filter(function(d){ return d.val == val; })
             .attr("title",function(d){
                 var precision = dashboard.config.titleprecision;
                 return d.node.valueAll[val].toExponential(precision)
                     + " +/- "
                     + Math.sqrt(d.node.valueAll[val+"_sig2"]).toExponential(precision);
-            })
-            .text(function(d){
+            });
+            if(baseurl){
+                cells = cells.append("a")
+                             .attr("class", "speclink")
+                             .attr("href", function(d){
+                                return [baseurl, 'val='+d.val,
+                                        'groupname='+d.node.group,
+                                        'groupval='+d.node.groupval,
+                                        ].join('&');
+                              });
+            }
+            cells.text(function(d){
                 var myval = d.node.valueAll[val];
                 if(myval == 0 || d.node.valueAll.count == 0)
                     return "";
@@ -504,7 +521,7 @@ dashboard.updatetable = function(table){
                     myerr *= multiplier;
                 }
                 var mypower = Math.floor(Math.log10(myval));
-                console.log("precision="+myprecision)
+                //console.log("precision="+myprecision)
                 var sigdigs = myval.toExponential(myprecision-1).substr(0,myprecision);
                 var fixed = parseFloat(myval.toExponential(myprecision-1)).toFixed(decimals+3);
                 //replace trailing zeros after the decimal point

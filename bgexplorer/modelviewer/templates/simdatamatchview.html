@@ -22,42 +22,54 @@
 
 {% block pagecontent %}
     <div class="row" >
-	<div class="col-md-6">
-	    <h2>Data Request</h2>
+    <div class="col-md-6">
+        <h2>Data Request</h2>
 
-	    <h3>Placement</h3>
-	    {{ printassemblypath(match.assemblyPath) }}
+        <h3>Placement</h3>
+        {{ printassemblypath(match.assemblyPath) }}
 
-	    <h3>Emission spec</h3>
-	    {% set spec = match.spec %}
-	    {% set rootspec = spec.getrootspec() %}
-	    <a href="{{ url_for('.emissionview', spec=rootspec) }}">{{ rootspec.name }}</a>
-	    {%- if rootspec != spec %} / {{ spec.name }} {% endif -%}
-	    <dl class="dl-horizontal" >
-		<dt>Rate</dt> <dd>{{ spec.getratestr() }}</dd>
-		<dt>Total Weight</dt> <dd>{{ match.weight }}</dd>
-		<dt>Total Emission Rate</dt> <dd>
-		    {{ "{:e}".format(match.emissionrate.to('1/day').m) }} / day
-		</dd>
-	    </dl>
-	</div><!-- end col-md-6 for data request -->
-	
-	<div class="col-md-6">
-	    <h2>Simulation Database</h2>
-	
-	    <dl class="dl-horizontal">
-		<dt>Generated Query</dt> <dd>
-		    {% if match.query %}<a href="{{ url_for('simsviewer.overview', query=match.query) }}">
-			{{ match.query }}</a>{% endif %}
-		</dd>
-		<dt>Query Weight</dt> <dd>{{ match.weight }}</dd>
-		<dt>Matching dataset</dt> <dd>{{ printdataset(match.dataset) }}</dd>
-		<dt>Simulated Livetime</dt> <dd>{{ match.livetime.to('day') }}</dd>
-		<dt>Status</dt> <dd>{{ match.status }}</dd>
-	    </dl>
-	</div><!-- end col-md-6 for database info -->
+        <h3>Emission spec</h3>
+        {% set spec = match.spec %}
+        {% set rootspec = spec.getrootspec() %}
+        <a href="{{ url_for('.emissionview', spec=rootspec) }}">{{ rootspec.name }}</a>
+        {%- if rootspec != spec %} / {{ spec.name }} {% endif -%}
+        <dl class="dl-horizontal" >
+        <dt>Rate</dt> <dd>{{ spec.getratestr() }}</dd>
+        <dt>Total Weight</dt> <dd>{{ match.weight }}</dd>
+        <dt>Total Emission Rate</dt> <dd>
+            {{ "{:e}".format(match.emissionrate.to('1/day').m) }} / day
+        </dd>
+        </dl>
+    </div><!-- end col-md-6 for data request -->
+
+    <div class="col-md-6">
+        <h2>Simulation Database</h2>
+
+        <dl class="dl-horizontal">
+        <dt>Generated Query</dt> <dd>
+            {% if match.query %}<a href="{{ url_for('simsviewer.overview', query=match.query) }}">
+            {{ match.query }}</a>{% endif %}
+        </dd>
+        <dt>Query Weight</dt> <dd>{{ match.weight }}</dd>
+        <dt>Matching dataset</dt> <dd>{{ printdataset(match.dataset) }}</dd>
+        <dt>Simulated Livetime</dt> <dd>{{ match.livetime.to('day') }}</dd>
+        <dt>Status</dt> <dd>{{ match.status }}</dd>
+        </dl>
+    </div><!-- end col-md-6 for database info -->
 
     </div><!-- end row -->
-
+    <div id="spectra" class="row">
+    <h2>Evaluated Spectra</h2>
+    {% for specname in g.simsdbview.spectra.keys() %}
+        {% set url = url_for('.getspectrum', specname=specname, match=match) %}
+        <div class="col-xs-6 col-md-4">
+            <a href="{{ url }}" class="thumbnail">
+                <img class="img-responsive" src="{{ url }}"
+                     alt="spectrum {{ specname }}">
+            </a>
+        </div>
+    {% endfor %}
+    </div>
+    <div class="clearfix"></div>
 
 {% endblock %}

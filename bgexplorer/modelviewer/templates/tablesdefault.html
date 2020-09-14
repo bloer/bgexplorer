@@ -16,7 +16,7 @@
            .attr("id",function(d,i){ return "dbtable-"+i; })
            .each(function(d){ db.buildtable(this, d); });
      });
-     
+
     </script>
 {% endblock %}
 
@@ -27,5 +27,10 @@
 
 {% block pagecontent %}
     {{ super() }}
-    <div id="mytables" ></div>
+    <div id="mytables" >
+         <p>The number in parentheses is the nominal 1-sigma error.
+         Hover over the numbers to see the result with longer precision.
+         Click on the numbers to view the associated spectrum.
+         </p>
+    </div>
 {% endblock %}

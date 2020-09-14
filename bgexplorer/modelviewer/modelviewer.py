@@ -7,6 +7,16 @@ from flask import (Blueprint, render_template, request, abort, url_for, g,
 import threading
 import zlib
 import json
+import numpy as np
+from uncertainties import unumpy
+from math import ceil, log10
+from io import BytesIO
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
 
 from bson import ObjectId
 
@@ -15,6 +25,11 @@ from ..dbview import SimsDbView
 
 from . import billofmaterials as bomfuncs
 from ..modeldb import InMemoryCacher
+
+import logging
+log = logging.getLogger(__name__)
+
+from time import sleep
 
 class ModelViewer(object):
     """Blueprint for inspecting saved model definitions
@@ -263,12 +278,195 @@ class ModelViewer(object):
                d['derivedFrom'] = str(d['derivedFrom'])
             return Response(json.dumps(d), mimetype="application/json")
 
+        @self.bp.route('/getspectrum')
+        @self.bp.route('/getspectrum/<specname>')
+        def getspectrum(specname=None):
+            # get the generator for the spectrum
+            if not specname:
+                valname = request.args.get('val')
+                if not valname:
+                    abort(404, "Either spectrum name or value name is required")
+                specname = g.simsdbview.values_spectra.get(valname)
+                if not specname:
+                    # valname might have a unit suffix applied to it
+                    index = valname.rfind(' [')
+                    valname = valname[:index]
+                    specname = g.simsdbview.values_spectra.get(valname)
+                if not specname:
+                    abort(404, f"No spectrum associated to value '{valname}'")
+            speceval = g.simsdbview.spectra.get(specname)
+            if speceval is None:
+                abort(404, f"No spectrum generator for '{specname}'")
+
+            log.debug(f"Generating spectrum: {specname}")
+            title = specname
+            # get the matches
+            matches = request.args.getlist('m')
+            try:
+                matches = [g.model.simdata[m] for m in matches]
+            except KeyError:
+                abort(404, "Request for unknown sim data match")
+            if not matches:
+                # matches may be filtered by component or spec
+                component = None
+                if 'componentid' in request.args:
+                    component = utils.getcomponentordie(g.model,
+                                                        request.args['componentid'])
+                    title += ", Component = "+component.name
+                rootspec = None
+                if 'specid' in request.args:
+                    rootspec = utils.getspecordie(g.model,
+                                                  request.args['specid'])
+                    title += ", Source = "+rootspec.name
+                matches = g.model.getsimdata(rootcomponent=component, rootspec=rootspec)
+
+            # test for a group filter
+            groupname = request.args.get('groupname')
+            groupval = request.args.get('groupval')
+            if groupname and groupval and groupval != 'Total':
+                try:
+                    groupfunc = g.simsdbview.groups[groupname]
+                except KeyError:
+                    abort(404, f"No registered grouping function {groupname}")
+                def _filter_group(match):
+                    mgval = g.simsdbview.evalgroup(match, groupname, False)
+                    return g.simsdbview.is_subgroup(mgval, groupval)
+                matches = list(filter(_filter_group, matches))
+                title += ", "+groupname+" = "
+                title += '/'.join(g.simsdbview.unflatten_gval(groupval, True))
+
+            if not matches:
+                abort(404, "No sim data matching query")
+
+            spectrum = self.simsdb.evaluate([speceval], matches)[0]
+            if not hasattr(spectrum, 'hist') or not hasattr(spectrum, 'bin_edges'):
+                abort(500, "Error generating spectrum")
+            fmt = request.args.get("format", "png").lower()
+            response = None
+            if fmt == 'tsv':
+                response = Response(self.streamspectrum(spectrum, sep='\t'),
+                                    mimetype='text/tab-separated-value')
+            elif fmt == 'csv':
+                response = Response(self.streamspectrum(spectrum, sep=','),
+                                    mimetype='text/csv')
+            elif fmt == 'png':
+                response = self.specimage(spectrum, title=title)
+            else:
+                abort(400, f"Unhandled format specifier {fmt}")
+
+            return response
+
+    def streamspectrum(self, spectrum, sep=',', include_errs=True,
+                       fmt='{:.5g}'):
+        """ Return a generator response for a spectrum
+        Args:
+            spectrum (Histogram): spectrum to stream
+            sep (str): separator (e.g. csv or tsv)
+            include_errs (bool): if True, include a column for errors
+            fmt (str): format specifier
+        Returns:
+            generator to construct Response
+        """
+        bins, vals =  spectrum.bin_edges, spectrum.hist
+        vals_has_units = hasattr(vals, 'units')
+        bins_has_units = hasattr(bins, 'units')
+
+        # yield the header
+        head = ["Bin", "Value"]
+        if bins_has_units:
+            head[0] += f' [{bins.units}]'
+        if vals_has_units:
+            head[1] += f' [{vals.units}]'
+        if include_errs:
+            head.append('Error')
+        yield sep.join(head)+'\n'
+
+        # now remove units and extract errors
+        if vals_has_units:
+            vals = vals.m
+        if bins_has_units:
+            bins = bins.m
+        vals, errs = unumpy.nominal_values(vals), unumpy.std_devs(vals)
+
+        for abin, aval, anerr in zip(bins, vals, errs):
+            yield sep.join((str(abin), fmt.format(aval), fmt.format(anerr)))+'\n'
+
+    def specimage(self, spectrum, title=None, logx=True, logy=True):
+        """ Generate a png image of a spectrum
+        Args:
+            spectrum (Histogram): spectrum to plot
+            title (str): title
+            logx (bool): set x axis to log scale
+            logy (bool): set y axis to log scale
+        Returns:
+            a Response object
+        """
+        if plt is None:
+            abort(500, "Matplotlib is not available")
+        log.debug("Generating spectrum image")
+        # apparently this aborts sometimes?
+        try:
+            x = spectrum.bin_edges.m
+        except AttributeError:
+            x = spectrum.bin_edges
+        plt.errorbar(x=x[:-1],
+                     y=unumpy.nominal_values(spectrum.hist),
+                     yerr=unumpy.std_devs(spectrum.hist),
+                     drawstyle='steps-post',
+                     elinewidth=0.6,
+                     )
+        plt.title(title)
+        if logx and logy:
+            plt.loglog()
+        elif logx:
+            plt.semilogx()
+        elif logy:
+            plt.semilogy
+        if hasattr(spectrum.bin_edges, 'units'):
+            plt.xlabel(f'Bin [{spectrum.bin_edges.units}]')
+        if hasattr(spectrum.hist, 'units'):
+            plt.ylabel(f"Value [{spectrum.hist.units}]")
+
+        """
+        #limit to at most N decades...
+        maxrange = 100000
+        ymin, ymax = plt.ylim()
+        ymax = 10**ceil(log10(ymax))
+        ymin = max(ymin, ymax/maxrange)
+        plt.ylim(ymin, ymax)
+        plt.tick_params(which='major',length=6, width=1)
+        plt.tick_params(which='minor',length=4,width=1)
+        iplt.gcf().set_size_inches(9,6)
+        plt.gca().set_position((0.08,0.1,0.7,0.8))
+        """
+        log.debug("Rendering...")
+        plt.draw()
+        log.debug("Saving...")
+        out = BytesIO()
+        plt.savefig(out, format='png')
+        log.debug("Done generating image")
+        size = out.tell()
+        out.seek(0)
+        res = Response(out.getvalue(),
+                       content_type='image/png',
+                       headers={'Content-Length': size,
+                                'Content-Disposition': 'inline',
+                                },
+                       )
+        plt.close()
+        return res
+
+
+
+
     #need to pass simsdb because it goes out of context
-    def streamdatatable(self, model):
+    def streamdatatable(self, model, simsdbview=None):
         """Stream exported data table so it doesn't all go into mem at once
         """
+        log.debug(f"Generating data table for model {model.id}")
         #can't evaluate values if we don't have a simsdb
-        simsdbview = utils.get_simsdbview(model=model) or SimsDbView()
+        if simsdbview is None:
+            simsdbview = utils.get_simsdbview(model=model) or SimsDbView()
         simsdb = simsdbview.simsdb
         valitems = list(simsdbview.values.values())
         matches = model.simdata.values()
@@ -300,6 +498,8 @@ class ModelViewer(object):
                                   (str(g) for g in groupvals),
                                   ("{:.3g}".format(eval) for eval in evals)))
                   +'\n')
+            #sleep(0.2) # needed to release the GIL
+        log.debug(f"Finished generating data table for model {model.id}")
 
 
 
@@ -331,16 +531,16 @@ class ModelViewer(object):
             return 0
 
         #if we get here, we need to generate it
-        def cachedatatable(app):
+        def cachedatatable(dbview):
             compressor = zlib.compressobj()
-            with app.app_context():
-                res = b''.join(compressor.compress(s.encode('utf-8'))
-                               for s in self.streamdatatable(model))
+            res = b''.join(compressor.compress(s.encode('utf-8'))
+                           for s in self.streamdatatable(model, dbview))
             res += compressor.flush()
             self._cacher.store(key, res)
             self._threads.pop(key) #is this a bad idea???
+        dbview = utils.get_simsdbview(model=model)
         thread = threading.Thread(target=cachedatatable,name=key,
-                                  args=(current_app._get_current_object(),))
+                                  args=(dbview,))
         self._threads[key] = thread
         thread.start()
         return thread
@@ -361,18 +561,22 @@ class ModelViewer(object):
         if not res:
             abort(500,"Unable to generate datatable")
         return Response(res, headers={'Content-Type':'text/plain;charset=utf-8',
-                                      'Content-Encoding':'deflate'})
+                                      'Content-Encoding':'deflate',
+                                      })
 
 
-    def get_componentsort(self, component):
+    def get_componentsort(self, component, includeself=True):
         """Return an array component names in assembly order to be passed
         to the javascript analyzer for sorting component names
         """
         #TODO: cache this
-        result = [component.name]
+        result = [component.name] if includeself  else []
         for child in component.getcomponents(merge=False):
-            result.extend(self.joinkey.join((component.name, s) )
-                          for s in self.get_componentsort(child))
+            branches = self.get_componentsort(child)
+            if includeself:
+                branches = [self.joinkey.join((component.name, s))
+                            for s in branches]
+            result.extend(branches)
         return result
 
 
@@ -380,7 +584,7 @@ class ModelViewer(object):
         res = dict(**g.simsdbview.groupsort)
         #todo: set up provided lists
         if 'Component' not in res:
-            res['Component'] = self.get_componentsort(g.model.assemblyroot)
+            res['Component'] = self.get_componentsort(g.model.assemblyroot, False)
         return res
 
     def eval_matches(self, matches, dovals=True, dospectra=False):

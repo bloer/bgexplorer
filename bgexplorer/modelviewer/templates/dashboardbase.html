@@ -8,7 +8,7 @@
 
      table.bgexplorertable thead th {text-align:center}
      table.bgexplorertable thead th:first-child {text-align:left}
-     
+
      table.bgexplorertable td.valcell {font-family: "Lucida Console", Monaco, monospace; text-align:right; white-space:pre }
      table.bgexplorertable tr.grouprow.depth0 {background-color:lightgreen; font-weight:bold}
      table.bgexplorertable tr.grouprow.depth1 {background-color:lightcyan; }
@@ -19,7 +19,7 @@
      table.bgexplorertable tr.grouprow.leaf { background-color:white; }
      table.bgexplorertable tr.grouprow.haschildren span.expander { transform: rotate(-90deg); cursor:pointer;margin-left:5px;paddingright:5px; }
      table.bgexplorertable tr.grouprow.haschildren.expanded span.expander { transform: rotate(0deg); }
-     
+
 
      div.bgexplorer-chart-container {  border: 1px solid gray;}
      .bgexplorer-chart-title { font-weight: bold; text-decoration: underline; }
@@ -29,7 +29,7 @@
      .bgexplorer-data-shape { stroke: white; stroke-width: 1px; }
      .bgexplorer-data-shape:hover { stroke:red; stroke-width: 4px; }
      .node.selected .bgexplorer-data-shape { stroke:orange; stroke-width: 4px; }
-     
+
      .filterstat {color:blue; }
     </style>
 {% endblock %}
@@ -39,9 +39,10 @@
     <script src="{{ url_for('.static',filename='d3.v4.min.js') }}"></script>
     <script src="{{ url_for('.static',filename='crossfilter.min.js') }}"></script>
     <script src="{{ url_for('.static',filename='dashboard.js') }}"></script>
-    
-    <script language="javascript">
 
+    <script language="javascript">
+     // base url for spectra
+     dashboard.basespecurl = "{% block basespecurl %}{{ url_for('.getspectrum') }}{% endblock %}";
      //define all of the available groupsort stuff
      {% for name,val in getmodelviewer().get_groupsort().items() %}
      dashboard.groupsort['{{ name }}'] = {{ val | safe}};
@@ -51,9 +52,9 @@
      $(document).ready(function(){
          //only show the loading graphic after 2s
          d3.select("#loading").transition().delay(2000).duration(500).style("opacity",1);
-         
+
          var dashboard = bgexplorer.dashboard;
-         dashboard.onLoad(function(){ d3.select("#loading").classed("hide",true); }); 
+         dashboard.onLoad(function(){ d3.select("#loading").classed("hide",true); });
          d3.tsv("{{ url_for('.datatable') }}",dashboard.parserow,dashboard.processtable);
      });
     </script>

@@ -2,6 +2,8 @@
 
 {% from "macros.html" import printdataset, showevaluated %}
 
+{%- block basespecurl -%}{{ url_for('.getspectrum', spec=spec) }}{%- endblock -%}
+
 {% block myscripts %}
 {{ super() }}
 {% if matches %}
@@ -96,5 +98,19 @@ db.prefilterfunc = function(row){
 
     </div><!-- end column -->
     </div><!-- end row -->
+
+    <div id="spectra" class="row">
+    <h2>Evaluated Spectra</h2>
+    {% for specname in g.simsdbview.spectra.keys() %}
+        {% set url = url_for('.getspectrum', specname=specname, spec=spec) %}
+        <div class="col-xs-6 col-md-4">
+            <a href="{{ url }}" class="thumbnail">
+                <img class="img-responsive" src="{{ url }}"
+                     alt="spectrum {{ specname }}">
+            </a>
+        </div>
+    {% endfor %}
+    </div>
+    <div class="clearfix"></div>
 
 {% endblock %}
