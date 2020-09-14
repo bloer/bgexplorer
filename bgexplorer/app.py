@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Blueprint, json, flash, redirect, url_for
+from flask import Flask, render_template, Blueprint, json, flash, redirect, url_for, Response
 from flask_bootstrap import Bootstrap
 from flask_basicauth import BasicAuth
 import itertools
@@ -91,6 +91,7 @@ class BgExplorer(Flask):
         logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         if app.debug:
             logging.basicConfig(format=logformat, level=logging.DEBUG)
+            logging.getLogger('matplotlib').setLevel(logging.WARNING)
         else:
             logfile = app.config.get('LOGFILE')
             if logfile:
