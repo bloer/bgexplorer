@@ -325,7 +325,7 @@ class ModelViewer(object):
             # test for a group filter
             groupname = request.args.get('groupname')
             groupval = request.args.get('groupval')
-            if groupname and groupval and groupval != 'Total':
+            if groupname and groupval and groupval != g.simsdbview.groupjoinkey:
                 try:
                     groupfunc = g.simsdbview.groups[groupname]
                 except KeyError:
