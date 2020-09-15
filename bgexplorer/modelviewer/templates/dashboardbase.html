@@ -69,12 +69,12 @@
 {% endblock %}
 
 {% block pagecontent %}
-    <svg><defs>
+    <div style="position:absolute"><svg><defs>
     <pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="10" height="10">
         <path d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2"
         style="stroke:black; stroke-width:1" rendering="crispEdges">
     </pattern>
-    </defs></svg>
+    </defs></svg></div>
     <div id="loading" style="opacity:0" >
         {# <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }} #}
         <p style="color:red" >Performing map-reduce on simulated data. This may take up to a few minutes</p>

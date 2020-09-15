@@ -2,7 +2,7 @@
 
 {% block mystyle %}
     {{ super() }}
-    
+
 {% endblock %}
 
 
@@ -24,24 +24,52 @@
            .property("value",function(d){ return d; })
            .text(function(d){ return d; })
          ;
-         
+
          //set up a div for each group type
          d3.select("#charts").selectAll("div.chartholder").data(Object.keys(dashboard.hierarchies))
            .enter().append("div").attr("class","chartholder col-sm-6 col-md-4 col-lg-4")
            .each(function(d){ dashboard.buildchart(this, d, dashboard.valuetypes[0]); });
          dashboard.updateall(dashboard.valuetypes[0]);
      });
-     
+
     </script>
 {% endblock %}
 
 {% block title %}Interactive Charts{% endblock %}
 
 {% block pageheader %}
-    <h1> Interactive Charts</h1>
+    <h1> Interactive Charts
+      <button type="button" class="btn btn-success" data-toggle="modal" data-target="#helpdialog">
+        Help <span class="glyphicon glyphicon-question-sign"></span>
+      </button>
+    </h1>
 {% endblock %}
 
 {% block pagecontent %}
+<div class="modal fade" tabindex="-1" role="dialog" id="helpdialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">Instructions</h4>
+      </div>
+      <div class="modal-body">
+        <ul>
+          <li>Hover over a segment for more information</li>
+          <li>Click to filter all charts by that selection; Ctrl-click to anti-filter</li>
+          <li>Hold shift to select multiple segments at once</li>
+          <li>Hatched areas are results from upper limit inputs</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <h3>Instructions:</h3>
+
     {{ super() }}
     <div id="control"></div>
     <div id="charts" class="row" >
