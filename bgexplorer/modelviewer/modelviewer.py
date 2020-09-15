@@ -484,19 +484,24 @@ class ModelViewer(object):
             if valitems:
                 evals = simsdb.evaluate(valitems, match)
                 for index, vlabel in enumerate(simsdbview.values):
+                    # convert to unit if provided
                     unit = simsdbview.values_units.get(vlabel,None)
                     if unit:
                         try:
                             evals[index] = evals[index].to(unit).m
                         except AttributeError: #not a Quantity...
                             pass
+                    # convert to string
+                    evals[index] = "{:.3g}".format(evals[index])
+                    if match.spec.islimit:
+                        evals[index] = '<'+evals[index]
             groupvals = (g(match) for g in simsdbview.groups.values())
             groupvals = (simsdbview.groupjoinkey.join(g)
                          if isinstance(g,(list,tuple)) else g
                          for g in groupvals)
             yield('\t'.join(chain([match.id],
                                   (str(g) for g in groupvals),
-                                  ("{:.3g}".format(eval) for eval in evals)))
+                                  evals))
                   +'\n')
             #sleep(0.2) # needed to release the GIL
         log.debug(f"Finished generating data table for model {model.id}")

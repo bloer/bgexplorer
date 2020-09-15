@@ -17,7 +17,8 @@
      table.bgexplorertable tr.grouprow.depth{{ i }} td.groupcell { padding-left: {{ loop.index }}em; }
      {%- endfor %}
      table.bgexplorertable tr.grouprow.leaf { background-color:white; }
-     table.bgexplorertable tr.grouprow.haschildren span.expander { transform: rotate(-90deg); cursor:pointer;margin-left:5px;paddingright:5px; }
+     table.bgexplorertable tr.grouprow.haschildren td:first-child {cursor:pointer;}
+     table.bgexplorertable tr.grouprow.haschildren span.expander { transform: rotate(-90deg); margin-left:5px;paddingright:5px; }
      table.bgexplorertable tr.grouprow.haschildren.expanded span.expander { transform: rotate(0deg); }
 
 
@@ -25,9 +26,11 @@
      .bgexplorer-chart-title { font-weight: bold; text-decoration: underline; }
      .bgexplorer-selection-display { font-weight: default; color: gray; display:inline-block }
      .bgexplorer-chart { font: 10px sans-serif;  }
-     .bgexplorer-chart .node.branch { font-weight: bold; }
-     .bgexplorer-data-shape { stroke: white; stroke-width: 1px; }
+     /*.bgexplorer-chart .node.branch { font-weight: bold; }*/
+     .bgexplorer-data-shape { stroke: white; stroke-width: 2px; }
      .bgexplorer-data-shape:hover { stroke:red; stroke-width: 4px; }
+     .bgexplorer-limit-shape {fill: url("#diagonalHatch"); fill-opacity:0.4;
+                              stroke:gray; stroke-opacity:0.3;}
      .node.selected .bgexplorer-data-shape { stroke:orange; stroke-width: 4px; }
 
      .filterstat {color:blue; }
@@ -66,6 +69,12 @@
 {% endblock %}
 
 {% block pagecontent %}
+    <svg><defs>
+    <pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="10" height="10">
+        <path d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2"
+        style="stroke:black; stroke-width:1" rendering="crispEdges">
+    </pattern>
+    </defs></svg>
     <div id="loading" style="opacity:0" >
         {# <img src="{{ url_for('.static',filename='loadingbig.gif') }}">     {{ super() }} #}
         <p style="color:red" >Performing map-reduce on simulated data. This may take up to a few minutes</p>

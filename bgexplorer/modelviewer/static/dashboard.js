@@ -62,7 +62,11 @@ dashboard.onLoad = function(callback){
 
 //parse a value column that has uncertainties in it
 dashboard.parsevalstring = function(val){
-    //strings are of the form "X+/-E" or "(X+/-E)eY"
+    //strings are of the form "X+/-E" or "(X+/-E)eY" with an optional leading <
+    var islimit = val.startsWith('<');
+    if(islimit){
+        val = val.substr(1);
+    }
     var expo="e0";
     if(val.startsWith("(")){
         var split = val.split("e");
@@ -72,7 +76,7 @@ dashboard.parsevalstring = function(val){
     var split = val.split("+/-");
     if(split.length == 1)
         split[1] = "0";
-    return [+(split[0]+expo), +(split[1]+expo)];
+    return [+(split[0]+expo), +(split[1]+expo), islimit];
 };
 
 
@@ -95,6 +99,7 @@ dashboard.parserow = function(row){
         parsed = dashboard.parsevalstring(row['V_'+v])
         out.values[v] = parsed[0];
         out.values[v+"_sig2"] = parsed[1]*parsed[1];
+        out.values[v+"_lim"] = parsed[2]*parsed[0];
     });
     return out;
 };
@@ -451,10 +456,11 @@ dashboard.buildtable = function(parent, group, cols, id){
                 .classed("expanded",node.depth<opendepth);
             childrows = node.children.map(addrow);
             row.select("td.groupcell")
+              .on("click", function(){
+                    togglerowexpanded(this.parentNode);
+                })
               .append("span").attr("class","caret expander")
-                .on("click", function(){
-                    togglerowexpanded(this.parentNode.parentNode);
-                });
+              ;
         }
         else{
             row.classed("leaf",true);
@@ -510,6 +516,8 @@ dashboard.updatetable = function(table){
 
                 var myprecision = precision;
                 var myerr = Math.sqrt(d.node.valueAll[val+"_sig2"]);
+                var mylimval = d.node.valueAll[val+"_lim"];
+                var islimit = mylimval > myval/2;
                 if(myerr){
                     myerr = +(myerr.toPrecision(1));
                     myprecision = Math.max(0, Math.floor(Math.log10(myval))
@@ -531,7 +539,7 @@ dashboard.updatetable = function(table){
                 var result = fixed.substr(0,length-cut);
                 if(result[result.length-1] == '.')
                     result = result.slice(0,-1);
-                if(myerr){
+                if(myerr && !islimit){
                     //if showing "0" in first decimal, we need to show a larger value
                     var figs = Math.floor(Math.log10(myerr))+1;
                     if(figs > 1){
@@ -544,7 +552,9 @@ dashboard.updatetable = function(table){
                     }
                 }
                 result = result.padEnd(length);
-                return useexpo ? result+" E"+(-exponent).toString() : result;
+                result = useexpo ? result+" E"+(-exponent).toString() : result;
+                result = islimit ? '<'+result : result;
+                return result;
             })
         ;
     });
@@ -610,12 +620,24 @@ dashboard.buildchart = function(parent, group, valtype, charttype, width, id){
     return chart;
 };
 
+function limitPoints(d, frac){
+    if(frac === undefined){
+        frac = (d.limval / d.value);
+    }
+    var x1 = d.x0 + (d.x1-d.x0)*frac;
+    //var y1 = d.y0 + (d.y1-d.y0)*0.4;
+    var obj = {x0: d.x0, y0: d.y0, x1: x1, y1: d.y1};
+    if(d.previousVals)
+        obj.previousVals = limitPoints(d.previousVals, frac);
+    return obj;
+}
+
 var arc = d3.arc()
         .startAngle(function(d){ return d.x0; })
         .endAngle(function(d){ return d.x1; })
         .innerRadius(function(d){ return d.y0; })
         .outerRadius(function(d){ return d.y1; })
-        .cornerRadius(0);
+        .cornerRadius(2);
 
 
 function arcTween(d){
@@ -650,6 +672,8 @@ function doanimation(transition, data, pie){
         .attr("height", function(d) { return d.x1 - d.x0; });
     transition.selectAll(".bgexplorer-data-shape.arc")
         .attrTween("d",arcTweenD);
+    transition.selectAll(".bgexplorer-limit-shape.arc")
+        .attrTween("d", function(d){ return arcTweenD(limitPoints(d)); });
     if(pie){
         var mintext = dashboard.config.mintextsize;
         transition.selectAll("text")
@@ -710,7 +734,10 @@ dashboard.updatechart = function(chart, valtype){
     var rad = width/2 * (maxdepth) / Math.min(h,dashboard.config.maxchartdepth);
     //recalculate for the value we care about
     //data.sum(function(node){ return node.value ? node.value[valtype] : 0.; });
-    data.each(function(node){ node.value = node.valueAll[valtype] || 0; });
+    data.each(function(node){
+        node.value = node.valueAll[valtype] || 0;
+        node.limval = node.valueAll[valtype+"_lim"] || 0;
+    });
     d3.partition()
         .size(pie ? [2*Math.PI, 0.99*rad] : [height, width])
         .round(false)
@@ -746,6 +773,14 @@ dashboard.updatechart = function(chart, valtype){
         enter.append("path")
             .attr("class","bgexplorer-data-shape arc")
             .attr("d",arc);
+
+        // todo: only do this if limval is > 0
+        enter.filter(function(d){ return d.limval/d.value > 0.01; })
+            .append("path")
+            .attr("class", "bgexplorer-limit-shape arc")
+            .attr("d", function(d){ return arc(limitPoints(d)); })
+            .attr("pointer-events", "none")
+            ;
     }
     else{
         enter.append("rect")
@@ -759,6 +794,8 @@ dashboard.updatechart = function(chart, valtype){
         .attr("id",function(d){ return "shape-"+d.id; }) //todo: this needs to be globally unique
         .style("fill",function(d){ return d.color; })
         //.style("opacity",0.6);
+    enter.selectAll(".bgexplorer-limit-shape")
+        .attr("id", function(d){ return "lim-shape-"+d.id; });
     enter.append("clipPath")
         .attr("id", function(d) { return "clip-" + d.id; }) //todo: this needs to be globally unique
       .append("use")
