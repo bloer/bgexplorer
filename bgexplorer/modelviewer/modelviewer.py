@@ -12,11 +12,9 @@ from uncertainties import unumpy
 from math import ceil, log10
 from io import BytesIO
 try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 except ImportError:
-    plt = None
+    Figure = None
 
 from bson import ObjectId
 
@@ -267,6 +265,10 @@ class ModelViewer(object):
             """Show some default charts with the calculated rates"""
             return render_template("chartsdefault.html")
 
+        @self.bp.route('/spectra/default')
+        def spectradefault():
+            return render_template("spectradefault.html")
+
         @self.bp.route('/export')
         def export():
             """Present the model as a JSON document"""
@@ -340,7 +342,15 @@ class ModelViewer(object):
 
             spectrum = self.simsdb.evaluate([speceval], matches)[0]
             if not hasattr(spectrum, 'hist') or not hasattr(spectrum, 'bin_edges'):
-                abort(500, "Error generating spectrum")
+                abort(500, f"Error generating spectrum, got {type(spectrum)}")
+
+            unit = g.simsdbview.spectra_units.get(specname, None)
+            if unit is not None:
+                try:
+                    spectrum.hist.ito(unit)
+                except AttributeError: #not a quantity
+                    pass
+
             fmt = request.args.get("format", "png").lower()
             response = None
             if fmt == 'tsv':
@@ -401,7 +411,7 @@ class ModelViewer(object):
         Returns:
             a Response object
         """
-        if plt is None:
+        if Figure is None:
             abort(500, "Matplotlib is not available")
         log.debug("Generating spectrum image")
         # apparently this aborts sometimes?
@@ -409,23 +419,23 @@ class ModelViewer(object):
             x = spectrum.bin_edges.m
         except AttributeError:
             x = spectrum.bin_edges
-        plt.errorbar(x=x[:-1],
-                     y=unumpy.nominal_values(spectrum.hist),
-                     yerr=unumpy.std_devs(spectrum.hist),
-                     drawstyle='steps-post',
-                     elinewidth=0.6,
-                     )
-        plt.title(title)
-        if logx and logy:
-            plt.loglog()
-        elif logx:
-            plt.semilogx()
-        elif logy:
-            plt.semilogy
+        fig = Figure()
+        ax = fig.subplots()
+        ax.errorbar(x=x[:-1],
+                    y=unumpy.nominal_values(spectrum.hist),
+                    yerr=unumpy.std_devs(spectrum.hist),
+                    drawstyle='steps-post',
+                    elinewidth=0.6,
+                    )
+        ax.set_title(title)
+        if logx:
+            ax.set_xscale('log')
+        if logy:
+            ax.set_yscale('log')
         if hasattr(spectrum.bin_edges, 'units'):
-            plt.xlabel(f'Bin [{spectrum.bin_edges.units}]')
+            ax.set_xlabel(f'Bin [{spectrum.bin_edges.units}]')
         if hasattr(spectrum.hist, 'units'):
-            plt.ylabel(f"Value [{spectrum.hist.units}]")
+            ax.set_ylabel(f"Value [{spectrum.hist.units}]")
 
         """
         #limit to at most N decades...
@@ -440,10 +450,8 @@ class ModelViewer(object):
         plt.gca().set_position((0.08,0.1,0.7,0.8))
         """
         log.debug("Rendering...")
-        plt.draw()
-        log.debug("Saving...")
         out = BytesIO()
-        plt.savefig(out, format='png')
+        fig.savefig(out, format='png')
         log.debug("Done generating image")
         size = out.tell()
         out.seek(0)
@@ -453,7 +461,6 @@ class ModelViewer(object):
                                 'Content-Disposition': 'inline',
                                 },
                        )
-        plt.close()
         return res
 
 
