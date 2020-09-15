@@ -199,7 +199,7 @@ class NumericField(Field):
                     raise ValueError(self.gettext("Not a valid numeric value"))
 
 class SimsDbField(SelectField):
-    def __init__(self, label='Backend', validators=[required],
+    def __init__(self, label='Backend', validators=[required()],
                  description="Backend to load simulation data and generate views",
                  render_kw={'class':'form-control'}, **kwargs):
         kwargs.pop('choices', None)
