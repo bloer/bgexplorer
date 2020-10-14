@@ -14,6 +14,7 @@ setup(name='bgexplorer',
           'bgexplorer.modeleditor': ['templates/*.html'],
           'bgexplorer.modelviewer':['templates/*.html','static/*','static/*/*'],
           'bgexplorer.simsviewer':['templates/*.html'],
+          'bgexplorer.assaydb': ['templates/*.html'],
       },
       zip_safe=False,
       install_requires=[
