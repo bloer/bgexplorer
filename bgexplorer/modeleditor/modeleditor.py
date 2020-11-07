@@ -242,7 +242,9 @@ class ModelEditor(object):
             if not simsdb:
                 error += " No registered SimulationsDB"
             try:
-                update = form.updatesimdata.data
+                # temporarily force update always
+                #update = form.updatesimdata.data
+                update = True
                 simsdb.updatesimdata(model, attach=True,
                                      findnewmatches=update, findnewdata=update)
             except units.errors.DimensionalityError as e:
@@ -303,12 +305,7 @@ class ModelEditor(object):
     def delcomponent(self, modelid, componentid):
         model = getmodelordie(modelid, toedit=True)
         component = getcomponentordie(model, componentid)
-        #remove references from parents
-        for placement in component.placements:
-            if placement.parent:
-                placement.parent.delcomponent(placement)
-        #and from the registry
-        del model.components[componentid]
+        model.delcomponent(componentid)
         self.modeldb.write_model(model)
         return redirect(url_for('.editmodel', modelid=modelid))
 
@@ -354,10 +351,7 @@ class ModelEditor(object):
     def delspec(self, modelid, specid):
         model = getmodelordie(modelid, toedit=True)
         spec = getspecordie(model, specid)
-        #remove all references
-        for comp in list(spec.appliedto):
-            comp.delspec(spec)
-        del model.specs[spec.id]
+        model.delspec(specid)
         self.modeldb.write_model(model)
         return redirect(url_for('.editmodel', modelid=modelid))
 
@@ -407,9 +401,19 @@ class ModelEditor(object):
                 #make sure the fully assembled object works
                 for bs in comp.specs:
                     bs.spec = model.specs.get(bs.spec, bs.spec)
+                if hasattr(comp, 'components'):
+                    for plc in comp.components:
+                        sub = plc.component
+                        plc.component = model.components.get(sub, sub)
+
                 status = comp.getstatus()
                 if not status:
                     #no errors, so save
+                    # sim data associations almost all get out of whack when
+                    # anything is changed, so take the heavy-handed method of
+                    # deleting all
+                    for match in model.getsimdata(rootcomponent=comp):
+                        del model.simdata[match.id]
                     self.modeldb.write_model(model)
                     flash("Changes to component '%s' successfully saved"%
                           comp.name, 'success')
@@ -445,6 +449,11 @@ class ModelEditor(object):
                 status = spec.getstatus()
                 if not status:
                     #no errors, so save
+                    # sim data associations almost all get out of whack when
+                    # anything is changed, so take the heavy-handed method of
+                    # deleting all
+                    for match in model.getsimdata(rootspec=spec):
+                        del model.simdata[match.id]
                     self.modeldb.write_model(model)
                     flash("Changes to spec '%s' successfully saved"%spec.name,
                           'success')

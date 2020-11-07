@@ -32,8 +32,9 @@ class SaveModelForm(FlaskForm):
     description = StringField("Description", [validators.required()])
     user = StringField("Your name", [validators.required()])
     comment = StringField("Describe your edits", [validators.required()])
+    # temporarily force this to be true
     updatesimdata = BooleanField("Update with latest simulation data",
-                                 default=True);
+                                 default=True, render_kw={'disabled': True})
 
     def populate_obj(self, obj):
         obj.name = self.name.data
@@ -224,6 +225,11 @@ class RadioactiveIsotopeForm(Form):
                        render_kw={'size':12,'class':'form-control'})
     islimit = BooleanField("Limit?",
                            description="Is this a measurement upper limit?")
+
+    def populate_obj(self, obj):
+        # make sure isotope and name are always the same
+        super().populate_obj(obj)
+        self.name.populate_obj(obj, 'isotope')
 
 def _defaultisotope():
     aspec = emissionspec.RadioactiveContam()
