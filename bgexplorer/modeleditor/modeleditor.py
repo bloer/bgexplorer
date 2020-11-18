@@ -182,7 +182,7 @@ class ModelEditor(object):
             simsdbview = request.form.get('backend', simsdbview)
         importfile = None
         if request.files:
-            importfile = request.files.get('importfile',importfile)
+            importfile = request.files.get('importmodel',importfile)
 
         if importfile:
             #try to convert file data
