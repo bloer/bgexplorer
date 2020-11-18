@@ -560,7 +560,7 @@ class ModelViewer(object):
     def get_datatable(self, model):
         """Return a Result object with the encoded or streamed datatable"""
         key = self.datatablekey(model)
-        if not self._cacher or self.modeldb.is_model_temp(model.id):
+        if not self._cacher: # or self.modeldb.is_model_temp(model.id):
             #no cache, so stream it directly, don't bother to zip it
             #should really be text/csv, but then browsersr won't let you see it
             return Response(self.streamdatatable(model), mimetype='text/plain')
