@@ -1,3 +1,4 @@
+import flask
 from flask import Flask, render_template, Blueprint, json, flash, redirect, url_for, Response, abort
 from flask_bootstrap import Bootstrap
 from flask_basicauth import BasicAuth
@@ -89,22 +90,31 @@ class BgExplorer(Flask):
 
         #set up logging
         logformat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        loglevel = app.config.get('LOGLEVEL',logging.WARNING)
         if app.debug:
-            logging.basicConfig(format=logformat, level=logging.DEBUG)
-            logging.getLogger('matplotlib').setLevel(logging.WARNING)
-        else:
-            logfile = app.config.get('LOGFILE')
-            if logfile:
-                from logging.handlers import RotatingFileHandler
-                level = app.config.get('LOGLEVEL',logging.WARNING)
-                logging.basicConfig(filename=logfile, format=logformat, level=level)
+            loglevel = logging.DEBUG
 
-                file_handler = RotatingFileHandler(logfile, maxBytes=1024*1024*100,
-                                                   backupCount=20)
-                file_handler.setLevel(app.config.get('LOGLEVEL',logging.DEBUG))
-                formatter = logging.Formatter(format)
-                file_handler.setFormatter(formatter)
-                app.logger.addHandler(file_handler)
+        logfile = app.config.get('LOGFILE')
+        #logging.basicConfig(format=logformat, level=level)
+        if logfile:
+            app.logger.removeHandler(flask.logging.default_handler)
+            from logging.handlers import RotatingFileHandler
+
+            file_handler = RotatingFileHandler(logfile, maxBytes=1024*1024*100,
+                                               backupCount=20)
+            file_handler.setLevel(loglevel)
+            formatter = logging.Formatter(logformat)
+            file_handler.setFormatter(formatter)
+            #app.logger.addHandler(file_handler)
+            logging.getLogger().addHandler(file_handler)
+            logging.getLogger().setLevel(loglevel)
+        else:
+            logging.basicConfig(format=logformat, level=loglevel)
+        app.logger.info("Log level is %s", loglevel)
+
+
+        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
         #set up extensions
         BasicAuth(app)
