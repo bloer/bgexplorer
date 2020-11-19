@@ -30,6 +30,14 @@ log = logging.getLogger(__name__)
 
 from time import sleep
 
+def make_etag(model):
+    """ Generate a string to use as an etag """
+    try:
+        return f"{model.id}-{model.editDetails['date']}"
+    except AttributeError:
+        # this should be a dictionary...
+        return f"{model['_id']}-{model['editDetails']['date']}"
+
 class ModelViewer(object):
     """Blueprint for inspecting saved model definitions
     Args:
@@ -84,13 +92,7 @@ class ModelViewer(object):
         """process model objects into URL strings, and pre-load models
         into the `flask.g` object before passing to endpoint functions
         """
-        def make_etag(model):
-            """ Generate a string to use as an etag """
-            try:
-                return f"{model.id}-{model.editDetails['date']}"
-            except AttributeError:
-                # this should be a dictionary...
-                return f"{model['_id']}-{model['editDetails']['date']}"
+
 
         @self.bp.after_request
         def addpostheaders(response):
@@ -500,7 +502,8 @@ class ModelViewer(object):
                         except AttributeError: #not a Quantity...
                             pass
                         except units.errors.DimensionalityError as e:
-                            log.warning(e)
+                            if evals[index] != 0 :
+                                log.warning(e)
                             evals[index] = getattr(evals[index], 'm', 0)
                     # convert to string
                     evals[index] = "{:.3g}".format(evals[index])
@@ -522,7 +525,7 @@ class ModelViewer(object):
 
     @staticmethod
     def datatablekey(model):
-        return "datatable:"+str(model.id)
+        return "datatable:"+make_etag(model)
 
     def build_datatable(self, model):
         """Generate a gzipped datatable and cache it
