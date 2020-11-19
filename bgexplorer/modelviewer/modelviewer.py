@@ -23,6 +23,7 @@ from ..dbview import SimsDbView
 
 from . import billofmaterials as bomfuncs
 from ..modeldb import InMemoryCacher
+from bgmodelbuilder import units
 
 import logging
 log = logging.getLogger(__name__)
@@ -498,10 +499,14 @@ class ModelViewer(object):
                             evals[index] = evals[index].to(unit).m
                         except AttributeError: #not a Quantity...
                             pass
+                        except units.errors.DimensionalityError as e:
+                            log.warning(e)
+                            evals[index] = getattr(evals[index], 'm', 0)
                     # convert to string
                     evals[index] = "{:.3g}".format(evals[index])
                     if match.spec.islimit:
                         evals[index] = '<'+evals[index]
+
             groupvals = (g(match) for g in simsdbview.groups.values())
             groupvals = (simsdbview.groupjoinkey.join(g)
                          if isinstance(g,(list,tuple)) else g
