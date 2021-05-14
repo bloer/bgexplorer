@@ -121,7 +121,7 @@ class SimsViewer(object):
         def addsimsdbview(endpoint, values):
             model = values.pop('model', None) or g.get('model', None)
             if model:
-                values['modelid'] = model.id
+                #values['modelid'] = model.id
                 dbname = model.simsdb
                 if not dbname:
                     dbname = current_app.getdefaultsimviewname()

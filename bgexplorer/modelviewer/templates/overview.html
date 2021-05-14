@@ -24,7 +24,7 @@
         <h3>Description</h3>
         <p>{{ g.model.description }}</p>
         <h4>Database Backend</h4>
-        <p>{{ g.model.simsdb |default("default")}}</p>
+        <p><a href="{{ url_for('simsviewer.overview') }}">{{ g.model.simsdb |default("default") }}</a></p>
         <h3>Additional Details</h3>
         <dl class="dl-horizontal" >
         {% for key, val in g.model.editDetails.items() %}
