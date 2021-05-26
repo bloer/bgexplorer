@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division,
 
 import pymongo
 import re
-from pprint import pprint 
+from pprint import pprint
 import bson
 from datetime import datetime
 from collections import OrderedDict, deque
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 class InMemoryCacher(object):
     def __init__(self, maxentries=3):
-        """Simple cache of most recently assembled models from the database. 
+        """Simple cache of most recently assembled models from the database.
         If new models are cached the oldest are removed first
         """
         self.maxentries = 3
@@ -36,48 +36,48 @@ class InMemoryCacher(object):
             self.byage.remove(key)
             self.byage.appendleft(key)
         return self.registry.get(key, None)
-        
+
     def test(self, key):
         return key in self.registry
-        
+
     def expire(self, key=None):
         if not key:
             key = self.byage.pop()
         else:
             try:
                 self.byage.remove(key)
-            except ValueError: 
+            except ValueError:
                 pass
         try:
             del self.registry[key]
         except KeyError:
             pass
-        
+
     def empty(self):
         self.byage = deque([])
         self.registry = {}
 
-    
+
 
 class ModelDB(object):
-    
+
     _default_uri = 'mongodb://localhost/modeldb'
-    
+
     """Helper class to load/save BgModel objects to a (pymongo) database
     Args:
        dburi (str): a pymongo database URI connection string
        collection (str): the model collection as a string
-       cacher: An object implementing store, get, and expire methods, to 
+       cacher: An object implementing store, get, and expire methods, to
                cache the most recently assembled model
     """
-    def __init__(self, dburi=None, collection='bgmodels', 
+    def __init__(self, dburi=None, collection='bgmodels',
                  cacher=InMemoryCacher(), app=None):
         self._collectionName = collection
         self._client = None
         self._database = None
         self._collection = None
         self._cacher = cacher
-        
+
         if dburi:
             self.connect(dburi)
         elif app:
@@ -87,11 +87,11 @@ class ModelDB(object):
         """Initialize from configuration parameters in a Flask app"""
         dburi = app.config.setdefault('MODELDB_URI',
                                       self._default_uri)
-        self._collectionName = app.config.setdefault('MODELDB_COLLECTION', 
+        self._collectionName = app.config.setdefault('MODELDB_COLLECTION',
                                                      'bgmodels')
         self.connect(dburi)
         app.extensions['ModelDB'] = self
-        
+
 
     def connect(self, dburi=None):
         """Connect to the server and database identified by dburi"""
@@ -113,14 +113,14 @@ class ModelDB(object):
                                       name='name_version',
                                       unique=True,
                                       partialFilterExpression=partialFilter);
-        
+
     def testconnection(self):
         """Make sure we're connected to the database, otherwise raise exception
         """
         if not self._collection:
             self.connect()
             #raise RuntimeError("No active database connection")
-            
+
 
     def makequery(self, query):
         """Accept queries in the form of raw IDs, which may be the string form
@@ -140,12 +140,12 @@ class ModelDB(object):
 
         return query
 
-        
+
     def get_raw_model(self, query, projection=None, withmeta=False):
         """Get the raw dict object for a model stored in the db
         Args:
             query(str or dict): pymongo query object. Should generally be a str
-                or ObjectId corresponding to the model's ID or a dict with 
+                or ObjectId corresponding to the model's ID or a dict with
                 'name' and 'version' keys
             projection (dict): pymongo projection doc
             withmeta (bool):  If true, include the __modeldb_meta subdocument.
@@ -177,15 +177,19 @@ class ModelDB(object):
         if not withmeta:
             result.pop('__modeldb_meta',None)
 
-        #change '_id' to 'id' 
+        #change '_id' to 'id'
         return result
-        
+
     def is_model_temp(self, modelid):
         """Is the model with id modelid temporary? Only temporary models
         are writeable!
         """
+        # only non-temp models are cached, so if it's in cache, it's not temp
+        if self._cacher.test(modelid):
+            return False
+        # not in cache, so need to check
         model = self.get_raw_model(modelid, {'__modeldb_meta':True})
-        #todo: should we just return false here? 
+        #todo: should we just return false here?
         if not model:
             raise KeyError("No model with ID ",modelid)
         return model['__modeldb_meta']['temporary']
@@ -196,7 +200,7 @@ class ModelDB(object):
            with the most recent first
         """
         result = []
-        projection = {'name': True, 'version': True, 'editDetails':True, 
+        projection = {'name': True, 'version': True, 'editDetails':True,
                       'derivedFrom':True}
         while modelid:
             model = self.get_raw_model(modelid, projection)
@@ -214,7 +218,7 @@ class ModelDB(object):
             query.update({'__modeldb_meta.temporary':False})
         result = self.get_raw_model(query,{'version':True})
         return result['version'] if result else "0.0"
-        
+
     def get_model(self, query, projection=None, bypasscache=False):
         """Load the model from query built into a BgModel object
         See `get_raw_model` for a description of other
@@ -230,7 +234,7 @@ class ModelDB(object):
             #prevents temp models from being loaded from cache:
             #if not raw.get('__modeldb_meta',{}).get('temporary',False):
             model = self._cacher.get(raw['_id'])
-            if model: 
+            if model:
                 return model
 
         #if we get here, it's not cached
@@ -243,14 +247,14 @@ class ModelDB(object):
 
     _replacekeys = {'$':'\uff04', '.': '\u2024'}
     _findall = tuple(_replacekeys.keys())+tuple(_replacekeys.values())
-    
+
     @staticmethod
     def encodebson(obj, registry=[], path=tuple()):
-        """Some objects in the model may have keys that start with '$' or 
+        """Some objects in the model may have keys that start with '$' or
         contain periods '.', in particular the querymod and query objects that
-        get stored. This function recursively replaces these values with 
-        their unicode equivalents. 
-        
+        get stored. This function recursively replaces these values with
+        their unicode equivalents.
+
         Args:
             obj:  Any object that will be stored in the DB
             registry: a list of paths to keys that will be overwritten
@@ -259,7 +263,7 @@ class ModelDB(object):
         if isinstance(obj,dict):
             for key in list(obj.keys()):
                 newkey = key
-                
+
                 replacekey = any(k in key for k in ModelDB._findall)
                 if replacekey:
                     for k, v in ModelDB._replacekeys.items():
@@ -269,7 +273,7 @@ class ModelDB(object):
                 val = ModelDB.encodebson(obj.pop(key), registry, mypath)
                 if replacekey:
                     registry.append(mypath)
-                obj[newkey] = val                
+                obj[newkey] = val
         elif isinstance(obj, (list, tuple)):
             for index, val in enumerate(obj):
                 ModelDB.encodebson(val,registry, path+(index,))
@@ -298,25 +302,25 @@ class ModelDB(object):
                 for k, v in ModelDB._replacekeys.items():
                     newkey = newkey.replace(v, k)
                 obj[newkey] = obj.pop(oldkey)
-            
+
         return root
-                        
 
 
-    #todo: implement password-locking for models    
+
+    #todo: implement password-locking for models
     def write_model(self, model, temp=True, bumpversion="major"):
         """Write a modified model to the database.  Only temporary models
         may be directly modified. Attempting to overwrite a non-temporary
         model will result in a new model being generated
 
         Args:
-            model (dict or BgModel): The data to be stored. If the model has 
+            model (dict or BgModel): The data to be stored. If the model has
                 an '_id' attribute, will attempt to overwrite an existing model
 
             temp (bool): If true, mark this entry as temporary. Existing non-
                 temporay models cannot become temporary
-          
-            bumpversion (str): One of "major" or "minor" 
+
+            bumpversion (str): One of "major" or "minor"
         """
         self.testconnection()
         if isinstance(model, BgModel):
@@ -340,7 +344,7 @@ class ModelDB(object):
             model['version'] = editDetails['date']
 
         # when a temporary model becomes permanent, we give it a new ID so it
-        # timesorts properly, then delete the original 
+        # timesorts properly, then delete the original
         deloldid = None
 
         if '_id' in model:
@@ -359,7 +363,7 @@ class ModelDB(object):
 
             else:
                 try:
-                    res = self._collection.replace_one({'_id':model['_id']}, 
+                    res = self._collection.replace_one({'_id':model['_id']},
                                                        model)
                 except pymongo.errors.WriteError:
                     #Most likely we have invalid keys
@@ -369,11 +373,11 @@ class ModelDB(object):
                         raise
                     model['__modeldb_meta']['encodedkeys'] = registry
                     #try again
-                    res = self._collection.replace_one({'_id':model['_id']}, 
+                    res = self._collection.replace_one({'_id':model['_id']},
                                                        model)
 
         #can't use elif since might have been removed in previous step
-        if '_id' not in model: 
+        if '_id' not in model:
             try:
                 res = self._collection.insert_one(model)
             except pymongo.errors.InvalidDocument:
@@ -393,11 +397,11 @@ class ModelDB(object):
         return model.get('_id')
 
     def new_model(self, derivedFrom=None, temp=True, name=""):
-        """Create a new model in the database, either from scratch or by 
+        """Create a new model in the database, either from scratch or by
         cloning an existing model. By default bump the version number to the
         next available for that name
         Args:
-            derivedFrom (str, ObjectID): _id for parent to clone from 
+            derivedFrom (str, ObjectID): _id for parent to clone from
             temp (bool): if true (default), mark as temporary
         Returns:
             newmodel (BgModel): new empty or cloned model object
@@ -410,10 +414,10 @@ class ModelDB(object):
                                derivedFrom)
         else:
             model = BgModel(name=name).todict()
-            
+
         newid = self.write_model(model, temp=temp, bumpversion="major")
         return self.get_model(newid)
-        
+
     def del_model(self, modelid):
         """Delete a model from the database. Not allowed if another model
         derives from it
@@ -428,19 +432,19 @@ class ModelDB(object):
         derived = self._collection.count({'derivedFrom':query['_id']})
         if derived:
             raise ValueError("Can't delete model with descendants")
-        
+
         self._cacher.expire(modelid)
         return self._collection.delete_one(query).deleted_count
-                
+
     def get_models_list(self, includetemp=False, mostrecentonly=True,
                         projection=None):
 
         """Get a list of all defined models, just the raw dictionary objects.
         Args:
-            includetemp (bool): if true, include temporary models 
+            includetemp (bool): if true, include temporary models
             mostrecentonly (bool): if true (default), only grab the most recent
                 version of each model name
-            projection (dict): mongodb projection operator to apply to the 
+            projection (dict): mongodb projection operator to apply to the
                 selection.  Use None to get the full object
 
         Returns:
@@ -448,7 +452,7 @@ class ModelDB(object):
         """
         self.testconnection()
 
-        
+
         projection=projection or {'name':True, 'version':True,
                                   'description':True, 'editDetails':True}
 
@@ -459,7 +463,7 @@ class ModelDB(object):
             pipeline.append(match)
         else:
             projection.update({'temporary': '$__modeldb_meta.temporary'})
-        pipeline.append({'$sort': 
+        pipeline.append({'$sort':
                          OrderedDict((('name',pymongo.ASCENDING),
                                       ('_id',pymongo.DESCENDING)))
                          })
@@ -472,7 +476,7 @@ class ModelDB(object):
             pipeline.append({'$project': projection})
 
         return list(self._collection.aggregate(pipeline))
-            
+
     def removecache(self, model):
         """ Remove the model from cache
         Args:
@@ -481,4 +485,4 @@ class ModelDB(object):
         if hasattr(model,'id'):
             model = model.id
         self._cacher.expire(model)
-            
+
