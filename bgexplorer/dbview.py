@@ -21,7 +21,7 @@ class SimsDbView(object):
                  groups=None, groupsort=None, groupjoinkey=None,
                  values=None, values_units=None,
                  spectra=None, spectra_units=None, values_spectra=None,
-                 upload_handler=None):
+                 upload_handler=None, description=''):
         """ Constructor
         Args:
             simsdb (SimulationsDB): A SimulationsDB concrete instance
@@ -39,6 +39,7 @@ class SimsDbView(object):
             values_spectra (dict): if an entry in `values` is associated to an
                                    entry in `spectra`, generate a link
             upload_handler (func): function to handle new entry upload requests
+            description (str): description to show on summary page
 
         Note that all of the 'spectra' keys are currently not used
 
@@ -63,6 +64,7 @@ class SimsDbView(object):
         self.spectra_units = spectra_units or {}
         self.values_spectra = values_spectra or {}
         self.upload_handler = upload_handler
+        self.description = description
 
         #replace groupsort nested lists with joined strings
         for key,val in list(self.groupsort.items()):
