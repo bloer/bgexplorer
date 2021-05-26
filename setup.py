@@ -27,6 +27,6 @@ setup(name='bgexplorer',
           'numpy',
           'matplotlib>=3.1',
           'uncertainties',
-          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@0.4.2',
+          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@0.4.3',
       ],
 )
