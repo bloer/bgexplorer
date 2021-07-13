@@ -93,7 +93,7 @@ class ModelDB(object):
         app.extensions['ModelDB'] = self
 
 
-    def connect(self, dburi=None):
+    def connect(self, dburi=None, makecache=True):
         """Connect to the server and database identified by dburi"""
         if not dburi:
             dburi = self._default_uri
@@ -113,6 +113,19 @@ class ModelDB(object):
                                       name='name_version',
                                       unique=True,
                                       partialFilterExpression=partialFilter);
+
+        if makecache:
+            cachecol = self._collection['evalcache']
+            cachecol.create_index((('modelid', pymongo.ASCENDING),
+                                   ('componentid', pymongo.ASCENDING),
+                                   ('specid', pymongo.ASCENDING),
+                                   ('matchid', pymongo.ASCENDING)),
+                                  unique=True)
+
+    def getevalcache(self):
+        """ Get the collection used for evaluated data cache """
+        return self._collection['evalcache']
+
 
     def testconnection(self):
         """Make sure we're connected to the database, otherwise raise exception
@@ -396,13 +409,15 @@ class ModelDB(object):
         #todo: test the response!
         return model.get('_id')
 
-    def new_model(self, derivedFrom=None, temp=True, name=""):
+    def new_model(self, derivedFrom=None, temp=True, name="", simsdb=None):
         """Create a new model in the database, either from scratch or by
         cloning an existing model. By default bump the version number to the
         next available for that name
         Args:
             derivedFrom (str, ObjectID): _id for parent to clone from
             temp (bool): if true (default), mark as temporary
+            name (str): name of the new model
+            simsdb (str): name pf simsdbview to use
         Returns:
             newmodel (BgModel): new empty or cloned model object
         """
@@ -410,11 +425,11 @@ class ModelDB(object):
         if derivedFrom:
             model = self.get_raw_model(derivedFrom)
             if not model:
-                raise KeyError("Model with id %s not found",
-                               derivedFrom)
+                raise KeyError("Model with id %s not found", derivedFrom)
         else:
             model = BgModel(name=name).todict()
-
+        if simsdb:
+            model['simsdb'] = simsdb
         newid = self.write_model(model, temp=temp, bumpversion="major")
         return self.get_model(newid)
 

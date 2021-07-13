@@ -179,7 +179,7 @@ class ModelEditor(object):
         simsdbview = None
         if request.form:
             name = request.form.get('name',name)
-            simsdbview = request.form.get('backend', simsdbview)
+            simsdbview = request.form.get('simsdb', simsdbview)
         importfile = None
         if request.files:
             importfile = request.files.get('importmodel',importfile)
@@ -200,7 +200,7 @@ class ModelEditor(object):
             newid = self.modeldb.write_model(newmodel,temp=True)
         else:
             derivedFrom = request.values.get('derivedFrom', None)
-            newmodel = self.modeldb.new_model(derivedFrom, name=name)
+            newmodel = self.modeldb.new_model(derivedFrom, name=name, simsdb=simsdbview)
             newid = newmodel.id
         #todo: handle error no model returned, probably DB down
         return redirect(url_for('.editmodel', modelid=str(newid)))
