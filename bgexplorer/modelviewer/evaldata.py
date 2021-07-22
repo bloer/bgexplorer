@@ -2,35 +2,28 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
 from itertools import chain
-import os
-import psutil
-import threading
-import zlib
-import json
 import datetime
 import gzip
+import copy
 import numpy as np
 from uncertainties import unumpy
-from math import ceil, log10
 from io import BytesIO
-from itertools import chain
+from flask import abort
+import pymongo
 try:
     from matplotlib.figure import Figure
 except ImportError:
     Figure = None
 
-from bson import ObjectId
-
 from .. import utils
-from ..dbview import SimsDbView
-from time import sleep
 from bgmodelbuilder import units
+from bgmodelbuilder.simulationsdb.histogram import Histogram
 
 import logging
 log = logging.getLogger(__name__)
 
 
-class ModelEvaluator(obj):
+class ModelEvaluator(object):
     """ Utiilty class to generate data tables and spectra for non-temp models """
 
     def __init__(self, model, modeldb=None, simsdbview=None, genimages=True,
@@ -60,11 +53,11 @@ class ModelEvaluator(obj):
         if cached:
             return cached
 
-        log.debug(f"Starting evaluation of model {model.id}")
+        log.debug(f"Starting evaluation of model {self.model.id}")
 
         # Loop through all the SimDataMatch objects and evaluate values and
         # spectra; create the sum data table
-        databuf = io.BytesIO()
+        databuf = BytesIO()
         datatable = gzip.GzipFile(mode='wb', fileobj=databuf)
         # write the datatable header
 
@@ -95,7 +88,7 @@ class ModelEvaluator(obj):
                 self.evalspec(spec)
 
         self.finalize(data)
-        log.debug(f"Finished evaluation of data for model {model.id}")
+        log.debug(f"Finished evaluation of data for model {self.model.id}")
         return data
 
     def evalmatch(self, match):
@@ -168,7 +161,7 @@ class ModelEvaluator(obj):
         self.finalize(data, spec=spec)
         return data
 
-    def _add_data(data1, data2, include_datatable=False):
+    def _add_data(self, data1, data2, include_datatable=False):
         spectra = dict((k, self.simsdbview.spectra[k].reduce(data1['spectra'].get(k),
                                                              data2['spectra'].get(k)))
                        for k in data1['spectra'])
@@ -265,9 +258,9 @@ class ModelEvaluator(obj):
         except AttributeError:
             pass
 
-       try:
-           val = val.n
-           err = val.s
+        try:
+            val = val.n
+            err = val.s
         except AttributeError:
             pass
 
@@ -306,8 +299,7 @@ class ModelEvaluator(obj):
         if not np.any(valerrs):
             del args['errs']
 
-
-        buf = io.BytesIO()
+        buf = BytesIO()
         np.savez_compressed(buf, **args)
         doc = dict(hist=buf.getvalue())
         if valunit is not None:
@@ -318,7 +310,7 @@ class ModelEvaluator(obj):
 
     @staticmethod
     def unpack_histogram(doc):
-        data = np.load(io.BytesIO(doc['hist']))
+        data = np.load(BytesIO(doc['hist']))
         hist = data['hist']
         bins = data['bins']
         if 'errs' in data:
@@ -329,7 +321,6 @@ class ModelEvaluator(obj):
             bins = bins * units[doc['bins_unit']]
         return Histogram(hist, bins)
 
-
     def writetocache(self, data):
         """ write an evaluated data dictionary to the cache """
         if (not self.writecache) or (self.cache is None):
@@ -338,18 +329,16 @@ class ModelEvaluator(obj):
         data = dict(**data, time=datetime.datetime.now())
 
         # repplace objects with cachable forms
-        for key, val in data.get('values',{}).items():
+        for key, val in data.get('values', {}).items():
             data['values'][key] = self.pack_quantity(val)
-        for key, val in data.get('spectra'{}).items():
+        for key, val in data.get('spectra', {}).items():
             data['spectra'][key] = self.pack_histogram(val)
 
         # write to db
         try:
-            self.cache.insert_one(data):
+            self.cache.insert_one(data)
         except pymongo.errors.DuplicateKeyError:
             log.warning(f"Existing entry for cache {data}")
-
-
 
     def readfromcache(self, component=None, spec=None, match=None,
                       projection={'spectrum_images': False}):
@@ -392,16 +381,17 @@ def get_spectrum(model, specname, image=True, component=None, spec=None,
         match = match
 
     dbview = utils.get_simsdbview()
-    spectra = dict(specname, dbview.spectra[specname])
+    spectra = dict(specname=dbview.spectra[specname])
     dbview = copy.copy(dbview)
     dbview.spectra = spectra
 
-    evaluator = ModelEvaluator(model, modeldb=tutils.get_modeldb(),
-                               genimages=image, simsdbview=simsdb,
+    evaluator = ModelEvaluator(model, modeldb=utils.get_modeldb(),
+                               genimages=image, simsdbview=dbview,
                                writecache=False)
     topkey = 'spectrum_images' if image else 'spectra'
     projection = {f'{topkey}.{specname}': True}
-    cached = evaluator.readfromcache(component=component, spec=spec, match=match)
+    cached = evaluator.readfromcache(component=component, spec=spec, match=match,
+                                     projection=projection)
     if cached:
         try:
             return cached[topkey][specname]
