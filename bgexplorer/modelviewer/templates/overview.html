@@ -25,6 +25,15 @@
         <p>{{ g.model.description }}</p>
         <h4>Database Backend</h4>
         <p><a href="{{ url_for('simsviewer.overview') }}">{{ g.model.simsdb |default("default") }}</a></p>
+        <h4>Calculations and Spectra generation status</h4>
+        {%- if evalcachestatus  %}
+            <form class="form-inline" action="{{ url_for('.evaldata') }}" method="POST">
+                <button class="btn btn-success">Generate</button>
+            </form>
+        {% else %}
+        <p> {{ evalcachestatus }}</p>
+        {% endif %}
+
         <h3>Additional Details</h3>
         <dl class="dl-horizontal" >
         {% for key, val in g.model.editDetails.items() %}
