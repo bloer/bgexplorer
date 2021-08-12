@@ -135,7 +135,9 @@ class ModelEvaluator(object):
         for match in self.model.simdata.values():
             doc = self._evalmatch(match, dovals=True, dogroups=True,
                                   dospectra=doallcache)
-            dtline = '\t'.join(chain([match.id], doc['groups'], doc['values']))
+            dtline = '\t'.join(chain([match.id],
+                                     [str(g) for g in doc['groups']],
+                                     doc['values']))
             datatable.write(dtline)
             datatable.write('\n')
             if doallcache:
