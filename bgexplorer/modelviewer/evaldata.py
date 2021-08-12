@@ -146,7 +146,7 @@ class ModelEvaluator(object):
         result = buf.getvalue()
         self.writetocache('datatable', result)
         log.info("Finished evaluation of data for model %s in %s seconds",
-                  self.model.id, time.monotonic()-start)
+                 self.model.id, time.monotonic()-start)
         return result
 
     def spectrum(self, specname, component=None, spec=None, match=None,
@@ -183,7 +183,7 @@ class ModelEvaluator(object):
             # also gen the top-level model hists
             specfunc(specname)
         log.info("Finished caching data for model %s in %s seconds",
-                  self.model.id, time.monotonic()-start)
+                 self.model.id, time.monotonic()-start)
 
     def _spectrum_impl(self, specname, component=None, spec=None, match=None,
                        matches=None, fmt="hist"):

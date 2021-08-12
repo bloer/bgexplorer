@@ -4,6 +4,7 @@ import zipfile
 import tarfile
 import itertools
 
+
 class SimsDbView(object):
     """ This class's members specify how to load and interpret simulation
     database entries and how to view results from models
@@ -11,8 +12,8 @@ class SimsDbView(object):
     defaultgroups = {
         "Component": lambda match: [c.name for c in match.assemblyPath],
         "Material": lambda match: match.component.material,
-        #"Source": lambda match: match.spec.name,
-        #"Source Category": lambda match: match.spec.category,
+        # "Source": lambda match: match.spec.name,
+        # "Source Category": lambda match: match.spec.category,
         "Source": lambda match: [match.spec.category, match.spec.name],
     }
     defaultjoinkey = '___'
@@ -66,11 +67,11 @@ class SimsDbView(object):
         self.upload_handler = upload_handler
         self.description = description
 
-        #replace groupsort nested lists with joined strings
-        for key,val in list(self.groupsort.items()):
-            if isinstance(val,(list, tuple)):
-                val = [self.groupjoinkey.join(i) if isinstance(i,(list,tuple))
-                                                 else i
+        # replace groupsort nested lists with joined strings
+        for key, val in list(self.groupsort.items()):
+            if isinstance(val, (list, tuple)):
+                val = [self.groupjoinkey.join(i) if isinstance(i, (list, tuple))
+                       else i
                        for i in val]
                 self.groupsort[key] = val
 
@@ -145,7 +146,7 @@ class SimsDbView(object):
         """ Test whether g1 is a subgroup of g2 (or equal) """
         g1 = self.unflatten_gval(g1, force=True)
         g2 = self.unflatten_gval(g2, force=True)
-        return len(g1) >= len(g2) and all(a==b for a, b in zip(g1, g2))
+        return len(g1) >= len(g2) and all(a == b for a, b in zip(g1, g2))
 
 
 # utilities to handle file uploads:
@@ -172,8 +173,9 @@ def json_upload_handler(files, simsdb):
             newentry = simsdb.addentry(decomp.read(), fmt="json")
             result['entries'][filename] = newentry
         except BaseException as e:
-            result['errors'][filename] = "Error inserting entry: %s"%e
+            result['errors'][filename] = "Error inserting entry: %s" % e
     return result
+
 
 def iterate_archive(afile):
     """ If `afile` is a zip or tar archive (gzipped or not), return a list
@@ -185,7 +187,7 @@ def iterate_archive(afile):
     try:
         tf = tarfile.open(fileobj=afile)
         files = [tf.extractfile(name) for name in tf.getnames()]
-        for f,name in zip(files, tf.getnames()):
+        for f, name in zip(files, tf.getnames()):
             f.filename = name
     except tarfile.TarError:
         afile.seek(0)
@@ -198,6 +200,7 @@ def iterate_archive(afile):
         pass
 
     return files
+
 
 def transparent_gzip(afile):
     """ If `afile` is gzipped, return a `gzip.GzipFile`, otherwise return `afile
@@ -213,8 +216,10 @@ def transparent_gzip(afile):
         afile.seek(0)
         return afile
 
+
 class _ZipExtSeekable(object):
     """ Wrap a 3.6 ZipExtFile to emulate seek(0) """
+
     def __init__(self, zipfile, name):
         self.zipfile = zipfile
         self.filename = name
@@ -229,5 +234,3 @@ class _ZipExtSeekable(object):
 
     def __getattr__(self, attr):
         return getattr(self.ext, attr)
-
-
