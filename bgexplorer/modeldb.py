@@ -8,6 +8,7 @@ from datetime import datetime
 from collections import OrderedDict, deque
 from bgmodelbuilder.bgmodel import BgModel
 from .utils import getobjectid
+from .modelviewer.evaldata import genevalcache
 import logging
 log = logging.getLogger(__name__)
 
@@ -117,27 +118,19 @@ class ModelDB(object):
             cachecol.create_index((('modelid', pymongo.ASCENDING),
                                    ('componentid', pymongo.ASCENDING),
                                    ('specid', pymongo.ASCENDING),
-                                   ('matchid', pymongo.ASCENDING)),
+                                   ('matchid', pymongo.ASCENDING),
+                                   ('dataname', pymongo.ASCENDING),
+                                   ('fmt', pymongo.ASCENDING)),
                                   unique=True)
 
     def getevalcache(self):
         """ Get the collection used for evaluated data cache """
         return self._collection['evalcache']
 
-    def getevalcache_status(self, modelid):
-        cachedb = self.getevalcache()
-        result = 'empty'
-        # see if there are any docs
-        ndocs = cachedb.count_documents(dict(modelid=modelid))
-        if ndocs:
-            result = 'inprogress'
-            # if there is a 'model' entry, it's done
-            query = dict(modelid=modelid, componentid=None, specid=None,
-                         matchid=None)
-            doc = cachedb.find_one(query, dict(modelid=True))
-            if doc:
-                result = 'complete'
-        return result
+    def clearevalcache(self, modelid):
+        if modelid is not None:
+            log.warning("Clearing evaluated data cache for model %s", modelid)
+            self._collection['evalcache'].delete_many(dict(modelid=modelid))
 
     def testconnection(self):
         """Make sure we're connected to the database, otherwise raise exception
@@ -410,6 +403,8 @@ class ModelDB(object):
                 model['__modeldb_meta']['encodedkeys'] = registry
                 # try again
                 res = self._collection.insert_one(model)
+            if not temp:
+                genevalcache(self.get_model(model['_id']))
 
         if deloldid:
             self.del_model(deloldid)

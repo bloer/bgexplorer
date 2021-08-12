@@ -164,9 +164,7 @@ class ModelViewer(object):
         @self.bp.route('/')
         def overview():
             history = self.modeldb.get_model_history(g.model.id)
-            evalcachestatus = self.modeldb.getevalcache_status(g.model.id)
-            return render_template('overview.html', history=history,
-                                   evalcachestatus=evalcachestatus)
+            return render_template('overview.html', history=history)
 
         @self.bp.route('/component/')
         @self.bp.route('/component/<componentid>')  # should be uuid type?
@@ -235,14 +233,11 @@ class ModelViewer(object):
                                    bomrows=bomrows,
                                    bomcols=self.bomcols)
 
-        @self.bp.route('/evaldata', methods=('POST',))
-        def evaldata():
-            status = self.modeldb.getevalcache_status(g.model.id)
-            if status != 'complete':
-                genevalcache(g.model, spawnprocess=True)
-                flash("Started data evaluation", 'success')
-            else:
-                flash("Cache is fully generated", 'info')
+        @self.bp.route('/clearcache', methods=('POST',))
+        def clearcache():
+            self.modeldb.clearevalcache(g.model.id)
+            flash("Cleared evaluated data cache for model %s"%g.model.id,
+                  'success')
             return redirect(url_for('.overview'))
 
         @self.bp.route('/datatable')
@@ -298,27 +293,25 @@ class ModelViewer(object):
             # get the matches
             matches = request.args.getlist('m')
             component = None
-            rootspec = None
+            spec = None
+            if 'componentid' in request.args:
+                component = utils.getcomponentordie(g.model,
+                                                    request.args['componentid'])
+            if 'specid' in request.args:
+                spec = utils.getspecordie(g.model, request.args['specid'])
+
             try:
                 matches = [g.model.simdata[m] for m in matches]
             except KeyError:
                 abort(404, "Request for unknown sim data match")
-            if not matches:
-                # matches may be filtered by component or spec
-                if 'componentid' in request.args:
-                    component = utils.getcomponentordie(g.model,
-                                                        request.args['componentid'])
-                rootspec = None
-                if 'specid' in request.args:
-                    rootspec = utils.getspecordie(g.model,
-                                                  request.args['specid'])
-                matches = g.model.getsimdata(
-                    rootcomponent=component, rootspec=rootspec)
 
             # test for a group filter
             groupname = request.args.get('groupname')
             groupval = request.args.get('groupval')
             if groupname and groupval and groupval != g.simsdbview.groupjoinkey:
+                if not matches:
+                    matches = g.model.getsimdata(rootcomponent=component,
+                                                 rootspec=spec)
                 if groupname not in g.simsdbview.groups:
                     abort(404, f"No registered grouping function {groupname}")
 
@@ -326,13 +319,12 @@ class ModelViewer(object):
                     mgval = g.simsdbview.evalgroup(match, groupname, False)
                     return g.simsdbview.is_subgroup(mgval, groupval)
                 matches = list(filter(_filter_group, matches))
-
-            if not matches:
-                abort(404, "No sim data matching query")
+                if not matches:
+                    abort(404, "No sim data matching query")
 
             fmt = request.args.get("format", "png").lower()
             spectrum = get_spectrum(g.model, specname, image=(fmt == 'png'),
-                                    component=component, spec=rootspec,
+                                    component=component, spec=spec,
                                     matches=matches)
             if spectrum is None:
                 abort(404, "Unable to generate spectrum")

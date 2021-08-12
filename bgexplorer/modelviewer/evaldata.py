@@ -1,10 +1,6 @@
-# python 2/3 compatibility
-from __future__ import (absolute_import, division,
-                        print_function, unicode_literals)
 from itertools import chain
 import datetime
 import gzip
-import copy
 import multiprocessing
 import time
 import numpy as np
@@ -27,19 +23,22 @@ from bgmodelbuilder.common import try_reduce
 import logging
 log = logging.getLogger(__name__)
 
+# todo: take component, spec, groupname, groupval? with class?
+
 
 class ModelEvaluator(object):
     """ Utiilty class to generate data tables and spectra for non-temp models """
 
-    def __init__(self, model, modeldb=None, simsdbview=None, genimages=True,
-                 bypasscache=False, writecache=True):
+    def __init__(self, model, modeldb=None, simsdbview=None,
+                 bypasscache=False, writecache=True, cacheimages=True):
         """ Constructor
         Args:
             model (BgModel): model object to evaluate
-            modeldb (ModelDB): database cache collection
+            modeldb (ModelDB): database with models
             simsdbview (SimsDbView): defines vals and spectra
-            simsdbview (SimsDbView): defines vals and spectra
-            bypasscache: (bool)
+            bypasscache (bool): If True, do not search for cached value
+            writecache (bool): If False, do not write calculation results to cache
+            cacheimages (bool): If False, don't cache image generation
         """
         self.model = model
         self.cache = None
@@ -48,169 +47,200 @@ class ModelEvaluator(object):
         if modeldb and not modeldb.is_model_temp(model.id):
             self.cache = modeldb.getevalcache()
 
-        self.genimages = genimages
         self.bypasscache = bypasscache
         self.writecache = writecache
+        self.cacheimages = cacheimages
         self.simsdbview = simsdbview
         if simsdbview is None:
             self.simsdbview = utils.get_simsdbview(model=model)
         self.simsdb = self.simsdbview.simsdb
 
-    def evalmodel(self, fillallcache=False):
-        cached = self.readfromcache()
-        if cached:
-            return cached
-        start = time.monotonic()
-        log.debug(f"Starting evaluation of model {self.model.id}")
+    def _valtostr(self, valname, val, match):
+        # convert to unit if provided
+        unit = self.simsdbview.values_units.get(valname, None)
+        if unit:
+            try:
+                val = val.to(unit).m
+            except AttributeError:  # not a Quantity...
+                pass
+            except units.errors.DimensionalityError as e:
+                if val != 0:
+                    log.warning(e)
+                val = getattr(val, 'm', 0)
+        # convert to string
+        val = "{:.3g}".format(val)
+        if match.spec.islimit:
+            val = '<'+val
+        return val
 
-        # write the datatable header
+    def _evalmatch(self, match, dovals=True, dogroups=True, dospectra=False):
+        """ Evaluate SimDocEvals and grous for a match
+        Returns:
+            dict
+        """
+        toeval = []
+        if dovals:
+            toeval.extend(self.simsdbview.values.values())
+        if dospectra:
+            toeval.extend(self.simsdbview.spectra.values())
+        result = self.simsdb.evaluate(toeval, match)
+
+        doc = dict()
+        if dovals:
+            doc['values'] = [self._valtostr(name, val, match) for name, val in
+                             zip(self.simsdbview.values.keys(), result)]
+            result = result[len(self.simsdbview.values):]
+        if dospectra:
+            doc['spectra'] = result
+
+        if dogroups:
+            doc['groups'] = self.simsdbview.evalgroups(match).values()
+
+        return doc
+
+    def datatable(self, doallcache=False):
+        """ Generate the datatable with line for each sim data match,
+        return the result as a gzip compressed blob
+        Args:
+            doallcache (bool): If True, while evaluating all values, also
+                               generate spectra. This slows down datatable
+                               generation, but speeds up caching speed overall
+        """
+        cached = self.readfromcache("datatable")
+        if cached is not None:
+            return cached
+
+        start = time.monotonic()
+        log.info(f"Generating datatable for model {self.model.id}")
+        # define some useful helper functions
 
         def _valhead(val):
             suffix = ''
             if val in self.simsdbview.values_units:
                 suffix = f' [{self.simsdbview.values_units[val]}]'
             return f'V_{val}{suffix}'
+
+        # prepare output buffer
+        buf = BytesIO()
+        datatable = gzip.open(buf, mode='wt', newline='\n')
+
+        # write the header
         header = '\t'.join(chain(['ID'],
                                  (f'G_{g}' for g in self.simsdbview.groups),
-                                 (_valhead(v) for v in self.simsdbview.values.keys())
+                                 (_valhead(v)
+                                  for v in self.simsdbview.values.keys())
                                  ))
-        # now evaluate all matches
-        data = self.evalmatches(self.model.simdata.values(), include_datatable=True)
+        datatable.write(header)
+        datatable.write('\n')
+        for match in self.model.simdata.values():
+            doc = self._evalmatch(match, dovals=True, dogroups=True,
+                                  dospectra=doallcache)
+            dtline = '\t'.join(chain([match.id], doc['groups'], doc['values']))
+            datatable.write(dtline)
+            datatable.write('\n')
+            if doallcache:
+                for name, spec in zip(self.simsdbview.spectra, doc['spectra']):
+                    self.writetocache(name, spec, match=match, fmt='hist')
 
-        # Complete the result object
-        datatable = '\n'.join((header, data['datatable'], ''))
-        data['datatable'] = gzip.compress(datatable.encode())
-
-        if self.cache is not None and fillallcache:
-            for comp in self.model.getcomponents():
-                self.evalcomponent(comp)
-            for spec in self.model.getspecs(rootonly=True):
-                self.evalspec(spec)
-
-        self.finalize(data)
-        log.debug("Finished evaluation of data for model %s in %s seconds",
+        datatable.flush()
+        result = buf.getvalue()
+        self.writetocache('datatable', result)
+        log.info("Finished evaluation of data for model %s in %s seconds",
                   self.model.id, time.monotonic()-start)
-        return data
-
-    def evalmatch(self, match):
-        cached = self.readfromcache(match=match)
-        if cached:
-            return cached
-
-        to_evaluate = list(chain(self.simsdbview.values.values(),
-                                 self.simsdbview.spectra.values()))
-        evals = self.simsdb.evaluate(to_evaluate, match)
-        nvals = len(self.simsdbview.values)
-        values = dict(zip(self.simsdbview.values.keys(), evals[:nvals]))
-        spectra = dict(zip(self.simsdbview.spectra.keys(), evals[nvals:]))
-
-        # convert spectra to requested units
-        for specname, spectrum in spectra.items():
-            unit = self.simsdbview.spectra_units.get(specname, None)
-            if unit is not None:
-                try:
-                    spectrum.hist.ito(unit)
-                except AttributeError:  # not a quantity
-                    pass
-
-        def _valtostr(key, val):
-            # convert to unit if provided
-            unit = self.simsdbview.values_units.get(key, None)
-            if unit:
-                try:
-                    val = val.to(unit).m
-                except AttributeError:  # not a Quantity...
-                    pass
-                except units.errors.DimensionalityError as e:
-                    if val != 0:
-                        log.warning(e)
-                    val = getattr(val, 'm', 0)
-            # convert to string
-            val = "{:.3g}".format(val)
-            if match.spec.islimit:
-                val = '<'+val
-            return val
-        datatable = '\t'.join(chain([match.id],
-                                    self.simsdbview.evalgroups(match).values(),
-                                    (_valtostr(k, v) for k, v in values.items())))
-
-        data = dict(values=values, spectra=spectra, datatable=datatable)
-        self.finalize(data, match=match)
-        return data
-
-    def evalmatches(self, matches, include_datatable=False):
-        data = None
-        for match in matches:
-            result = self.evalmatch(match)
-            data = self._add_data(result, data, include_datatable)
-        return data
-
-    def evalcomponent(self, component):
-        cached = self.readfromcache(component=component)
-        if cached:
-            return cached
-        data = self.evalmatches(self.model.getsimdata(rootcomponent=component))
-        self.finalize(data, component=component)
-        return data
-
-    def evalspec(self, spec):
-        cached = self.readfromcache(spec=spec)
-        if cached:
-            return cached
-        data = self.evalmatches(self.model.getsimdata(rootspec=spec))
-        self.finalize(data, spec=spec)
-        return data
-
-    def _add_data(self, data1, data2=None, include_datatable=False):
-        if not data2:
-            result = data1
-            if not include_datatable:
-                result.pop('datatable', None)
-        else:
-            ss = self.simsdbview.spectra
-            spectra = dict((k, try_reduce(ss[k].reduce,
-                                          data1['spectra'].get(k, 0),
-                                          data2['spectra'].get(k, 0)))
-                           for k in ss)
-            vv = self.simsdbview.values
-            values = dict((k, try_reduce(vv[k].reduce,
-                                         data1['values'].get(k, 0),
-                                         data2['values'].get(k, 0)))
-                          for k in vv)
-
-            result = dict(spectra=spectra, values=values)
-            if include_datatable:
-                datatable = '\n'.join((data1.get('datatable', ''),
-                                       data2.get('datatable', '')))
-                result['datatable'] = datatable
         return result
 
-    def finalize(self, data, component=None, spec=None, match=None, cache=True):
-        if not data:
-            return data
-        data['modelid'] = self.model.id
-        title = ''
-        if component is not None:
-            data['componentid'] = component.id
-            title = f"Component={component.name}"
-        if spec is not None:
-            data['specid'] = spec.id
-            title = f"Source={spec.name}"
-        if match is not None:
-            data['matchid'] = match.id
-        if self.genimages:
-            self.make_all_images(data, title)
-        if cache:
-            self.writetocache(data)
-        return data
+    def spectrum(self, specname, component=None, spec=None, match=None,
+                 matches=None):
+        return self._spectrum_impl(specname, component, spec, match, matches,
+                                   fmt="hist")
 
-    def make_all_images(self, data, titlesuffix=''):
-        data['spectrum_images'] = {k: self.spectrum_image(k, v, titlesuffix)
-                                   for k, v in data['spectra'].items()}
-        return data
+    def spectrum_image(self, specname, component=None, spec=None, match=None,
+                       matches=None):
+        return self._spectrum_impl(specname, component, spec, match, matches,
+                                   fmt="png")
 
-    def spectrum_image(self, specname, spectrum, titlesuffix="",
-                       logx=True, logy=True):
+    def fillallcache(self, genimages=False):
+        """ Loop over all matches, components, and spectra in the model and
+        create cache entries for all spectra
+        Args:
+            genimages (bool): If True, also generate PNG images
+        """
+        if not self.cacheimages:
+            genimages = False
+        start = time.monotonic()
+        log.info(f"Generating full cache for model {self.model.id}")
+        self.datatable(doallcache=True)
+
+        specfunc = self.spectrum_image if genimages else self.spectrum
+
+        for specname in self.simsdbview.spectra:
+            for match in self.model.getsimdata():
+                specfunc(specname, match=match)
+            for comp in self.model.getcomponents():
+                specfunc(specname, component=comp)
+            for spec in self.model.getspecs(rootonly=True):
+                specfunc(specname, spec=spec)
+            # also gen the top-level model hists
+            specfunc(specname)
+        log.info("Finished caching data for model %s in %s seconds",
+                  self.model.id, time.monotonic()-start)
+
+    def _spectrum_impl(self, specname, component=None, spec=None, match=None,
+                       matches=None, fmt="hist"):
+        cacheable = (not matches)
+        result = None
+        fmt = fmt.lower()
+        if cacheable:
+            cached = self.readfromcache(specname, component=component,
+                                        spec=spec, match=match, fmt=fmt)
+            if cached is not None:
+                return cached
+
+        if specname not in self.simsdbview.spectra:
+            raise KeyError(f"Unknown spectrum generator {specname}")
+
+        if fmt == 'png':
+            result = self._spectrum_impl(specname, component, spec, match,
+                                         matches, fmt="hist")
+            titlesuffix = ''
+            if component is not None:
+                titlesuffix += f', Component={component.name}'
+            if spec is not None:
+                titlesuffix += f', Source={spec.name}'
+            result = self._spectrum_image(specname, result, titlesuffix)
+
+        elif match is not None:
+            result = self._spectrum_hist(specname, match)
+
+        else:
+            if not matches:
+                matches = self.model.getsimdata(rootcomponent=component,
+                                                rootspec=spec)
+            result = None
+            reducer = self.simsdbview.spectra[specname].reduce
+            for amatch in matches:
+                result1 = self._spectrum_impl(specname, match=amatch, fmt=fmt)
+                result = try_reduce(reducer, result, result1)
+
+        if cacheable:
+            self.writetocache(specname, result, component=component, spec=spec,
+                              match=match, fmt=fmt)
+
+        return result
+
+    def _spectrum_hist(self, specname, match):
+        specgen = self.simsdbview.spectra[specname]
+        result = self.simsdb.evaluate(specgen, match)[0]
+        unit = self.simsdbview.spectra_units.get(specname, None)
+        if unit is not None:
+            try:
+                result.hist.ito(unit)
+            except AttributeError:  # not a quantity
+                pass
+        return result
+
+    def _spectrum_image(self, specname, spectrum, titlesuffix="",
+                        logx=True, logy=True):
         if not hasattr(spectrum, 'hist') or not hasattr(spectrum, 'bin_edges'):
             # this is not a Histogram, don't know what to do with it
             return None
@@ -325,9 +355,9 @@ class ModelEvaluator(object):
         np.savez_compressed(buf, **args)
         doc = dict(hist=buf.getvalue())
         if valunit is not None:
-            doc['hist_unit'] = valunit
+            doc['hist_unit'] = str(valunit)
         if binunit is not None:
-            doc['bins_unit'] = binunit
+            doc['bins_unit'] = str(binunit)
         return doc
 
     @staticmethod
@@ -345,46 +375,56 @@ class ModelEvaluator(object):
             bins = bins * units[doc['bins_unit']]
         return Histogram(hist, bins)
 
-    def writetocache(self, data):
+    def writetocache(self, dataname, result, component=None, spec=None,
+                     match=None, fmt=None):
         """ write an evaluated data dictionary to the cache """
         # TODO: currently the most granular level of caching is a single
         # match, which means if you only want to calculate a single spectrum,
         # you're out of luck. We should set it so you can do just one at a time
-        if (not self.writecache) or (self.cache is None):
+        if (not self.writecache) or (self.cache is None) or (result is None):
             return
-        # make a shallow copy to avoid overwriting the original
-        data = dict(**data)
-        data['time'] = datetime.datetime.now()
 
-        q = dict(modelid=data['modelid'],
-                 componentid=data.get('componentid'),
-                 specid=data.get('specid'),
-                 matchid=data.get('matchid'))
-        log.debug(f"Caching {q}")
+        if fmt == 'png' and not self.cacheimages:
+            return
 
-        # repplace objects with cachable forms
-        data['values'] = {key: self.pack_quantity(val)
-                          for key, val in data.get('values', {}).items()}
-        data['spectra'] = {key: self.pack_histogram(val)
-                           for key, val in data.get('spectra', {}).items()}
+        if dataname != 'datatable' and fmt not in ('hist', 'png'):
+            raise ValueError("Only 'hist' and 'png' fmt supported for spectra")
+
+        if fmt == 'hist':
+            result = self.pack_histogram(result)
+
+        entry = dict(modelid=self.model.id, dataname=dataname, fmt=fmt,
+                     time=datetime.datetime.now(), data=result)
+        if dataname != 'datatable':
+            if component is not None:
+                entry['componentid'] = component.id
+            if spec is not None:
+                entry['specid'] = spec.id
+            if match is not None:
+                entry['matchid'] = match.id
+
+        query = {k: str(v) for k, v in entry.items()
+                 if k not in ('data', 'time')}
+        log.debug(f"Caching {query}")
 
         # write to db
         try:
-            self.cache.insert_one(data)
+            self.cache.insert_one(entry)
         except pymongo.errors.DuplicateKeyError:
-            log.warning(f"Existing entry for cache {q}")
+            del entry['data']
+            log.warning(f"Existing entry for cache {query}")
 
-    def readfromcache(self, component=None, spec=None, match=None,
-                      projection={'spectrum_images': False}):
+    def readfromcache(self, dataname, component=None, spec=None,
+                      match=None, fmt=None):
         """ Test if there is an entry in cache for the supplied values
         Returns:
-            dict if in cache, None otherwise
+            obj if in cache, None otherwise
         """
         if (self.bypasscache) or (self.cache is None):
             return None
 
-        query = dict(modelid=self.model.id, componentid=None, specid=None,
-                     matchid=None)
+        query = dict(modelid=self.model.id, dataname=dataname, fmt=fmt,
+                     componentid=None, specid=None,  matchid=None)
         if component is not None:
             query['componentid'] = component.id
         if spec is not None:
@@ -392,17 +432,19 @@ class ModelEvaluator(object):
         if match is not None:
             query['matchid'] = match.id
 
-        doc = self.cache.find_one(query, projection)
+        doc = self.cache.find_one(query, projection={'data': True})
         log.debug(f"Cached entry for {query}: {bool(doc)}")
         if not doc:
             return None
-        # convert entries in raw to usable values
-        for key, val in doc.get('values', {}).items():
-            doc['values'][key] = self.unpack_quantity(val)
-        for key, val in doc.get('spectra', {}).items():
-            doc['spectra'][key] = self.unpack_histogram(val)
+        try:
+            data = doc['data']
+        except KeyError:
+            log.warn("No 'data' key in cached doc for query %s", query)
+            return None
+        if fmt == 'hist':
+            data = self.unpack_histogram(data)
+        return data
 
-        return doc
 
 def genevalcache(model, spawnprocess=True):
     """ Generate cache entries for eaach match, component, and spec in model
@@ -417,30 +459,21 @@ def genevalcache(model, spawnprocess=True):
     response = None
     if spawnprocess:
         proc = multiprocessing.Process(name='bgexplorer.genevalcache',
-                                       target=lambda ev: ev.evalmodel(True),
+                                       target=lambda ev: ev.fillallcache(),
                                        args=(evaluator,),
                                        daemon=True,
                                        )
         proc.start()
         response = proc
     else:
-        response = evaluator.evalmodel(True)
+        response = evaluator.fillallcache()
     return response
+
 
 def get_datatable(model):
     """ Get only the datatable for a model """
-    dbview = copy.copy(utils.get_simsdbview(model=model))
-    dbview.spectra = {}
-    evaluator = ModelEvaluator(model, modeldb=utils.get_modeldb(),
-                               genimages=False, simsdbview=dbview,
-                               writecache=False)
-    # with writecache=False, cache will never be written, even though
-    # we're doing lots of calcuations. On the other hand, we're note
-    # generating spectra, so if we write cache the spectra will *never*
-    # be updated...
-    # Maybe we should update cache rather than insert only?
-    data = evaluator.evalmodel()
-    return data['datatable']
+    return ModelEvaluator(model).datatable()
+
 
 def get_spectrum(model, specname, image=True, component=None, spec=None,
                  matches=None):
@@ -450,39 +483,14 @@ def get_spectrum(model, specname, image=True, component=None, spec=None,
     try:
         if len(matches) == 1:
             match = matches[0]
+            matches = None
     except TypeError:
-        match = match
+        pass
 
-    dbview = utils.get_simsdbview(model=model)
-    spectra = {specname: dbview.spectra[specname]}
-    dbview = copy.copy(dbview)
-    dbview.values = {}
-    dbview.spectra = spectra
-
-    evaluator = ModelEvaluator(model, modeldb=utils.get_modeldb(),
-                               genimages=image, simsdbview=dbview,
-                               writecache=False)
-    topkey = 'spectrum_images' if image else 'spectra'
-    projection = {f'{topkey}.{specname}': True}
-    cached = evaluator.readfromcache(component=component, spec=spec, match=match,
-                                     projection=projection)
-    if cached:
-        try:
-            return cached[topkey][specname]
-        except KeyError:
-            log.warn(f"Missing spectrum {specname} in eval cache")
-            pass
-
-    # now do evaluate...should we always just go for matches?
-    # or should we just do everything and cache it?
-    data = None
-    if matches:
-        data = evaluator.evalmatches(matches)
-        data = evaluator.finalize(data)
+    evaluator = ModelEvaluator(model)
+    if image:
+        result = evaluator.spectrum_image(specname, component, spec, match,
+                                          matches)
     else:
-        data = evaluator.evalmodel()
-    try:
-        return data[topkey][specname]
-    except KeyError:
-        # for whatever reason, the spectrum isn't there, so give none
-        return None
+        result = evaluator.spectrum(specname, component, spec, match, matches)
+    return result
