@@ -2,6 +2,7 @@
 
 
 {% from "macros.html" import printdataset, printassemblypath, showevaluated %}
+{%- block basespecurl -%}{{ url_for('.getspectrum', m=match.id) }}{%- endblock -%}
 
 {% block myscripts %}
 {{ super() }}
