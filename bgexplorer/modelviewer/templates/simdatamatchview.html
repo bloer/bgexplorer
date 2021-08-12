@@ -2,6 +2,7 @@
 
 
 {% from "macros.html" import printdataset, printassemblypath, showevaluated %}
+{%- block basespecurl -%}{{ url_for('.getspectrum', m=match.id) }}{%- endblock -%}
 
 {% block myscripts %}
 {{ super() }}
@@ -61,7 +62,7 @@
     <div id="spectra" class="row">
     <h2>Evaluated Spectra</h2>
     {% for specname in g.simsdbview.spectra.keys() %}
-        {% set url = url_for('.getspectrum', specname=specname, m=match) %}
+        {% set url = url_for('.getspectrum', specname=specname, m=match.id) %}
         <div class="col-xs-6 col-md-4">
             <a href="{{ url }}" class="thumbnail">
                 <img class="img-responsive" src="{{ url }}"

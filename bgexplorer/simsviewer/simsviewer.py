@@ -1,11 +1,11 @@
 from __future__ import (absolute_import, division,
                         print_function, unicode_literals)
-from flask import (Blueprint, render_template, render_template_string,
-                   request, abort, url_for, g, json, flash, redirect,
-                   Response, get_flashed_messages, current_app)
+from flask import (Blueprint, render_template,
+                   request, abort, url_for, g, json, redirect, current_app)
 
 from .. import utils
 import io
+
 
 def findsimmatches(dataset, model=None):
     """find all simdatamatch objects associated with the given dataset"""
@@ -13,7 +13,7 @@ def findsimmatches(dataset, model=None):
     model = g.get('model', model)
     if not model:
         return res
-    #make sure we're not working with a full dataset object
+    # make sure we're not working with a full dataset object
     try:
         dataset = dataset.get('_id')
     except AttributeError:
@@ -41,6 +41,7 @@ class SimsViewer(object):
         uploadsummary (func): generate a summary projection from uploaded
                               (json-generated) documents
     """
+
     def __init__(self, app=None, url_prefix='/simulations',
                  detailtemplate=None,
                  enableupload=True, uploadsummary=None):
@@ -51,14 +52,14 @@ class SimsViewer(object):
         self.bp = Blueprint('simsviewer', __name__,
                             static_folder='static',
                             template_folder='templates')
-        self.bp.add_app_template_global(lambda : self, 'getsimsviewer')
+        self.bp.add_app_template_global(lambda: self, 'getsimsviewer')
         self.bp.add_app_template_global(findsimmatches, 'findsimmatches')
         self.bp.add_app_template_global(json.dumps, 'json_dumps')
 
-        #handle 'query' requests for non strings
+        # handle 'query' requests for non strings
         @self.bp.url_defaults
         def url_defaults(endpoint, values):
-            query=values.get('query', None)
+            query = values.get('query', None)
             if query and not isinstance(query, str):
                 values['query'] = json.dumps(query)
 
@@ -84,7 +85,6 @@ class SimsViewer(object):
         key = "ENABLE_SIMULATION_UPLOADS"
         self.enable_upload = app.config.setdefault(key, self.enable_upload)
 
-
     @property
     def simsdb(self):
         return g.simsdbview.simsdb
@@ -97,11 +97,11 @@ class SimsViewer(object):
         except AttributeError:
             pass
         if sims and not columns:
-            #non-underscore keys with string or number values
+            # non-underscore keys with string or number values
             for key, val in sims[0].items():
                 if (not key.startswith('_')
                     and key != 'id'
-                    and isinstance(val,(str,int,float))):
+                        and isinstance(val, (str, int, float))):
                     columns.append(key)
         return columns
 
@@ -127,10 +127,10 @@ class SimsViewer(object):
                     dbname = current_app.getdefaultsimviewname()
                 values.setdefault('dbname', dbname)
 
-            simsdbview = values.pop('simsdbview', None) or g.get('simsdbview', None)
+            simsdbview = values.pop(
+                'simsdbview', None) or g.get('simsdbview', None)
             if simsdbview and 'dbname' not in values:
                 values['dbname'] = current_app.getsimviewname(simsdbview)
-
 
         """Define the view functions here"""
         @self.bp.route('/')
@@ -142,11 +142,11 @@ class SimsViewer(object):
 
         @self.bp.route('/<dbname>/')
         def overview():
-            query = request.args.get('query',None)
+            query = request.args.get('query', None)
             try:
                 projection = g.simsdbview.summarypro
                 sims = list(self.simsdb.runquery(query, projection=projection))
-            except Exception as e:
+            except Exception:
                 abort(400, "Invalid query specifier")
             columns = self.getcolnames(sims)
             return render_template('simoverview.html', sims=sims, query=query,
@@ -156,9 +156,8 @@ class SimsViewer(object):
         def detailview(dataset):
             detail = self.simsdb.getdatasetdetails(dataset)
             matches = findsimmatches(dataset)
-            return render_template('datasetview.html',dataset=dataset,
-                                   detail=detail)
-
+            return render_template('datasetview.html', dataset=dataset,
+                                   detail=detail, matches=matches)
 
         @self.bp.route('/<dbname>/dataset/<dataset>/raw')
         def rawview(dataset):
@@ -184,15 +183,13 @@ class SimsViewer(object):
                 abort(501, "Uploads are not implemented for this database")
             except BaseException as e:
                 err = f"{type(e).__name__}: {str(e)}"
-                result = dict(entries={}, errors = {None: err})
+                result = dict(entries={}, errors={None: err})
             return result
 
-        @self.bp.route('/<dbname>/upload', methods=('GET','POST'))
+        @self.bp.route('/<dbname>/upload', methods=('GET', 'POST'))
         def upload():
             """ Upload new JSON-formatted entries """
             result = None
             if request.method == 'POST':
                 result = api_upload()
             return render_template('uploadsimdata.html', result=result)
-
-
