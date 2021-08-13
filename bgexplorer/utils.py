@@ -67,7 +67,7 @@ def getdatasetordie(datasetid, simsdb=None):
     simsdb = simsdb or get_simsdb()
     if not simsdb:
         abort(501, "No registered simulations database")
-    return simsdb.getdatasetdetails(dataset)
+    return simsdb.getdatasetdetails(datasetid)
 
 
 def getsimdatamatchordie(model, matchid):
@@ -75,7 +75,7 @@ def getsimdatamatchordie(model, matchid):
     match = model.simdata.get(matchid)
     if not match:
         abort(404, "Model %s has no SimDataMatch with ID %s" %
-              (model._id, specid))
+              (model.id, matchid))
     return match
 
 
