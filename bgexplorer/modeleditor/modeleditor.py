@@ -244,11 +244,11 @@ class ModelEditor(object):
             # make sure the model is valid
             if error or not model.validate():
                 flash("The model failed to validate: %s" % error, 'error')
-                return url_for('.editmodel', modelid=modelid, bypasscache=True)
-            self.modeldb.write_model(model, temp=False, bumpversion="major")
+                return redirect(url_for('.editmodel', modelid=modelid, bypasscache=True))
+            newid = self.modeldb.write_model(model, temp=False, bumpversion="major")
             flash("Model '%s' successfully saved" % (model.name),
                   'success')
-            return redirect(url_for("index"))
+            return redirect(url_for("modelviewer.overview",modelid=newid))
 
         # we should only get here if the form failed...
         return redirect(url_for('.editmodel', modelid=modelid))
