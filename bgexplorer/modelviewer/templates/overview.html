@@ -33,7 +33,7 @@
                 .text(datatabletext);
 
             var spectraclass = "danger";
-            if(data.spectra == data.totalspectra)
+            if(data.spectra >= data.totalspectra)
                 spectraclass = "success";
             else if(data.spectra > 0)
                 spectraclass = "warning";

@@ -192,6 +192,23 @@ class ModelEvaluator(object):
 
     def _spectrum_impl(self, specname, component=None, spec=None, match=None,
                        matches=None, fmt="hist"):
+        if match and matches:
+            raise ValueError("Only one of `match` and `matches` can be provided")
+
+        # see if `matches` is a single match
+        try:
+            if len(matches) == 1:
+                match = matches[0]
+                matches = None
+        except TypeError:
+            # matches has no len and may be a generator
+            pass
+
+        # if 'match' or 'matches' is defined, we ignore component and spec
+        if match or matches:
+            component = None
+            spec = None
+
         cacheable = (not matches)
         result = None
         fmt = fmt.lower()
@@ -520,21 +537,12 @@ def get_datatable(model):
 def get_spectrum(model, specname, image=True, component=None, spec=None,
                  matches=None):
     """ Get only a single spectrum, ideally from cache """
-    # see if `matches` is a single match
-    match = None
-    try:
-        if len(matches) == 1:
-            match = matches[0]
-            matches = None
-    except TypeError:
-        pass
-
     evaluator = ModelEvaluator(model)
     if image:
-        result = evaluator.spectrum_image(specname, component, spec, match,
-                                          matches)
+        result = evaluator.spectrum_image(specname, component, spec,
+                                          matches=matches)
     else:
-        result = evaluator.spectrum(specname, component, spec, match, matches)
+        result = evaluator.spectrum(specname, component, spec, matches=matches)
     return result
 
 def getcachestatus(model, *args, **kwargs):
