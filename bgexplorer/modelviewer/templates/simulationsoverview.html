@@ -1,22 +1,55 @@
 {% extends "modelbase.html" %}
 
 {% block mystyles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='js/DataTables/datatables.min.css') }}">
     <style>
     td .breadcrumb { margin:0px; padding:0px }
-    </style>
+
+     </style>
 {% endblock %}
 
 
 {% block title %}Simdata{% endblock %}
 
 {% block pageheader %}
-    <h1> Simulation Data</h1>
+    <h1> Simulation Data <small>{{ g.model.getsimdata() | length }} total</small></h1>
 {% endblock %}
 
 
 {% from "macros.html" import printdataset, printassemblypath %}
 
 
+
+{% block myscripts %}
+    <script type="text/javascript" src="{{ url_for('static', filename='js/DataTables/datatables.min.js') }}"></script>
+    <script type="text/javascript">
+
+     $(document).ready(function(){
+         var table = $('#simdatatable').DataTable({
+             paging: false,
+             ordering: false,
+             scrollY: $(window).height() - $("#pagecontent").offset().top - 80,
+             scrollX: true,
+             //select: true,
+             scrollCollapse: true,
+             //colReorder: {
+             //    realtime: true,
+             //    fixedColumnsLeft: 1,
+             //},
+             //fixedColumns: {
+             //    leftColumns: 2,
+             //    heightMatch: 'none',
+             //},
+             //buttons: [ 'colvis', 'colvisRestore', 'copy', 'csv',
+             //           {
+             //               extend: 'excel',
+             //               filename: "bgexplorer_{{ g.model.name }}_{{ g.model.version }}",
+             //           } ],
+             dom: 'lfrtip',
+         });
+     });
+    </script>
+{% endblock %}
 
 {% block pagecontent %}
     <table class="table" id="simdatatable">
