@@ -1,9 +1,9 @@
 from itertools import chain
-import datetime
 import gzip
 import multiprocessing
 import time
 import numpy as np
+from enum import Enum
 from uncertainties import unumpy
 from io import BytesIO
 from flask import abort
@@ -28,6 +28,9 @@ log = logging.getLogger(__name__)
 
 class ModelEvaluator(object):
     """ Utiilty class to generate data tables and spectra for non-temp models """
+
+    class StatusCodes(Enum):
+        NoEntryInCache = "Cache query returned 0 hits"
 
     def __init__(self, model, modeldb=None, simsdbview=None,
                  bypasscache=False, writecache=True, cacheimages=True):
@@ -107,7 +110,7 @@ class ModelEvaluator(object):
                                generation, but speeds up caching speed overall
         """
         cached = self.readfromcache("datatable")
-        if cached is not None:
+        if cached is not self.StatusCodes.NoEntryInCache:
             return cached
 
         start = time.monotonic()
@@ -195,7 +198,7 @@ class ModelEvaluator(object):
         if cacheable:
             cached = self.readfromcache(specname, component=component,
                                         spec=spec, match=match, fmt=fmt)
-            if cached is not None:
+            if cached is not self.StatusCodes.NoEntryInCache:
                 return cached
 
         if specname not in self.simsdbview.spectra:
@@ -383,7 +386,7 @@ class ModelEvaluator(object):
         # TODO: currently the most granular level of caching is a single
         # match, which means if you only want to calculate a single spectrum,
         # you're out of luck. We should set it so you can do just one at a time
-        if (not self.writecache) or (self.cache is None) or (result is None):
+        if (not self.writecache) or (self.cache is None):
             return
 
         if fmt == 'png' and not self.cacheimages:
@@ -396,7 +399,7 @@ class ModelEvaluator(object):
             result = self.pack_histogram(result)
 
         entry = dict(modelid=self.model.id, dataname=dataname, fmt=fmt,
-                     time=datetime.datetime.now(), data=result)
+                     data=result)
         if dataname != 'datatable':
             if component is not None:
                 entry['componentid'] = component.id
@@ -423,7 +426,7 @@ class ModelEvaluator(object):
             obj if in cache, None otherwise
         """
         if (self.bypasscache) or (self.cache is None):
-            return None
+            return self.StatusCodes.NoEntryInCache
 
         query = dict(modelid=self.model.id, dataname=dataname, fmt=fmt,
                      componentid=None, specid=None,  matchid=None)
@@ -437,15 +440,52 @@ class ModelEvaluator(object):
         doc = self.cache.find_one(query, projection={'data': True})
         log.debug(f"Cached entry for {query}: {bool(doc)}")
         if not doc:
-            return None
+            return self.StatusCodes.NoEntryInCache
         try:
             data = doc['data']
         except KeyError:
             log.warn("No 'data' key in cached doc for query %s", query)
-            return None
+            return self.StatusCodes.NoEntryInCache
         if fmt == 'hist':
             data = self.unpack_histogram(data)
         return data
+
+    def getcachestatus(self, includetotal=True, includetime=True):
+        if not self.cache:
+            return None
+        result = dict()
+        # First find how many are in the cache db
+        query = dict(modelid=self.model.id, dataname='datatable')
+        result['datatable'] = self.cache.count(query)
+        query = dict(modelid=self.model.id, fmt='hist')
+        result['spectra'] = self.cache.count(query)
+        if includetotal:
+            nspecs = len(self.simsdbview.spectra)
+            ncache = (1  # for the overall model
+                      + len(self.model.getsimdata())
+                      + len(self.model.getcomponents())
+                      + sum(1 for _ in self.model.getspecs(rootonly=True))
+                      )
+            result['totalspectra'] = nspecs * ncache
+
+        if result['spectra'] > 0 and includetime:
+            # find the time fo the first cache entry
+            query = dict(modelid=self.model.id)
+            projection = dict(_id=True)
+            firstentry = self.cache.find_one(query, projection=projection,
+                                             sort=(('_id', 1),))
+            lastentry = self.cache.find_one(query, projection=projection,
+                                            sort=(('_id',-1),))
+            query['dataname'] = 'datatable'
+            dtentry = self.cache.find_one(query, projection=projection)
+            if firstentry:
+                t0 = firstentry['_id'].generation_time.timestamp()
+                if dtentry:
+                    t1 = dtentry['_id'].generation_time.timestamp()
+                    result['datatabletime'] = t1 - t0
+                t1 = lastentry['_id'].generation_time.timestamp()
+                result['spectratime'] = t1 - t0
+        return result
 
 
 def genevalcache(model, spawnprocess=True):
@@ -496,3 +536,6 @@ def get_spectrum(model, specname, image=True, component=None, spec=None,
     else:
         result = evaluator.spectrum(specname, component, spec, match, matches)
     return result
+
+def getcachestatus(model, *args, **kwargs):
+    return ModelEvaluator(model).getcachestatus(*args, **kwargs)
