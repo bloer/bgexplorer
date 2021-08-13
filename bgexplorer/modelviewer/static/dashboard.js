@@ -111,7 +111,14 @@ dashboard.prefilterfunc = null;
 //take the list of objects returned from parserows and construct the crossfiler
 // and d3 structures
 dashboard.processtable = function(error,rows){
-    if(error){alert("An error occurred: "+error); throw error;}
+    if(error){
+        console.log("An error occurred: ");
+        console.log(error);
+        d3.select("#loading").classed("text-danger", true)
+          .html("<p>Error "+error.target.status+" downloading datatable:</p>\n"
+                +error.target.responseText);
+        throw error;
+    }
     if(dashboard.prefilterfunc){
         console.log("using prefilter function, initial size "+rows.length);
         rows = rows.filter(dashboard.prefilterfunc);
