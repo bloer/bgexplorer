@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division,
 from flask import (Blueprint, render_template, request, abort, url_for, g,
                    Response, make_response, redirect, flash)
 import json
+import functools
 from uncertainties import unumpy
 from bson import ObjectId
 
@@ -158,6 +159,17 @@ class ModelViewer(object):
                                       **values)
             g.simsdbview = utils.get_simsdbview(model=g.model)
 
+    def excludetemp(self, endpoint):
+        """ Decorator for endpoints that should not be processed for temp
+        models: generating spectra, etc """
+        @functools.wraps(endpoint)
+        def _wrapper(*args, **kwargs):
+            model = getattr(g, 'model', None)
+            if model and self.modeldb.is_model_temp(model.id):
+                abort(404, "Resource not available for temporary models")
+            return endpoint(*args, **kwargs)
+        return _wrapper
+
     def register_endpoints(self):
         """Define the view functions here"""
 
@@ -234,6 +246,7 @@ class ModelViewer(object):
                                    bomcols=self.bomcols)
 
         @self.bp.route('/clearcache', methods=('POST',))
+        @self.excludetemp
         def clearcache():
             self.modeldb.clearevalcache(g.model.id)
             flash("Cleared evaluated data cache for model %s" % g.model.id,
@@ -241,6 +254,7 @@ class ModelViewer(object):
             return redirect(url_for('.overview'))
 
         @self.bp.route('/datatable')
+        @self.excludetemp
         def datatable():
             """Return groups and values for all simdatamatches"""
             return self.get_datatable(g.model)
@@ -272,6 +286,7 @@ class ModelViewer(object):
 
         @self.bp.route('/getspectrum')
         @self.bp.route('/getspectrum/<specname>')
+        @self.excludetemp
         def getspectrum(specname=None):
             # get the generator for the spectrum
             if not specname:
