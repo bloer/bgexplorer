@@ -9,7 +9,7 @@ from uncertainties import unumpy
 from bson import ObjectId
 
 from .. import utils
-from .evaldata import get_spectrum, get_datatable
+from .evaldata import get_spectrum, get_datatable, getcachestatus
 from . import billofmaterials as bomfuncs
 from ..modeldb import InMemoryCacher
 
@@ -85,11 +85,12 @@ class ModelViewer(object):
             if self.app.config.get('NO_CLIENT_CACHE'):
                 return
             # todo: add Last-Modified
-            response.headers["Cache-Control"] = "private, max-age=100"
-            try:
-                response.headers['ETag'] = make_etag(g.model)
-            except (AttributeError, KeyError):  # model is not loaded in g
-                pass
+            if 'Cache-Control' not in response.headers:
+                response.headers["Cache-Control"] = "private, max-age=100"
+                try:
+                    response.headers['ETag'] = make_etag(g.model)
+                except (AttributeError, KeyError):  # model is not loaded in g
+                    pass
             return response
 
         @self.bp.url_defaults
@@ -168,6 +169,15 @@ class ModelViewer(object):
             if model and self.modeldb.is_model_temp(model.id):
                 abort(404, "Resource not available for temporary models")
             return endpoint(*args, **kwargs)
+        return _wrapper
+
+    def nocache(self, endpoint):
+        """ prevent cache """
+        @functools.wraps(endpoint)
+        def _wrapper(*args, **kwargs):
+            response = make_response(endpoint(*args, **kwargs))
+            response.headers['Cache-Control'] = "no-store, max-age=0"
+            return response
         return _wrapper
 
     def register_endpoints(self):
@@ -360,6 +370,13 @@ class ModelViewer(object):
                 abort(400, f"Unhandled format specifier {fmt}")
 
             return response
+
+        @self.bp.route('/cachestatus')
+        @self.excludetemp
+        @self.nocache
+        def cachestatus():
+            # do we need to explicitly jsonify this?
+            return getcachestatus(g.model)
 
     def streamspectrum(self, spectrum, sep=',', include_errs=True,
                        fmt='{:.5g}'):

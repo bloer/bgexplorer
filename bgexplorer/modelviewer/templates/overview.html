@@ -18,6 +18,52 @@
     </div>
 {% endblock %}
 
+{% block myscripts %}
+<script>
+    function updateCacheStatus(){
+      // display how much of the data is cached
+      $.getJSON("{{ url_for('.cachestatus') }}")
+        .done(function(data){
+            var datatableclass = data.datatable ? "success" : "danger"
+            var datatabletext = "datatable";
+            if(data.datatabletime)
+                datatabletext += " <"+parseInt(data.datatabletime)+" seconds>";
+            datatable = $("<li></li>").addClass("list-group-item")
+                .addClass("list-group-item-"+datatableclass)
+                .text(datatabletext);
+
+            var spectraclass = "danger";
+            if(data.spectra == data.totalspectra)
+                spectraclass = "success";
+            else if(data.spectra > 0)
+                spectraclass = "warning";
+            var spectratext = "spectra:  "
+                            + data.spectra+" / "+data.totalspectra
+                            + " ("+Math.floor(100*data.spectra/data.totalspectra)+"%)";
+            if(data.spectratime)
+                spectratext += " <"+data.spectratime+" seconds>";
+            spectra = $("<li></li>").addClass("list-group-item")
+                .addClass("list-group-item-"+spectraclass)
+                .text(spectratext);
+
+            $("#cachestatus").html($("<ul></ul>").addClass("list-group")
+                                   .addClass("list-group-horizontal")
+                                   .append(datatable).append(spectra));
+
+            if(data.spectra < data.totalspectra){
+              setTimeout(updateCacheStatus, 2000);
+            }
+        })
+        .fail(function(jqxHr, textStatus, error){
+          var err = textStatus + ", " + error;
+          $("#cachestatus").addClass("text-danger", true)
+            .text("Request failed: "+err);
+        });
+    }
+    $(updateCacheStatus);
+</script>
+{% endblock %}
+
 {% block pagecontent %}
     <div class="row" >
     <div class="col-md-6" >
@@ -25,21 +71,15 @@
         <p>{{ g.model.description }}</p>
         <h4>Database Backend</h4>
         <p><a href="{{ url_for('simsviewer.overview') }}">{{ g.model.simsdb |default("default") }}</a></p>
+        <h4>Evaluated Data Cache</h4>
+        <p id="cachestatus"></p>
         <p>If you experience an issue with displayed plots, the button below may
         fix some issues. </p>
         <form class="form-inline" action="{{ url_for('.clearcache') }}" method="POST">
             <button class="btn btn-danger btn-small">Clear Results Cache</button>
         </form>
 
-        <h3>Additional Details</h3>
-        <dl class="dl-horizontal" >
-        {% for key, val in g.model.editDetails.items() %}
-        {% if key not in ("date", "user", "derivedFrom") %}
-            <dt class="" >{{ key }}</dt>
-            <dd class="" >{{ val }}</dd>
-        {% endif %}
-        {% endfor %}
-        </dl>
+
     </div><!-- end col -->
 
     <div class="col-md-6" >
@@ -48,7 +88,17 @@
             <dd>{{ g.model.components | length }}</dd>
 
             <dt>Total <a href="{{ url_for('.emissionsoverview') }}">emission specs</a>:</dt>
-            <dd>{{ g.model.specs | length }}</dd>
+            <dd>{{ g.model.getspecs(rootonly=True) | map("int", default=1) | sum }} groups
+                ({{ g.model.specs | length }} total)</dd>
+        </dl>
+        <h3>Additional Details</h3>
+        <dl class="dl-horizontal" >
+        {% for key, val in g.model.editDetails.items() %}
+        {% if key not in ("date", "user", "derivedFrom") %}
+            <dt class="" >{{ key }}</dt>
+            <dd class="" >{{ val }}</dd>
+        {% endif %}
+        {% endfor %}
         </dl>
     </div>
     </div> <!-- end row -->
