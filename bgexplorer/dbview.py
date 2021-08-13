@@ -146,7 +146,11 @@ class SimsDbView(object):
         """ Test whether g1 is a subgroup of g2 (or equal) """
         g1 = self.unflatten_gval(g1, force=True)
         g2 = self.unflatten_gval(g2, force=True)
-        return len(g1) >= len(g2) and all(a == b for a, b in zip(g1, g2))
+        try:
+            return len(g1) >= len(g2) and all(a == b for a, b in zip(g1, g2))
+        except TypeError:
+            # somethign returned None
+            return False
 
 
 # utilities to handle file uploads:
