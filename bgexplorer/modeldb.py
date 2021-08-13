@@ -130,7 +130,7 @@ class ModelDB(object):
     def clearevalcache(self, modelid):
         if modelid is not None:
             log.warning("Clearing evaluated data cache for model %s", modelid)
-            self._collection['evalcache'].delete_many(dict(modelid=modelid))
+            self.getevalcache().delete_many(dict(modelid=modelid))
 
     def testconnection(self):
         """Make sure we're connected to the database, otherwise raise exception
