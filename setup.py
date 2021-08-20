@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='bgexplorer',
-      version='0.6.1',
+      version='0.6.2',
       description='Web app for exploring details of background modeling',
       url='http://github.com/bloer/bgexplorer',
       author='Ben Loer',
