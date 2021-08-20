@@ -76,6 +76,17 @@ class ModelEvaluator(object):
             val = '<'+val
         return val
 
+    def _applyspecunit(self, specname, spec):
+        unit = self.simsdbview.spectra_units.get(specname, None)
+        if unit is not None:
+            try:
+                spec.hist.ito(unit)
+            except AttributeError:  # not a quantity
+                pass
+
+        return spec
+
+
     def _evalmatch(self, match, dovals=True, dogroups=True, dospectra=False):
         """ Evaluate SimDocEvals and grous for a match
         Returns:
@@ -94,7 +105,8 @@ class ModelEvaluator(object):
                              zip(self.simsdbview.values.keys(), result)]
             result = result[len(self.simsdbview.values):]
         if dospectra:
-            doc['spectra'] = result
+            doc['spectra'] = [self._applyspecunit(name, spec) for name, spec in
+                              zip(self.simsdbview.spectra.keys(), result)]
 
         if dogroups:
             doc['groups'] = self.simsdbview.evalgroups(match).values()
@@ -253,12 +265,7 @@ class ModelEvaluator(object):
     def _spectrum_hist(self, specname, match):
         specgen = self.simsdbview.spectra[specname]
         result = self.simsdb.evaluate(specgen, match)[0]
-        unit = self.simsdbview.spectra_units.get(specname, None)
-        if unit is not None:
-            try:
-                result.hist.ito(unit)
-            except AttributeError:  # not a quantity
-                pass
+        result = self._applyspecunit(specname, result)
         return result
 
     def _spectrum_image(self, specname, spectrum, titlesuffix="",
@@ -266,24 +273,16 @@ class ModelEvaluator(object):
         if not hasattr(spectrum, 'hist') or not hasattr(spectrum, 'bin_edges'):
             # this is not a Histogram, don't know what to do with it
             return None
-        unit = self.simsdbview.spectra_units.get(specname, None)
-        if unit is not None:
-            try:
-                spectrum.hist.ito(unit)
-            except AttributeError:  # not a quantity
-                pass
-
         if matplotlib is None:
             abort(500, "Matplotlib is not available")
+
+        # unit should already be applied ...
+        #spectrum = self._applyspecunit(specname, spectrum)
         #log.debug("Generating spectrum image")
         # apparently this aborts sometimes?
-        try:
-            x = spectrum.bin_edges.m
-        except AttributeError:
-            x = spectrum.bin_edges
         fig = matplotlib.figure.Figure()
         ax = fig.subplots()
-        ax.errorbar(x=x[:-1],
+        ax.errorbar(x=unumpy.nominal_values(spectrum.bin_edges[:-1]),
                     y=unumpy.nominal_values(spectrum.hist),
                     yerr=unumpy.std_devs(spectrum.hist),
                     drawstyle='steps-post',
@@ -356,13 +355,13 @@ class ModelEvaluator(object):
         valunit = None
         binunit = None
         try:
-            vals = vals.m
             valunit = vals.u
+            vals = vals.m
         except AttributeError:
             pass
         try:
-            bins = bins.m
             binunit = bins.u
+            bins = bins.m
         except AttributeError:
             pass
 
@@ -392,9 +391,9 @@ class ModelEvaluator(object):
         if 'errs' in data:
             hist = unumpy.uarray(hist, data['errs'])
         if 'hist_unit' in doc:
-            hist = hist * units[doc['hist_unit']]
+            hist = hist * units(doc['hist_unit'])
         if 'bins_unit' in doc:
-            bins = bins * units[doc['bins_unit']]
+            bins = bins * units(doc['bins_unit'])
         return Histogram(hist, bins)
 
     def writetocache(self, dataname, result, component=None, spec=None,
