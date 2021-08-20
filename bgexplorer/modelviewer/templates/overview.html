@@ -51,7 +51,11 @@
                                    .append(datatable).append(spectra));
 
             if(data.spectra < data.totalspectra){
+              //$("#gencache").show();
               setTimeout(updateCacheStatus, 2000);
+            }
+            else{
+              $("#gencache").hide();
             }
         })
         .fail(function(jqxHr, textStatus, error){
@@ -73,6 +77,9 @@
         <p><a href="{{ url_for('simsviewer.overview') }}">{{ g.model.simsdb |default("default") }}</a></p>
         <h4>Evaluated Data Cache</h4>
         <p id="cachestatus"></p>
+        <form class="form-inline" action="{{ url_for('.gencache') }}" method="POST">
+            <button class="btn btn-warning btn-small" id="gencache">Generate cache</button>
+        </form>
         <p>If you experience an issue with displayed plots, the button below may
         fix some issues. </p>
         <form class="form-inline" action="{{ url_for('.clearcache') }}" method="POST">

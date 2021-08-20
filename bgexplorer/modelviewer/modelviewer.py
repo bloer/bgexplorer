@@ -9,7 +9,7 @@ from uncertainties import unumpy
 from bson import ObjectId
 
 from .. import utils
-from .evaldata import get_spectrum, get_datatable, getcachestatus
+from .evaldata import get_spectrum, get_datatable, getcachestatus, genevalcache
 from . import billofmaterials as bomfuncs
 from ..modeldb import InMemoryCacher
 
@@ -261,6 +261,13 @@ class ModelViewer(object):
             self.modeldb.clearevalcache(g.model.id)
             flash("Cleared evaluated data cache for model %s" % g.model.id,
                   'success')
+            genevalcache(g.model)
+            return redirect(url_for('.overview'))
+
+        @self.bp.route('/gencache', methods=('POST',))
+        @self.excludetemp
+        def gencache():
+            genevalcache(g.model)
             return redirect(url_for('.overview'))
 
         @self.bp.route('/datatable')
