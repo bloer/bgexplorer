@@ -175,6 +175,7 @@ def json_upload_handler(files, simsdb):
         decomp = transparent_gzip(jfile)
         try:
             newentry = simsdb.addentry(decomp.read(), fmt="json")
+            newentry['_filename'] = filename
             result['entries'][filename] = newentry
         except BaseException as e:
             result['errors'][filename] = "Error inserting entry: %s" % e
