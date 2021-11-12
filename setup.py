@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='bgexplorer',
-      version='0.6.3',
+      version='0.6.4',
       description='Web app for exploring details of background modeling',
       url='http://github.com/bloer/bgexplorer',
       author='Ben Loer',
@@ -19,6 +19,7 @@ setup(name='bgexplorer',
       zip_safe=False,
       install_requires=[
           'flask',
+          'wtforms<3.0',
           'flask-wtf',
           'flask-bootstrap',
           'flask-basicauth',
