@@ -14,6 +14,7 @@ from collections import OrderedDict
 from bgmodelbuilder import units
 from bgmodelbuilder.common import to_primitive
 from flask import current_app
+from .widgets import JSONEditor
 
 class DictField(TextAreaField):
     """Render a dictionary as a textarea
@@ -108,6 +109,8 @@ class StaticField(Field):
 class JSONField(StringField):
     """JSON-encoded field. Set the 'default' argument to list if this expects
     a list, rather than a dict"""
+    widget = JSONEditor()
+
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('default',dict)
         super().__init__(*args, **kwargs)

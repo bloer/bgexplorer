@@ -14,7 +14,7 @@ import types
 from collections import namedtuple
 
 from wtforms.widgets import (html_params, HTMLString, HiddenInput, TextInput,
-                             CheckboxInput, RadioInput)
+                             CheckboxInput, RadioInput, TextArea)
 from wtforms.utils import unset_value
 
 from flask_bootstrap import is_hidden_field_filter
@@ -201,3 +201,60 @@ class StaticIfExists(object):
                 value = '<a href="%s">%s</a>'%(field.link, value)
             return HiddenInput()(field, **kwargs)+\
                    HTMLString('<p class="form-control-static">'+value+'</p')
+
+class JSONEditor(object):
+    """ For fields that expect a JSON value, make a button that pops up a modal
+    editor. """
+    def __call__(self, field, **kwargs):
+        id = kwargs.setdefault('id', field.id)
+        modalid = f"{id}_modal"
+        saveid = f"{id}_save"
+        errid = f"{id}_err"
+        kwargs.setdefault('class','form-control')
+        kwargs.setdefault('style', "height:250px;")
+
+        btntype = "btn-warning" if field.data else "btn-default"
+        html = f"""
+        <div id="{modalid}" class="modal fade" tabindex="-1" role="dialog">
+          <div class="modal-dialog" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Edit JSON {field.short_name}</h4>
+              </div>
+              <div class="modal-body">
+                {TextArea()(field, **kwargs)}
+                <p id="{errid}" class="text-danger"></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                <button id="{saveid}" type="button" class="btn btn-primary">Save changes</button>
+              </div>
+            </div><!-- /.modal-content -->
+          </div><!-- /.modal-dialog -->
+        </div><!-- /.modal -->
+        <a data-toggle="modal" data-target="#{modalid}" class="btn {btntype}">
+            <span class="linklike glyphicon glyphicon-wrench"></span>
+        </a>
+        <script language="javascript">
+        $("#{id}").data("validval",'{field._value()}');
+        $("#{modalid}").on("hidden.bs.modal",function(){{
+            $("#{id}").val($("#{id}").data('validval'));
+            $("#{errid}").text("");
+        }}).on("show.bs.modal", function(){{
+            var validval = $("#{id}").data('validval');
+            $("#{id}").val(JSON.stringify(JSON.parse(validval),null,4));
+        }});
+        $("#{saveid}").on("click", function(){{
+            try{{
+                var newval = $("#{id}").val();
+                newval = JSON.stringify(JSON.parse(newval));
+                $("#{id}").data("validval", newval);
+                $("#{modalid}").modal("hide");
+            }}catch(e){{
+                $("#{errid}").text(e);
+            }}
+        }});
+        </script>
+        """
+        return HTMLString(html)
