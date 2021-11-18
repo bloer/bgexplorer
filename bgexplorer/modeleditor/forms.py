@@ -82,7 +82,7 @@ class BoundSpecForm(Form):
                                widget=StaticIfExists(dist_widget),
                                render_kw={'class':'form-control'})
     #rate = StaticField("Rate", default='')
-    querymod = JSONField("Querymod",render_kw={'class':'form-control'})
+    querymod = JSONField("Query")
     #edit = StaticField("Edit", default="edit")
 
     #override populate_obj to make new spec if necessary
@@ -142,7 +142,10 @@ class PlacementForm(Form):
                       render_kw={'class':'form-control'})
     weight = NumericField("Quantity", [validators.required()] ,
                           render_kw={'size':1, 'class':'form-control'})
-    querymod = JSONField("Querymod")
+    simvolume = StringField("Sim Volume",
+                            description="Associate this placement with a location in simulation geometry",
+                            render_kw={'class':'form-control'})
+    querymod = JSONField("Query")
     #edit = StaticField("Edit", default="link goes here");
     #override BaseForm process to restructure placements
     class _FakePlacement(object):
@@ -172,6 +175,7 @@ class PlacementForm(Form):
         obj.component = comp
         obj.name = self.name.data
         obj.weight = self.weight.data
+        obj.simvolume = self.simvolume.data
         obj.querymod = self.querymod.data
 
 class AssemblyForm(BaseComponentForm):
@@ -211,7 +215,7 @@ class EmissionspecForm(FlaskForm):
         variables 'component' and 'units' defined. Can also be 'piece' or
         'per piece' indicating that the rate is already normalized"""))
 
-    querymod = JSONField("Querymod", description="Overrides for generating simulation database queries")
+    querymod = JSONField("Query Modifier", description="Overrides for generating simulation database queries")
 
 class RadioactiveIsotopeForm(Form):
     id = HiddenField("ID")
