@@ -248,6 +248,7 @@ class JSONEditor(object):
         $("#{saveid}").on("click", function(){{
             try{{
                 var newval = $("#{id}").val();
+                if(newval == "") newval = "{{}}";
                 newval = JSON.stringify(JSON.parse(newval));
                 $("#{id}").data("validval", newval);
                 $("#{modalid}").modal("hide");
