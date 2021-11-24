@@ -13,9 +13,15 @@
   }
   // hack to let the sub-forms float
   $(function(){
-    $("fieldset").addClass("col-md-6");
+    $("fieldset").addClass("col-sm-10").addClass("col-md-8").addClass("col-lg-6");
   });
 </script>
+{% endblock %}
+
+{% block mystyles %}
+<style>
+  fieldset:nth-child(2n) { clear: both; }
+</style>
 {% endblock %}
 
 {% macro renderform(form) %}

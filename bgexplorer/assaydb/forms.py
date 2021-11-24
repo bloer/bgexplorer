@@ -94,19 +94,19 @@ class PerPieceField(BooleanField):
 class SampleInfoForm(Form):
     sampleid = TextField('Sample ID')
     description = TextField('Description')
-    owner = TextField('Sample owner')
-    ownercontact = TextField('Owner contact info')
     vendor = TextField('Vendor/producer')
     batch = TextField('Batch number/ID')
+    owner = TextField('Sample owner')
+    ownercontact = TextField('Owner contact info')
     notes = TextAreaField('Additional Notes')
 
 class MeasurementInfoForm(Form):
-    operator = TextField('Operator', description='Name of person who made the measurement')
-    operatorcontact = TextField('Operator contact info')
-    date = TextField('Measurement date')
-    institution = TextField('Institution/Location')
     technique = TextField('Measurement technique')
+    institution = TextField('Institution/Location')
     instrument = TextField('Instrument used')
+    date = TextField('Measurement date')
+    operator = TextField('Operator') #, description='Name of person who made the measurement')
+    operatorcontact = TextField('Operator contact info')
     notes = TextAreaField('Additional Notes')
 
 class DataEntryInfoForm(Form):
@@ -130,9 +130,9 @@ class AssaySpecForm(RadioactiveContamForm):
 
 class AssayForm(FlaskForm):
     specs = FormField(AssaySpecForm, "Emission Specs")
+    dataentry = DictFormField(DataEntryInfoForm, "Data Entry Details")
     sampleinfo = DictFormField(SampleInfoForm, "Sample Details")
     measurementinfo = DictFormField(MeasurementInfoForm, "Measurement Details")
-    dataentry = DictFormField(DataEntryInfoForm, "Data Entry Details")
     save = AnonymousSubmitField("Save")
 
     @property
