@@ -82,12 +82,12 @@ class SortableTable(object):
         #now loop through the subforms
         html.append('<tbody class="sortable">')
         for entry in field:
-            html.append(TableRow()(entry, **{'data-prefix':field.short_name}))
+            html.append(TableRow()(entry, **{'data-prefix':field.name}))
 
         #make a fake hidden form for cloning
         html.append(TableRow()(boundform, render_kw={'disabled':'disabled'},
                                **{'class':'hide template',
-                                  'data-prefix':field.short_name}))
+                                  'data-prefix':field.name}))
         html.append("</tbody></table>")
         #add an 'add new' button
         html.append('<button type="button" class="btn text-primary" ')
