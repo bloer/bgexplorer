@@ -89,6 +89,12 @@
 {%- endfor %}
 {% endmacro %}
 
+{% macro printdescription(entry) %}
+{%- if entry.sampleinfo.vendor -%} {{ entry.sampleinfo.vendor }}
+  {%- if entry.sampleinfo.batch -%} /{{ entry.sampleinfo.batch }} {%- endif -%}
+{%- endif %} {{ entry.sampleinfo.description | default('') }}
+{% endmacro %}
+
 {% macro printentryrow(entry) %}
 <tr>
   <td>
@@ -96,17 +102,12 @@
            onclick="toggleControls();">
   </td>
   <td><a href="{{ url_for('.detail', assayid=entry.id) }}">{{ entry.name }}</a></td>
-  <td>{{ entry.sampleinfo.description | default('') }}</td>
-  <td>
-    {% set refurl = entry.dataentry.url %}
-    {% if refurl %}<a href="{{ refurl }}">{% endif %}
-    {{ entry.dataentry.reference | default('') }}
-    {% if refurl %}</a>{% endif %}
-  </td>
+  <td>{{ printdescription(entry) }}</td>
+  <td> {{ entry.measurementinfo.technique }} </td>
   {% for iso in isocols %}
-  <td>{{ getsubspec(entry, iso) }}</td>
+  <td>{{ getsubspec(entry.specs, iso) }}</td>
   {% endfor %}
-  <td class="truncate">{{ getothersubspecs(entry, isocols) }}</td>
+  <td class="truncate">{{ getothersubspecs(entry.specs, isocols) }}</td>
   {% if not tomodel %}
   <td>
     <a class="" href="{{ url_for('.edit', assayid=entry.id) }}">
@@ -161,7 +162,7 @@ still have the old version.</p>
       <th data-orderable="false">
         <input type="checkbox" id="checkall" onclick="setAllChecks();">
       </th>
-      <th>Name</th><th>Description</th><th>Ref</th>
+      <th>Name</th><th>Description</th><th>Technique</th>
       {% for iso in isocols %}
       <th>{{ iso }}</th>
       {% endfor %}

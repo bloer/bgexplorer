@@ -33,7 +33,6 @@
 {% endmacro %}
 
 {% block pagecontent %}
-
 <div class="row">
     <div class="col-sm-6">
 
@@ -50,18 +49,20 @@
     </div>
     <div class="col-sm-6">
         <div id="emissions">
-            <h3>Emissions <small>({{ assay.distribution }})</small></h3>
+            <h3>Emissions <small>({{ assay.specs.distribution }})</small></h3>
+            {% if assay.specs.normfunc == 'piece' %}<p>Rates are per-piece</p>{% endif %}
             <table class="table table-condensed">
                 <thead>
                     <tr><th>Isotope</th><th>Rate</th></tr>
                 </thead>
                 <tbody>
-                    {% for spec in assay.subspecs %}
+                    {% for spec in assay.specs.subspecs %}
                     <tr><td>{{ spec.name }}</td><td>{{ spec.getfullspec() }}</td></tr>
                     {% endfor %}
-                    <tr class="total"><td>Total</td><td>{{ assay.getratestr() }}</td></tr>
+                    <tr class="total"><td>Total</td><td>{{ assay.specs.getratestr() }}</td></tr>
                 </tbody>
             </table>
+
         </div>
 
         <div id="measurement">

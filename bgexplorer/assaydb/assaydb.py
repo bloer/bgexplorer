@@ -3,8 +3,8 @@ from flask import (Blueprint, render_template, request, redirect, abort,
 import pymongo
 from bgmodelbuilder.emissionspec import RadioactiveContam, CombinedSpec, buildspecfromdict
 from ..modeleditor.forms import RadioactiveContamForm
-from wtforms.fields import HiddenField
-
+from wtforms.fields import HiddenField, FormField
+from copy import copy
 from .forms import AssayEntry, AssayForm
 from ..utils import getmodelordie, get_modeldb
 import logging
@@ -49,7 +49,7 @@ class AssayDB(object):
             log.warning("Database not provided in URI, connecting to 'test'")
             self._database = self._client.get_database('test')
         self._collection = self._database.get_collection(self._collectionName)
-        self._collection.create_index('name', unique=True)
+        self._collection.create_index('specs.name', unique=True)
 
     def init_app(self, app, url_prefix='/assays'):
         """Initialize from configuration parameters in a Flask app"""
@@ -83,11 +83,12 @@ class AssayDB(object):
 
     def save(self, entry):
         # pymongo needs a dict, so convert if it is a real assay
+        entry = copy(entry.__dict__)
         try:
-            entry = entry.todict()
-        except AttributeError:
-            pass
-        entry.pop('__class__', None)
+            entry['specs'] = entry['specs'].todict()
+            entry['specs'].pop('__class__', None)
+        except KeyError:
+            abort(400, "AssayEntry requires emissions details")
         if entry.get('_id') is None:
             entry.pop('_id', None)
             self._collection.insert_one(entry)
@@ -96,6 +97,11 @@ class AssayDB(object):
         return entry['_id']
 
     def addendpoints(self):
+        @self.bp.before_request
+        def before_request():
+            if not request.form:
+                request.form = None
+
         @self.bp.route('/')
         def index():
             return render_template('assays_overview.html', assays=self.find())
@@ -139,7 +145,7 @@ class AssayDB(object):
                 entry = self.get(assayid)
             else:
                 subspecs = [RadioactiveContam(iso) for iso in ('U238', 'Th232', 'K40')]
-                entry = AssayEntry(name='', subspecs=subspecs)
+                entry = AssayEntry(specs=CombinedSpec(name='', subspecs=subspecs))
             form = AssayForm(request.form, obj=entry)
             if request.method == 'POST' and form.validate():
                 form.populate_obj(entry)

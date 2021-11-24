@@ -11,6 +11,10 @@
       document.getElementById("deleteform").submit();
     }
   }
+  // hack to let the sub-forms float
+  $(function(){
+    $("fieldset").addClass("col-md-6");
+  });
 </script>
 {% endblock %}
 
@@ -55,10 +59,12 @@
 
 {% block pagecontent %}
 
-
+{% if form.errors %}
+<p class='h4 alert alert-danger'>Please correct highlighted errors and resubmit</p>
+{% endif %}
 {{ wtf.quick_form(form, id="editform",
                   action=url_for('.edit', assayid=assayid),
-                  form_type='horizontal',
+                  form_type='normal',
                   button_map={'save':'primary'},)
                   }}
 
