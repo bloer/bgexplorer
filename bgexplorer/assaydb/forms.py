@@ -30,6 +30,8 @@ class AssayEntry(CombinedSpec):
         self.measurementinfo = measurementinfo or {}
         self.dataentry = dataentry or {}
         self.attachments = attachments or []
+        if self.category == 'AssayEntry':
+            self.category = ''
 
     def tospec(self):
         """ Convert to a CombinedSpec for import to a model """

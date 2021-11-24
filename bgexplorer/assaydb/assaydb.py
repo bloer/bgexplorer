@@ -126,8 +126,10 @@ class AssayDB(object):
         @self.bp.route('/<assayid>')
         def detail(assayid):
             # placeholder until we get a better view page
-            return jsonify(self.get(assayid, raw=True))
-            #return render_template('assaydetail.html', entry=self.get(assayid))
+            #return jsonify(self.get(assayid, raw=True))
+            assay = self.get(assayid)
+            form = AssayForm(obj=assay)
+            return render_template('assaydetail.html', assay=assay, form=form)
 
         @self.bp.route('/new', methods=('GET', 'POST'))
         @self.bp.route('/edit/<assayid>', methods=('GET', 'POST'))

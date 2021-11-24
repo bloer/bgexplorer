@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %} Assay Detail {% endblock %}
+
+{% block mystyles %}
+<style>
+    tr.total {font-weight: bold; border-top:2px}
+    .dl-horizontal dt { text-align:left; font-weight:normal }
+</style>
+{% endblock %}
+
+{% block pageheader %}
+  <h1>Assay detail: <span class="text-primary">{{ assay.name }}</span>
+
+    <span class="btn-group pull-right">
+      <a href="{{ url_for('.index') }}" class="btn btn-warning">Back to Overview</a>
+      <a href="{{ url_for('.edit', assayid=assay.id) }}" class="btn btn-primary">Edit</a>
+      <a href="{{ url_for('.exportentries', id=assay.id) }}" class="btn btn-default">Export</a>
+    </span>
+  </h1>
+  {% if assay.category %}
+  <dl class="dl-horizontal">
+      <dt>Category</dt><dd>{{ assay.category }}</dd>
+  </dl>
+  {% endif %}
+{% endblock %}
+
+{% macro printform(form) %}
+<dl class="dl-horizontal">
+    {% for field in form %}
+    <dt>{{ field.label.text }}</dt><dd>{{ field.data }}</dd>
+    {% endfor %}
+</dl>
+{% endmacro %}
+
+{% block pagecontent %}
+
+<div class="row">
+    <div class="col-sm-6">
+
+        <div id="sampledetail">
+            <h3>Sample Details</h3>
+            {{ printform(form.sampleinfo) }}
+        </div>
+
+        <div id="dataentry">
+            <h3>Data Entry</h3>
+            {{ printform(form.dataentry) }}
+        </div>
+
+    </div>
+    <div class="col-sm-6">
+        <div id="emissions">
+            <h3>Emissions <small>({{ assay.distribution }})</small></h3>
+            <table class="table table-condensed">
+                <thead>
+                    <tr><th>Isotope</th><th>Rate</th></tr>
+                </thead>
+                <tbody>
+                    {% for spec in assay.subspecs %}
+                    <tr><td>{{ spec.name }}</td><td>{{ spec.getfullspec() }}</td></tr>
+                    {% endfor %}
+                    <tr class="total"><td>Total</td><td>{{ assay.getratestr() }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="measurement">
+            <h3>Measurement details</h3>
+            {{ printform(form.measurementinfo ) }}
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
