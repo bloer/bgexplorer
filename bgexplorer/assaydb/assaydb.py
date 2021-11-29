@@ -182,12 +182,6 @@ class AssayDB(object):
         def importentries():
             abort(501, "This action is not yet implemented")
 
-        @self.bp.route('/edit/<assayid>/attachments', methods=('GET','POST'))
-        def editattachments(assayid):
-            assay = self.get(assayid)
-
-            return render_template("attachments.html", assay=assay)
-
         @self.bp.route('/addattachments/<assayid>', methods=('POST',))
         def addattachments(assayid):
             assay = self.get(assayid) # we don't need this, but checks that id exists

@@ -93,6 +93,15 @@ class PerPieceField(BooleanField):
     def populate_obj(self, obj, name):
         setattr(obj, name, 'piece' if self.data else '')
 
+class LastModifiedField(HiddenField):
+    def __init__(self, *args, **kwargs):
+        kwargs['default'] = _strnow
+        super().__init__(*args, **kwargs)
+
+    def process_formdata(self, valuelist):
+        self.data = self.default()
+
+
 class SampleInfoForm(Form):
     sampleid = TextField('Sample ID')
     description = TextField('Description')
@@ -117,7 +126,7 @@ class DataEntryInfoForm(Form):
     reference = TextField('Original Reference')
     url = TextField('URL for original reference')
     created = HiddenField(default=_strnow)
-    modified = HiddenField(default=_strnow)
+    modified = LastModifiedField()
 
 
 class AssaySpecForm(RadioactiveContamForm):
@@ -129,23 +138,6 @@ class AssaySpecForm(RadioactiveContamForm):
         del self.querymod
         del self.moreinfo
         del self.comment
-
-class FileBlobField(HiddenField):
-    def process_formdata(self, valuelist):
-        if valuelist and valuelist[0]:
-            self.data = valuelist[0]
-
-    def _value(self):
-        return ""
-
-class AttachmentForm(Form):
-    _id = HiddenField()
-    etag = HiddenField()
-    filename = StaticField("Filename")
-    size = StaticField("File size")
-    mimetype = HiddenField("mimetype")
-    description = TextField("Description", render_kw={'class':'form-control'})
-    blob = FileBlobField()
 
 
 class AssayForm(FlaskForm):
