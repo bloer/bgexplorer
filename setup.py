@@ -18,7 +18,7 @@ setup(name='bgexplorer',
       },
       zip_safe=False,
       install_requires=[
-          'flask',
+          'flask>=2.0,<2.1',
           'wtforms<3.0',
           'flask-wtf',
           'flask-bootstrap',

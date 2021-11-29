@@ -11,9 +11,49 @@
       document.getElementById("deleteform").submit();
     }
   }
-  // hack to let the sub-forms float
+
+  function preventDefaults(event){
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function dragenter(e){
+    preventDefaults(e);
+    $(e.target).addClass('dragover');
+  }
+
+  function dragleave(e){
+    preventDefaults(e);
+    $(e.target).removeClass('dragover');
+  }
+
+  function handleNewFiles(event){
+    preventDefaults(event);
+    $("#droptarget").removeClass("dragover");
+    var dt = event.originalEvent.dataTransfer;
+    var fupload = document.getElementById("fupload");
+    if(dt && dt.files)
+      fupload.files = dt.files;
+    document.getElementById("uploadform").submit();
+  }
+
+  function confirmDeleteAttachment(event){
+    preventDefaults(event);
+    var target = $(event.target);
+    $("#delfilename").text(target.data('filename'));
+    $("#deleteattachmentform").prop("action", target.data('action'));
+    $("#confirmdelete").modal('show');
+  }
+
   $(function(){
-    $("fieldset").addClass("col-sm-10").addClass("col-md-8").addClass("col-lg-6");
+    $("fieldset").addClass("col-sm-8").addClass("col-md-6");
+    $("#droptarget")
+      .on('drop', handleNewFiles)
+      .on('dragenter', dragenter)
+      .on('dragover',  preventDefaults)
+      .on('dragleave', dragleave);
+    $("#fupload").on('change', handleNewFiles);
+    $("button.delete").on('click', confirmDeleteAttachment);
   });
 </script>
 {% endblock %}
@@ -21,6 +61,18 @@
 {% block mystyles %}
 <style>
   fieldset:nth-child(2n) { clear: both; }
+  #finfo {width:85%; margin-top:2em; }
+  .truncate {overflow:hidden; text-overflow:ellipsis; max-width:32ch;}
+  .truncate:hover {white-space: normal}
+  tr.attachment td:nth-child(3) {text-align:right}
+  div.dt-buttons { float:left;}
+  div.dt-buttons a.btn {font-size:small}
+
+  div.droptarget {background-color:#D9EDF7; border: 2px dashed blue;
+               padding:1em ; max-width:600px; margin:auto; text-align:center}
+  div.droptarget.dragover { background-color: #90EE90; border: 2px solid green;}
+  div.droptarget div {pointer-events: none;}
+  div.droptarget div label {pointer-events: auto;}
 </style>
 {% endblock %}
 
@@ -68,16 +120,79 @@
 {% if form.errors %}
 <p class='h4 alert alert-danger'>Please correct highlighted errors and resubmit</p>
 {% endif %}
+<div class="row">
 {{ wtf.quick_form(form, id="editform",
                   action=url_for('.edit', assayid=assayid),
                   form_type='normal',
                   button_map={'save':'primary'},)
                   }}
 
-
+</div>
 {% if assayid %}
   <form id="deleteform" action="{{ url_for('.delete') }}" method="POST">
     <input type="hidden" name="id" value="{{ assayid }}">
   </form>
 {% endif %}
+
+<div id="attachmentsdiv" style="clear:both; margin-bottom:1em;">
+  <h2>Attachments</h2>
+  {% if entry.attachments %}
+  <table id="attachments" class="table table-condensed">
+      <thead>
+          <tr><th>Filename</th><th>Size</th><th style="text-align:right">Remove</th></tr>
+      </thead>
+      <tbody>
+      {% for attachment in entry.attachments %}
+        <tr class="attachment" data-attachment="{{ attachment._id }}">
+            <td><a href="{{ url_for('.getattachment', assayid=entry.id, attachmentid=attachment._id) }}">{{ attachment.filename }}</a></td>
+            <td>{{ "%.1f" | format(attachment.size/1000) }} kB</td>
+            <td><button class="delete btn btn-danger"
+                        data-filename="{{ attachment.filename }}"
+                        data-action="{{ url_for('.delattachment', assayid=entry.id, attachmentid=attachment._id) }}"
+                        >
+                    <span class="glyphicon glyphicon-remove"></span>
+                </button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+  </table>
+
+  <div id="confirmdelete" class="modal fade" >
+    <div class="modal-dialog" >
+        <div class="modal-content" >
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" >&times;</button>
+            <h4 class="modal-title" >Confirm delete</h4>
+        </div>
+        <div class="modal-body clearfix" >
+            Are you sure you want to delete attachment <br>
+            '<span id="delfilename" class="text-danger">--</span>'? <br>
+            This action cannot be undone.
+        </div>
+        <div class="modal-footer">
+            <form id="deleteattachmentform" method="POST">
+            <button type="submit"  class="btn btn-danger pull-right">Confirm</button>
+            <button class="btn btn-default pull-right" data-dismiss="modal">Cancel</button>
+            </form>
+        </div>
+        </div>
+    </div>
+  </div>
+
+  {% endif %}
+  <!-- <h3>Upload new</h3> -->
+
+  <form id="uploadform" action="{{ url_for('.addattachments', assayid=entry.id) }}" method="POST" class="form" enctype="multipart/form-data">
+  <div id="droptarget" class="droptarget">
+    <div class="form-group">
+      <label class="control-label btn btn-default" for="fupload">Select file(s) to upload</label>
+      <input type="file" class="form-control-file hidden" multiple name="fupload"
+             id="fupload">
+      or drag and drop<br>
+      <small id="filehelp" class="form-text text-muted">Total upload size is limited to 16 MB</small>
+    </div>
+  </div>
+  </form>
+
+</div>
 {% endblock %}

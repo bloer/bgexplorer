@@ -5,6 +5,7 @@
 <style>
     tr.total {font-weight: bold; border-top:2px}
     .dl-horizontal dt { text-align:left; font-weight:normal }
+    img.thumb {max-height: 50px; max-width:100px; padding-left:20px;}
 </style>
 {% endblock %}
 
@@ -72,5 +73,23 @@
 
     </div>
 </div>
-
+{% if assay.attachments %}
+<h2>Attachments</h2>
+<div class="row" id="attachmentsdiv">
+    <table id="attachments" class="table table-compact">
+        <thead><tr><th>Filename</th><th>Size</th></tr></thead>
+        <tbody>{% for attachment in assay.attachments %}
+        <tr class="attachment" data-attachment="{{ attachment._id }}">
+            <td><a href="{{ url_for('.getattachment', assayid=assay.id, attachmentid=attachment._id) }}">
+                {{ attachment.filename }}
+                {% if attachment.mimetype.startswith('image') %}
+                <img class="thumb" src="{{ url_for('.getattachment', assayid=assay.id, attachmentid=attachment._id) }}">
+                {% endif %}
+                </a></td>
+            <td>{{ "%.1f" | format(attachment.size/1000) }} kB</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table>
+</div>
+{% endif %}
 {% endblock %}

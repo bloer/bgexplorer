@@ -11,6 +11,8 @@ from flask_wtf import FlaskForm
 from flask import url_for
 from datetime import datetime
 from ..modeleditor.forms import RadioactiveContamForm
+from ..modeleditor.fields import StaticField
+from ..modeleditor.widgets import SortableTable
 from bgmodelbuilder.emissionspec import CombinedSpec
 from bgmodelbuilder.mappable import Mappable
 
@@ -128,12 +130,30 @@ class AssaySpecForm(RadioactiveContamForm):
         del self.moreinfo
         del self.comment
 
+class FileBlobField(HiddenField):
+    def process_formdata(self, valuelist):
+        if valuelist and valuelist[0]:
+            self.data = valuelist[0]
+
+    def _value(self):
+        return ""
+
+class AttachmentForm(Form):
+    _id = HiddenField()
+    etag = HiddenField()
+    filename = StaticField("Filename")
+    size = StaticField("File size")
+    mimetype = HiddenField("mimetype")
+    description = TextField("Description", render_kw={'class':'form-control'})
+    blob = FileBlobField()
+
+
 class AssayForm(FlaskForm):
     specs = FormField(AssaySpecForm, "Emission Specs")
     dataentry = DictFormField(DataEntryInfoForm, "Data Entry Details")
     sampleinfo = DictFormField(SampleInfoForm, "Sample Details")
     measurementinfo = DictFormField(MeasurementInfoForm, "Measurement Details")
-    save = AnonymousSubmitField("Save")
+    #save = AnonymousSubmitField("Save",render_kw={'style': "clear:both"})
 
     @property
     def name(self):

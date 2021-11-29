@@ -1,12 +1,16 @@
 from flask import (Blueprint, render_template, request, redirect, abort,
-                   flash, url_for, current_app, jsonify)
+                   flash, url_for, current_app, jsonify, send_file)
 import pymongo
+from bson import ObjectId
+from io import BytesIO
 from bgmodelbuilder.emissionspec import RadioactiveContam, CombinedSpec, buildspecfromdict
 from ..modeleditor.forms import RadioactiveContamForm
 from wtforms.fields import HiddenField, FormField
 from copy import copy
 from .forms import AssayEntry, AssayForm
 from ..utils import getmodelordie, get_modeldb
+import datetime
+import hashlib
 import logging
 log = logging.getLogger(__name__)
 
@@ -63,8 +67,9 @@ class AssayDB(object):
 
     _defpro = {'attachments.blob': False}
 
-    def get(self, assayid, doabort=True, raw=False):
-        result = self._collection.find_one(assayid, projection=self._defpro)
+    def get(self, assayid, doabort=True, raw=False, projection=None):
+        project = projection or self._defpro
+        result = self._collection.find_one(assayid, projection)
         if result is None:
             msg = f"No assay entry with id {assayid}"
             if doabort:
@@ -177,5 +182,70 @@ class AssayDB(object):
         def importentries():
             abort(501, "This action is not yet implemented")
 
+        @self.bp.route('/edit/<assayid>/attachments', methods=('GET','POST'))
+        def editattachments(assayid):
+            assay = self.get(assayid)
+
+            return render_template("attachments.html", assay=assay)
+
+        @self.bp.route('/addattachments/<assayid>', methods=('POST',))
+        def addattachments(assayid):
+            assay = self.get(assayid) # we don't need this, but checks that id exists
+            files = request.files.getlist('fupload')
+            for _file in files:
+                blob = _file.read()
+                finfo = dict(_id=ObjectId(),
+                             filename=_file.filename,
+                             mimetype=_file.mimetype,
+                             size=len(blob),
+                             etag=hashlib.sha1(blob).hexdigest(),
+                             blob=blob,
+                             )
+                try:
+                    self._collection.update_one({'_id':assayid},
+                                                {'$push': {'attachments': finfo}})
+                except Exception as e:
+                    log.error(f"Error adding attachment {e}")
+                    flash(f"Error adding attachment: {e}","error")
+            flash(f"Processed {len(files)} attachments", 'info')
+
+            return redirect(url_for('.edit', assayid=assayid))
+
+        @self.bp.route('/getattachment/<assayid>/<attachmentid>')
+        def getattachment(assayid, attachmentid):
+            attachmentid = ObjectId(attachmentid)
+            query = {'_id': assayid, 'attachments._id': attachmentid}
+            projection = {'attachments.$': 1}
+            doc = self._collection.find_one(query, projection)
+            if not doc:
+                abort(404, "Can't find requested attachment")
+            doc = doc['attachments'][0]
+            return send_file(BytesIO(doc['blob']), mimetype=doc['mimetype'],
+                             download_name=doc['filename'], etag=doc['etag'],
+                             last_modified=doc['_id'].generation_time)
 
 
+
+        @self.bp.route('delattachment/<assayid>/<attachmentid>', methods=('POST',))
+        def delattachment(assayid, attachmentid):
+            attachmentid = ObjectId(attachmentid)
+            assay = self.get(assayid)
+            filename = None
+            for attachment in assay.attachments:
+                if attachment['_id'] == attachmentid:
+                    filename = attachment['filename']
+            if not filename:
+                abort(404, f"No attachment with ID {attachmentid} on assay {assay.name}")
+
+            mod = {'$pull': {'attachments': {'_id': attachmentid}}}
+            try:
+                result = self._collection.update_one({'_id':assayid}, mod)
+                print(result.modified_count)
+            except Excepception as e:
+                msg = f"Exception updating assay attachments: {e}"
+                log.error(msg)
+                flash(msg, 'error')
+            else:
+                flash(f"Successfully deleted attachment from assay {assay.name}",
+                      'success')
+            return redirect(url_for('.edit', assayid=assayid))
