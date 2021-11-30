@@ -128,11 +128,13 @@
                   }}
 
 </div>
+
+{# remainder needs the base populated first #}
 {% if assayid %}
   <form id="deleteform" action="{{ url_for('.delete') }}" method="POST">
     <input type="hidden" name="id" value="{{ assayid }}">
   </form>
-{% endif %}
+
 
 <div id="attachmentsdiv" style="clear:both; margin-bottom:1em;">
   <h2>Attachments</h2>
@@ -195,4 +197,5 @@
   </form>
 
 </div>
+{% endif %} {# end if assayid block #}
 {% endblock %}
