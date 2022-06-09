@@ -59,6 +59,23 @@
     </div><!-- end col-md-6 for database info -->
 
     </div><!-- end row -->
+    {% if values %}
+    <div id="sensitivity" class="row">
+        <h3>Sensitivity</h3>
+        <table class="table table-condensed">
+            <thead><tr>
+                {% for valname in values %}
+                <th>{{ valname }}</th>
+                {% endfor %}
+            </tr></thead>
+            <tbody><tr>
+                {% for val in values.values() %}
+                <td>{{ val }}</td>
+                {% endfor %}
+            </tr></tbody>
+        </table>
+    </div>
+    {% endif %}
     <div id="spectra" class="row">
     <h2>Evaluated Spectra</h2>
     {% for specname in g.simsdbview.spectra.keys() %}

@@ -245,8 +245,18 @@ class ModelViewer(object):
         def simdatamatchview(matchid):
             match = utils.getsimdatamatchordie(g.model, matchid)
             linkspec = match.spec.getrootspec()
+            values = {}
+            if match.emissionrate:
+                vals = g.simsdbview.values
+                values_units = g.simsdbview.values_units
+                evaluated = self.simsdb.evaluate(list(vals.values()), match)
+                for k, v in zip(vals, evaluated):
+                    try:
+                        values[k] = v.to(values_units[k])/match.emissionrate.to('Bq')
+                    except Exception:
+                        values[k] = -1
             return render_template("simdatamatchview.html", match=match,
-                                   linkspec=linkspec)
+                                   linkspec=linkspec, values=values)
 
         @self.bp.route('/billofmaterials')
         def billofmaterials():
