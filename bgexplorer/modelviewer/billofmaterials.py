@@ -76,7 +76,10 @@ def getdefaultcols():
         def _getisorate(row):
             try:
                 specmatch = [spec for spec in row.component.getspecs(deep=True)
-                             if iso == spec.name]
+                             if (iso == spec.name and
+                                 spec.distribution == 'bulk' and 
+                                 spec.category == 'RadioactiveContam')
+                             ]
                 if not specmatch:
                     return ''
                 rate = sum(spec.ratewitherr for spec in specmatch)
@@ -88,7 +91,7 @@ def getdefaultcols():
                 if all(spec.islimit for spec in specmatch):
                     return '<'+str(rate)
                 return rate
-            except ValueError:
+            except (ValueError, units.errors.DimensionalityError):
                 return "err"
 
         return _getisorate
