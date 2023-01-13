@@ -18,24 +18,21 @@
 {% block pagecontent %}
     <table class="table" id="querytable">
     <thead>
-        <tr><th>Query</th><th>Components<th>Datasets</th><th>Livetime</th></tr>
+        <tr><th>Query</th><th>Components</th><th>Datasets</th><th>Livetime</th></tr>
     </thead>
-    <tbody>{% for query, matches in queries.items() %}
-        <tr class="simquery" >
-            <td><a href="{{ url_for('simsviewer.overview',query=matches[0].query) }}">{{ query }}</a></td>
+    <tbody>{% for _id in queries.keys() %}
+        {% for query, matches in queries[_id].items() %}
+            {% for match in matches %}
+                <tr class="simquery" >
+                    <td><a href="{{ url_for('simsviewer.overview',query=matches.query) }}">{{ match.query }}</a></td>
+                    <td><a href="{{ url_for('.simdatamatchview', match=match) }}">
+                        {{ match.component.name }}
+                    </a></td>
+                    <td>{% for dataset, matches in matches|groupby('dataset') %}{{ printdataset(dataset) }}{% endfor %}</td>
 
-            <td>{% for match in matches %}
-                {%-  if loop.index0 > 0 %} | {% endif -%}
-                <a href="{{ url_for('.simdatamatchview', match=match) }}">
-                    {{ match.component.name }}
-                </a>
-            {% endfor %}</td>
-
-            <td>{% for dataset, matches in matches | groupby('dataset') %}{{ printdataset(dataset) }}{% endfor %}</td>
-
-            <td>{{ matches | sum(attribute='livetime') }}</td>
-        </tr>
-
+                    <td>{{ matches | sum(attribute='livetime') }}</td>
+                {% endfor %}</tr>
+        {% endfor %}
     {% endfor %}</tbody>
     </table>
 {% endblock %}
