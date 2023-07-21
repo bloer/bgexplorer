@@ -31,7 +31,7 @@
                 </a>
             {% endfor %}</td>
 
-            <td>{% for dataset, matches in matches | groupby('dataset') %}{{ printdataset(dataset) }}{% endfor %}</td>
+            <td>{% for dataset, matches in matches | selectattr('dataset') | groupby('dataset') %}{{ printdataset(dataset) }}{% endfor %}</td>
 
             <td>{{ matches | sum(attribute='livetime') }}</td>
         </tr>
