@@ -6,7 +6,7 @@ setup(name='bgexplorer',
       url='http://github.com/bloer/bgexplorer',
       author='Ben Loer',
       author_email='ben.loer@pnnl.gov',
-      license='MIT',
+      license='BSD',
       packages=find_packages(),
       package_data={
           'bgexplorer': ['templates/*.html','static/*','static/*/*',
@@ -19,6 +19,7 @@ setup(name='bgexplorer',
       zip_safe=False,
       install_requires=[
           'flask>=2.0,<2.1',
+          'werkzeug==2.2.2',
           'wtforms<3.0',
           'flask-wtf',
           'flask-bootstrap',
@@ -30,4 +31,9 @@ setup(name='bgexplorer',
           'uncertainties',
           'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@master',
       ],
+      entry_points = {
+          'console_scripts': [
+              'bgexplorer = bgexplorer.app:main',
+          ],
+      }
 )

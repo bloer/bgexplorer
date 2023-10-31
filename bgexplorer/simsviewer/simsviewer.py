@@ -20,6 +20,7 @@ def findsimmatches(dataset, model=None):
         pass
 
     for match in model.getsimdata():
+        print(match.dataset, dataset)
         if match.dataset == dataset:
             res.append(match)
         else:
@@ -156,13 +157,14 @@ class SimsViewer(object):
         def detailview(dataset):
             detail = self.simsdb.getdatasetdetails(dataset)
             matches = findsimmatches(dataset)
+            keys = self.getcolnames([detail])
             return render_template('datasetview.html', dataset=dataset,
-                                   detail=detail, matches=matches)
+                                   detail=detail, matches=matches, keys=keys)
 
         @self.bp.route('/<dbname>/dataset/<dataset>/raw')
         def rawview(dataset):
             """Export the dataset as raw JSON"""
-            detail = self.simsdb.getdatasetdetails(dataset)
+            detail = self.simsdb.getdatasetdetails(dataset, raw=True)
             return json.jsonify(detail)
 
         if not self.enable_upload:

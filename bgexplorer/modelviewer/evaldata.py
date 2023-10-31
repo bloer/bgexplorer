@@ -18,6 +18,8 @@ except ImportError:
 from .. import utils
 from bgmodelbuilder import units
 from bgmodelbuilder.simulationsdb.histogram import Histogram
+from bgmodelbuilder.simulationsdb.hiteffdb import HitEffDB
+from bgmodelbuilder.simulationsdb.fields import HistogramField
 from bgmodelbuilder.common import try_reduce
 
 import logging
@@ -71,9 +73,13 @@ class ModelEvaluator(object):
                     log.warning(e)
                 val = getattr(val, 'm', 0)
         # convert to string
-        val = "{:.3g}".format(val)
-        if match.spec.islimit:
-            val = '<'+val
+        try:
+            val = val.to_reduced_units()
+        except AttributeError:
+            pass
+        val = "{:~.3gC}".format(val)
+        #if match.spec.islimit:
+        #    val = '<'+val
         return val
 
     def _applyspecunit(self, specname, spec):
@@ -92,26 +98,43 @@ class ModelEvaluator(object):
         Returns:
             dict
         """
-        toeval = []
-        if dovals:
-            toeval.extend(self.simsdbview.values.values())
-        if dospectra:
-            toeval.extend(self.simsdbview.spectra.values())
-        result = self.simsdb.evaluate(toeval, match)
+        if isinstance(self.simsdb, HitEffDB):
+            doc = self._evalmatch_hiteffdb(match, dovals, dospectra)
+        else:
+            toeval = []
+            if dovals:
+                toeval.extend(self.simsdbview.values.values())
+            if dospectra:
+                toeval.extend(self.simsdbview.spectra.values())
+            result = self.simsdb.evaluate(toeval, match)
 
-        doc = dict()
-        if dovals:
-            doc['values'] = [self._valtostr(name, val, match) for name, val in
-                             zip(self.simsdbview.values.keys(), result)]
-            result = result[len(self.simsdbview.values):]
-        if dospectra:
-            doc['spectra'] = [self._applyspecunit(name, spec) for name, spec in
-                              zip(self.simsdbview.spectra.keys(), result)]
+            doc = dict()
+            if dovals:
+                doc['values'] = [self._valtostr(name, val, match) for name, val in
+                                 zip(self.simsdbview.values.keys(), result)]
+                result = result[len(self.simsdbview.values):]
+            if dospectra:
+                doc['spectra'] = [self._applyspecunit(name, spec) for name, spec in
+                                  zip(self.simsdbview.spectra.keys(), result)]
 
         if dogroups:
             doc['groups'] = self.simsdbview.evalgroups(match).values()
 
         return doc
+
+    def _evalmatch_hiteffdb(self, match, dovals=True, dospectra=False):
+        """ Evaluate the match object when simsdb is a HitEffDb """
+        doc = dict()
+        if dovals:
+            res = self.simsdb.evaluate(None, match)
+            doc['values'] = [self._valtostr(name, val, match)
+                             for name, val in res.items()]
+        if dospectra:
+            res = self.simsdb.evaluate('spectra', match)
+            doc['spectra'] = [self._applyspecunit(name, spec)
+                              for name, spec in res.items()]
+        return doc
+
 
     def datatable(self, doallcache=False):
         """ Generate the datatable with line for each sim data match,
@@ -131,13 +154,20 @@ class ModelEvaluator(object):
 
         def _valhead(val):
             suffix = ''
-            if val in self.simsdbview.values_units:
-                suffix = f' [{self.simsdbview.values_units[val]}]'
+            unit = self.simsdbview.values_units.get(val, None)
+            if unit is not None:
+                suffix = f' [{unit}]'
             return f'V_{val}{suffix}'
 
         # prepare output buffer
         buf = BytesIO()
         datatable = gzip.open(buf, mode='wt', newline='\n')
+
+        # make sure config is up-to-date if it lives in the db
+        try:
+            self.simsdb.dbconfig.update_from_collection()
+        except AttributeError:
+            pass
 
         # write the header
         header = '\t'.join(chain(['ID'],
@@ -230,8 +260,8 @@ class ModelEvaluator(object):
             if cached is not self.StatusCodes.NoEntryInCache:
                 return cached
 
-        if specname not in self.simsdbview.spectra:
-            raise KeyError(f"Unknown spectrum generator {specname}")
+        #if specname not in self.simsdbview.spectra:
+        #    raise KeyError(f"Unknown spectrum generator {specname}")
 
         if fmt == 'png':
             result = self._spectrum_impl(specname, component, spec, match,
@@ -251,7 +281,11 @@ class ModelEvaluator(object):
                 matches = self.model.getsimdata(rootcomponent=component,
                                                 rootspec=spec)
             result = None
-            reducer = self.simsdbview.spectra[specname].reduce
+            try:
+                reducer = self.simsdbview.spectra[specname].reduce
+            except (IndexError, AttributeError):
+                def reducer(a, b):
+                    return a + b
             for amatch in matches:
                 result1 = self._spectrum_impl(specname, match=amatch, fmt=fmt)
                 result = try_reduce(reducer, result, result1)
@@ -263,8 +297,11 @@ class ModelEvaluator(object):
         return result
 
     def _spectrum_hist(self, specname, match):
-        specgen = self.simsdbview.spectra[specname]
-        result = self.simsdb.evaluate(specgen, match)[0]
+        if isinstance(self.simsdb, HitEffDB):
+            result = self.simsdb.evaluate(specname, match)[specname]
+        else:
+            specgen = self.simsdbview.spectra[specname]
+            result = self.simsdb.evaluate(specgen, match)[0]
         result = self._applyspecunit(specname, result)
         return result
 
@@ -282,9 +319,17 @@ class ModelEvaluator(object):
         # apparently this aborts sometimes?
         fig = matplotlib.figure.Figure()
         ax = fig.subplots()
-        ax.errorbar(x=unumpy.nominal_values(spectrum.bin_edges[:-1]),
-                    y=unumpy.nominal_values(spectrum.hist),
-                    yerr=unumpy.std_devs(spectrum.hist),
+        try:
+            x = spectrum.bin_edges.m[:-1]
+        except AttributeError:
+            x = spectrum.bin_edges[:-1]
+        uplims = (spectrum.hist.m.mode == 0)
+        y = np.where(uplims, spectrum.hist.ppf(0.9), spectrum.hist.mode)
+        ax.errorbar(x=x, #x=unumpy.nominal_values(spectrum.bin_edges[:-1]),
+                    y=y, #pectrum.hist.m.mode, #y=unumpy.nominal_values(spectrum.hist),
+                    yerr=[spectrum.hist.m.sigma, spectrum.hist.m.sigmaup], #yerr=unumpy.std_devs(spectrum.hist),
+                    uplims=uplims, #(spectrum.hist.m.mode==0),
+                    #lolims=True,
                     drawstyle='steps-post',
                     elinewidth=0.6,
                     )
@@ -346,6 +391,8 @@ class ModelEvaluator(object):
 
     @staticmethod
     def pack_histogram(hist):
+        packed = HistogramField().to_mongo(hist)
+        return packed
         try:
             vals = hist.hist
             bins = hist.bin_edges
@@ -383,6 +430,7 @@ class ModelEvaluator(object):
 
     @staticmethod
     def unpack_histogram(doc):
+        return HistogramField().to_python(doc)
         if not isinstance(doc, dict):
             return doc
         data = np.load(BytesIO(doc['hist']))

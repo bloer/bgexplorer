@@ -10,7 +10,36 @@
 
 {% block pagecontent %}
     <a href="{{ url_for('.rawview',dataset=dataset) }}">Raw data</a>
-    <h3> Full entry:</h3>
-    <pre>{{ detail|tojson(indent=2) }}
-    </pre>
+    <h2>Keys</h2>
+    <table class="table">
+        <thead>
+            <tr><th>Key</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+        {% for key in keys %}
+            <tr><td>{{ key }}</td><td>{{ detail[key] | default('') }}</td></tr>
+        {% endfor %}
+        {% for key in detail['values']|default({}) %}
+            <tr><td>Value {{ key }}</td><td>{{ detail['values'][key]}}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if matches %}
+    <h2>Linked to</h2>
+    <table class="table tbl">
+        <thead>
+            <tr><th>Query</th><th>Component</th><th>Spec</th></tr>
+        </thead>
+        <tbody>
+        {% for match in matches %}
+            <tr>
+                <td><a href="{{ url_for('modelviewer.simdatamatchview',matchid=match.id) }}">{{ match.query }}</a></td>
+                <td><a href="{{ url_for('modelviewer.componentview', componentid=match.component.id) }}">{{ match.component.name }}</a></td>
+                <td><a href="{{ url_for('modelviewer.emissionview', specid=match.spec.id) }}">{{ match.spec.name }}</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
 {% endblock %}

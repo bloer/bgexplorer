@@ -4,6 +4,9 @@ import zipfile
 import tarfile
 import itertools
 
+from bgmodelbuilder.simulationsdb.hiteffdb import HitEffDB
+from bgmodelbuilder.simulationsdb.hiteff import HitEffDbConfig
+
 
 class SimsDbView(object):
     """ This class's members specify how to load and interpret simulation
@@ -151,6 +154,63 @@ class SimsDbView(object):
         except TypeError:
             # somethign returned None
             return False
+
+
+class HitEffDbView(SimsDbView):
+    """ Temporary hack to construct a simsdbview from a HitEffDB """
+    def __init__(self, hiteffdb, **kwargs):
+        dbconfig = hiteffdb.dbconfig
+        if not dbconfig.display_values:
+            dbconfig.update_from_collection()
+        summarypro = {k: 1 for k in dbconfig.display_columns}
+        summarypro['id'] = '$_id'
+        super().__init__(simsdb=hiteffdb,
+                         summarypro=summarypro,
+                         summarycolumns=dbconfig.display_columns,
+                         upload_handler=json_upload_handler,
+                         **kwargs)
+
+    @property
+    def values(self):
+        return self.simsdb.dbconfig.display_values
+
+    @values.setter
+    def values(self, newval):
+        pass
+
+    @property
+    def spectra(self):
+        return self.simsdb.dbconfig.display_spectra
+
+    @spectra.setter
+    def spectra(self, val):
+        pass
+
+    @property
+    def values_units(self):
+        return {k: v.display_unit for k, v in self.values.items()}
+
+    @values_units.setter
+    def values_units(self, newval):
+        pass
+
+    @property
+    def spectra_units(self):
+        return {k: v.display_unit for k, v in self.spectra.items()}
+
+    @spectra_units.setter
+    def spectra_units(self, newval):
+        pass
+
+    @property
+    def values_spectra(self):
+        return {k: v.link_spectrum for k, v in self.values.items() if v.link_spectrum}
+
+    @values_spectra.setter
+    def values_spectra(self, newval):
+        pass
+
+
 
 
 # utilities to handle file uploads:

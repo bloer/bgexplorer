@@ -194,7 +194,13 @@ class ModelViewer(object):
             if componentid:
                 component = utils.getcomponentordie(g.model, componentid)
                 matches = g.model.getsimdata(component=component)
-                datasets = sum((m.dataset or [] for m in matches), [])
+                datasets = []
+                for m in matches:
+                    if isinstance(m.dataset, (list, tuple)):
+                        datasets.extend(m.datataset)
+                    elif m.dataset is not None:
+                        datasets.append(m.dataset)
+                #datasets = sum((m.dataset or [] for m in matches), [])
                 return render_template("componentview.html",
                                        component=component, datasets=datasets)
             else:
@@ -215,7 +221,13 @@ class ModelViewer(object):
                 matches = g.model.getsimdata(rootspec=spec)
             else:
                 matches = g.model.getsimdata(spec=spec)
-            datasets = sum((m.dataset or [] for m in matches), [])
+            datasets = []
+            for m in matches:
+                if isinstance(m.dataset, (list, tuple)):
+                    datasets.extend(m.datataset)
+                elif m.dataset is not None:
+                    datasets.append(m.dataset)
+            #datasets = sum((m.dataset or [] for m in matches), [])
             return render_template('emissionview.html', spec=spec,
                                    matches=matches, datasets=datasets)
 
@@ -250,9 +262,14 @@ class ModelViewer(object):
                 vals = g.simsdbview.values
                 values_units = g.simsdbview.values_units
                 evaluated = self.simsdb.evaluate(list(vals.values()), match)
-                for k, v in zip(vals, evaluated):
+                iter_ = (zip(vals, evaluated) if isinstance(evaluated, list)
+                         else evaluated.items())
+                for k, v in iter_:
                     try:
                         values[k] = v.to(values_units[k])/match.emissionrate.to('Bq')
+                    except IndexError:
+                        # key is not in values_units
+                        values[k] = v / match.emissionrate.to('Bq')
                     except Exception:
                         values[k] = -1
             return render_template("simdatamatchview.html", match=match,
@@ -328,8 +345,8 @@ class ModelViewer(object):
                     specname = g.simsdbview.values_spectra.get(valname)
                 if not specname:
                     abort(404, f"No spectrum associated to value '{valname}'")
-            if specname not in g.simsdbview.spectra:
-                abort(404, f"No spectrum generator for '{specname}'")
+            #if specname not in g.simsdbview.spectra:
+            #    abort(404, f"No spectrum generator for '{specname}'")
 
             #log.debug(f"Generating spectrum: {specname}")
             # get the matches

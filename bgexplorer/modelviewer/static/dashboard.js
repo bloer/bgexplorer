@@ -63,11 +63,13 @@ dashboard.onLoad = function(callback){
 //parse a value column that has uncertainties in it
 dashboard.parsevalstring = function(val){
     //strings are of the form "X+/-E" or "(X+/-E)eY" with an optional leading <
+    //units follow spaces
+    val = val.split(' ')[0]
     var islimit = val.startsWith('<');
     if(islimit){
         val = val.substr(1);
     }
-    var expo="e0";
+    var expo="";
     if(val.startsWith("(")){
         var split = val.split("e");
         expo = "e"+split[1];

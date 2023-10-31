@@ -15,6 +15,7 @@ from .assaydb.assaydb import AssayDB
 from .modeldb import ModelDB
 from .utils import getobjectid
 from .modeleditor.forms import NewModelForm
+from .dbview import HitEffDbConfig, HitEffDB, HitEffDbView
 
 from flask.json.tag import JSONTag
 
@@ -75,12 +76,26 @@ class BgExplorer(Flask):
         super().__init__('bgexplorer', instance_path=instance_path,
                          instance_relative_config=bool(instance_path))
 
-        self.simviews = simviews or {}
-
         app = self
 
+        app.config.from_object('bgexplorer.config_default')
         if config_filename:
             app.config.from_pyfile(config_filename)
+
+        # define simviews
+        self.simviews = simviews or {}
+        if app.config.get('SIMDB_BACKENDS'):
+            HitEffDB.connect(app)
+        for viewname in app.config.get('SIMDB_BACKENDS', []):
+            if viewname in self.simviews:
+                continue
+            # see if it's in the DB already
+            try:
+                dbconf = HitEffDbConfig.objects.get(name=viewname)
+            except (HitEffDbConfig.MultipleObjectsReturned,
+                    HitEffDbConfig.DoesNotExist):
+                dbconf = HitEffDbConfig(name=viewname)
+            self.addsimview(viewname, HitEffDbView(HitEffDB(dbconf)))
 
         # override json encode/decode to handle object IDs
         app.json_encoder = CustomJSONEncoder
@@ -161,7 +176,14 @@ class BgExplorer(Flask):
             except KeyError:
                 abort(404, 'SimDbView name not provided and no default set')
         if name not in self.simviews:
-            abort(404, f"No SimsDbView backend with name {name}")
+            # try to get from db-configured HitEffDbConfigs
+            try:
+                dbconf = HitEffDbConfig.objects.get(name=name)
+            except (HitEffDbConfig.MultipleObjectsReturned,
+                    HitEffDbConfig.DoesNotExist):
+                abort(404, f"No SimsDbView backend with name {name}")
+            # do we want to save this in simviews?
+            return HitEffDbView(dbconf)
         return self.simviews[name]
 
     def getsimviewname(self, simsdbview):
@@ -178,3 +200,21 @@ class BgExplorer(Flask):
 def create_app(*args, **kwargs):
     """ Simple wrapper to make app easier to find for wsgi server testing """
     return BgExplorer(*args, **kwargs)
+
+def main():
+    import sys
+    from glob import glob
+    app = create_app(sys.argv[1] if len(sys.argv)>1 else None)
+    app.config.update({'DEBUG':True,'TESTING':True,
+                       'TEMPLATES_AUTO_RELOAD':True,
+                       #'EXPLAIN_TEMPLATE_LOADING':True,
+                      })
+    app.secret_key = "not very secret is it?"
+    #force template reloading, even though it shouldn't be necessary
+    templates = glob("bgexplorer/templates/*.html")
+    templates.extend(glob("bgexplorer/*/templates/*.html"))
+    app.run(host='0.0.0.0', port=app.config.get('SERVER_PORT'),
+            extra_files=templates)
+
+if __name__ == '__main__':
+    main()
