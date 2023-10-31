@@ -160,8 +160,8 @@ class HitEffDbView(SimsDbView):
     """ Temporary hack to construct a simsdbview from a HitEffDB """
     def __init__(self, hiteffdb, **kwargs):
         dbconfig = hiteffdb.dbconfig
-        if not dbconfig.display_values:
-            dbconfig.update_from_collection()
+        # if not dbconfig.display_values:
+        dbconfig.update_from_collection()
         summarypro = {k: 1 for k in dbconfig.display_columns}
         summarypro['id'] = '$_id'
         super().__init__(simsdb=hiteffdb,
