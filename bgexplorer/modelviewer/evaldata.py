@@ -72,14 +72,15 @@ class ModelEvaluator(object):
                 if val != 0:
                     log.warning(e)
                 val = getattr(val, 'm', 0)
-        # convert to string
+        else:
+            try:
+                val = val.to_reduced_units()
+            except AttributeError:
+                pass
         try:
-            val = val.to_reduced_units()
-        except AttributeError:
-            pass
-        val = "{:~.3gC}".format(val)
-        #if match.spec.islimit:
-        #    val = '<'+val
+            val = "{:~.3gC}".format(val)
+        except ValueError:
+            val = "{:.3g}".format(val)
         return val
 
     def _applyspecunit(self, specname, spec):
