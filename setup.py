@@ -29,7 +29,7 @@ setup(name='bgexplorer',
           'numpy',
           'matplotlib>=3.1',
           'uncertainties',
-          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@master',
+          'bgmodelbuilder @ git+https://github.com/bloer/bgmodelbuilder@feature/asymmetric',
       ],
       entry_points = {
           'console_scripts': [
