@@ -157,6 +157,7 @@ class PlacementForm(Form):
             self.cls = (type(placement.component).__name__
                         if self.component else None)
             self.weight = placement.weight
+            self.simvolume = placement.simvolume
             self.querymod = placement.querymod
 
     def process(self, formdata=None, obj=None, data=None, **kwargs):

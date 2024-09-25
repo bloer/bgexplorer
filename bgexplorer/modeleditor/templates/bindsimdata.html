@@ -53,7 +53,7 @@
         {% if loop.index0>0 %}, {% endif %}
         {{ printOneDataset(ds, loop.index, links) }}
     {% endfor %}
-    {% else %}
+    {% elif dataset is not none %}
     {{ printOneDataset(dataset, '1', links) }}
     {% endif %}
 {% endmacro %}

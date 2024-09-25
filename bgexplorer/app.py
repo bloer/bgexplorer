@@ -70,16 +70,27 @@ class BgExplorer(Flask):
                 If not provided, it will be set to the first registered view
         """
         if instance_path is None:
-            caller = inspect.stack()[1][1]
-            instance_path = os.path.dirname(os.path.abspath(caller))
+            instance_path = os.getcwd()
+            #caller = inspect.stack()[1][1]
+            #instance_path = os.path.dirname(os.path.abspath(caller))
 
         super().__init__('bgexplorer', instance_path=instance_path,
                          instance_relative_config=bool(instance_path))
 
         app = self
-
         app.config.from_object('bgexplorer.config_default')
+        # test for Docker config files
+        try:
+            app.config.from_pyfile('/bgexplorer_app_config')
+        except FileNotFoundError:
+            pass
+        try:
+            app.config.from_pyfile('/run/secrets/flask_secret_key')
+        except FileNotFoundError:
+            pass
+        # override with user-supplied config
         if config_filename:
+            print("Loading configuration from file", config_filename)
             app.config.from_pyfile(config_filename)
 
         # define simviews
@@ -204,7 +215,8 @@ def create_app(*args, **kwargs):
 def main():
     import sys
     from glob import glob
-    app = create_app(sys.argv[1] if len(sys.argv)>1 else None)
+    app = create_app(sys.argv[1] if len(sys.argv)>1 else None,
+                     instance_path=os.getcwd())
     app.config.update({'DEBUG':True,'TESTING':True,
                        'TEMPLATES_AUTO_RELOAD':True,
                        #'EXPLAIN_TEMPLATE_LOADING':True,
