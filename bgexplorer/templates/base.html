@@ -98,11 +98,15 @@
             {% block navbarlinks %}{% endblock %}
             </ul>
             {% block navbarextra %}{% endblock %}
+            <a class="navbar-right" href="https://pnnl.gov">
+                <img src="{{ url_for('static', filename='logopnnl.png') }}" alt="PNNL" class="brand">
+            </a>
             {% if g.permalink %}
             <ul class="nav navbar-nav navbar-right" >
                 <li><a id="permalink" href="{{ g.permalink }}"><small>permalink to this page</small></a></li>
             </ul>
             {% endif %}
+
         </div>
         </div>
     </nav>
