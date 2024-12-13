@@ -69,8 +69,9 @@ class BgExplorer(Flask):
                 If not provided, it will be set to the first registered view
         """
         if instance_path is None:
-            caller = inspect.stack()[1][1]
-            instance_path = os.path.dirname(os.path.abspath(caller))
+            instance_path = os.getcwd()
+            #caller = inspect.stack()[1][1]
+            #instance_path = os.path.dirname(os.path.abspath(caller))
 
         super().__init__('bgexplorer', instance_path=instance_path,
                          instance_relative_config=bool(instance_path))
